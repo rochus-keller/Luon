@@ -22,7 +22,8 @@ NOTE that this project is in an early stage and work-in-progress.
 #### Planned features
 
 - [x] Implement lexer with directive support
-- [ ] Implement parser, validator and IR generator
+- [x] Implement parser and AST
+- [ ] Implement semantic validator 
 - [ ] Implement a LuaJIT backend based on LjTools
 - [ ] Implement an IDE similar to the Oberon+ IDE
 - [ ] Migrate the Smalltalk-80 VM to Luon as a proof-of-concept and to optimize the language
@@ -31,6 +32,11 @@ NOTE that this project is in an early stage and work-in-progress.
 
 Derived the syntax from Oberon+ and Micron and generated a parser using [the grammar](https://github.com/micron-language/specification/blob/master/Micron_Programming_Language.ebnf) and adopted the lexer from [the Micron project](https://github.com/rochus-keller/Micron). The parser is able to successfully read the ongoing Luon migration of the 
 [Are-we-fast-yet benchmark suite](https://github.com/rochus-keller/Are-we-fast-yet/tree/main/Luon) (not yet commited).
+
+#### Status on October 15, 2024
+
+Adopted the AST infrastructure from Micron and extended the AST for full program coverage.
+Implemented a recursive descent parser (modified the one generated  by [EbnfStudio](https://github.com/rochus-keller/EbnfStudio)) which generates the AST.
 
 #### Precompiled versions
 

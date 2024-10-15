@@ -6,7 +6,9 @@ SOURCES += \
     LnToken.cpp \
     LnTokenType.cpp \
     LnParser.cpp \
-    LnSynTree.cpp
+    LnSynTree.cpp \
+    $$PWD/LnAst.cpp \
+    $$PWD/LnParser2.cpp
 
 HEADERS += \
     LnLexer.h \
@@ -15,5 +17,7 @@ HEADERS += \
     LnToken.h \
     LnTokenType.h \
     LnParser.h \
-    LnSynTree.h
+    LnSynTree.h \
+    $$PWD/LnAst.h \
+    $$PWD/LnParser2.h
 

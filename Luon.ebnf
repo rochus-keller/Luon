@@ -49,7 +49,7 @@ ArrayType ::= 'ARRAY' [ length ] 'OF' type | '[' [ length ] ']' type
 
 length ::= ConstExpression 
 
-DictType ::= 'HASHMAP' type 'OF' type
+DictType ::= 'HASHMAP' NamedType 'OF' type
 
 RecordType ::= 'RECORD' ['(' BaseType ')'] { FieldList [ ';' ] } 'END' 
 BaseType ::= NamedType
@@ -80,7 +80,7 @@ term ::= factor {MulOperator factor}
 
 MulOperator ::= '*' | '/' | 'DIV' | 'MOD' | '&' | 'AND'
 
-literal ::= number | string | hexchar | 'NIL' | set | 'TRUE' | 'FALSE'
+literal ::= number | string | hexstring | hexchar | 'NIL' | set | 'TRUE' | 'FALSE'
 
 constructor ::= NamedType '{' [ component {[','] component} ] '}' 
                            | hexstring
@@ -122,7 +122,7 @@ ElseStatement ::= 'ELSE' StatementSequence
 CaseStatement ::= 'CASE' expression 'OF' [Case] { '|' Case }
 	[ 'ELSE' StatementSequence ] 'END' 
 
-Case ::= [ CaseLabelList ':' StatementSequence ]
+Case ::= CaseLabelList ':' StatementSequence
 
 CaseLabelList ::= LabelRange { [','] LabelRange }
 
