@@ -1,0 +1,199 @@
+// Copyright (c) 2024 by Rochus Keller <mailto:me@rochus-keller.ch>
+// 
+// GNU General Public License Usage
+// This file may be used under the terms of the GNU General Public
+// License (GPL) versions 2.0 or 3.0 as published by the Free Software
+// Foundation and appearing in the file LICENSE.GPL included in
+// the packaging of this file. Please review the following information
+// to ensure GNU General Public Licensing requirements will be met:
+// http://www.fsf.org/licensing/licenses/info/GPLv2.html and
+// http://www.gnu.org/copyleft/gpl.html.
+
+Luon ::=  module
+
+ident ::= // ( letter | '_' ) {letter | digit | '_'}
+
+// int, integer, uint; long, longint, ulong
+integer ::= // digit {hexDigit|'_'} ['O'|'B'|'H'] ['L']
+
+// float
+real ::= // digit {digit|'_'} '.' {digit} ['E' ['+' | '-'] digit {digit}]
+
+number ::= integer | real
+
+string ::= // '"' {character} '"' 
+hexchar ::= // digit {hexDigit} 'X'
+hexstring ::= // '$' {hexDigit} '$'
+
+comment- ::= '(*' '*)' '//'
+Comment ::=
+directive- ::= '<*' '*>' // oadkwood source code directive
+
+hexstringdelim- ::= '$'
+
+qualident ::= [ \LA: 2:'.'\ ident '.' ] ident  
+
+identdef ::= ident [ '*' | '-' ] 
+
+ConstDeclaration ::= identdef  '=' ConstExpression 
+
+ConstExpression ::= expression
+
+TypeDeclaration ::= identdef 	'=' type
+
+type ::= NamedType | ArrayType | DictType | RecordType | ProcedureType | enumeration
+
+NamedType ::= qualident
+
+ArrayType ::= 'ARRAY' [ length ] 'OF' type | '[' [ length ] ']' type
+
+length ::= ConstExpression 
+
+DictType ::= 'HASHMAP' type 'OF' type
+
+RecordType ::= 'RECORD' ['(' BaseType ')'] { FieldList [ ';' ] } 'END' 
+BaseType ::= NamedType
+FieldList ::= IdentList ':' type 
+
+IdentList ::= identdef { [','] identdef}
+
+enumeration ::= '(' constEnum ')'                       
+constEnum ::= ident [ '=' ConstExpression ] { [','] ident }
+
+VariableDeclaration ::= IdentList ':' type
+
+designator ::= qualident {selector}
+
+selector ::= '.' ident | '[' expression ']' | '(' [ ExpList ] ')' 
+
+ExpList ::= expression { [','] expression }
+
+expression ::= SimpleExpression [ relation SimpleExpression ]
+
+relation ::= '=' | '#' | '<' | '<=' | '>' | '>=' | IN |'IS'
+
+SimpleExpression ::= ['+' | '-'] term { AddOperator term }
+
+AddOperator ::= '+' | '-' | 'OR'
+
+term ::= factor {MulOperator factor}
+
+MulOperator ::= '*' | '/' | 'DIV' | 'MOD' | '&' | 'AND'
+
+literal ::= number | string | hexchar | 'NIL' | set | 'TRUE' | 'FALSE'
+
+constructor ::= NamedType '{' [ component {[','] component} ] '}' 
+                           | hexstring
+
+component ::= [\LL:2\ ident '='] ConstExpression
+
+factor ::= 
+        \LA: 1:ident & 2:'{'\ constructor
+        | literal
+	| variableOrFunctionCall // replaces: designator [ActualParameters]
+	| '(' expression ')' 
+	| ('~'|'NOT') factor // negation
+
+variableOrFunctionCall ::= designator // designator includes [ ActualParameters ] 
+	
+set ::= '{' [ element {[','] element} ] '}'
+
+element ::= expression ['..' expression]
+
+statement ::= 
+        assignmentOrProcedureCall
+	| IfStatement | CaseStatement |
+	LoopStatement |
+	ExitStatement | 
+	ReturnStatement |
+	WhileStatement | RepeatStatement | ForStatement
+
+assignmentOrProcedureCall ::= designator  [
+		':=' expression ] // assignment 
+		// designator also covers params: | [ ActualParameters ] // ProcedureCall
+
+StatementSequence ::=  { statement { ';' } } 
+
+IfStatement ::= 'IF' expression 'THEN' StatementSequence { ElsifStatement }
+	[ ElseStatement ] 'END'
+ElsifStatement ::= 'ELSIF' expression 'THEN' StatementSequence 
+ElseStatement ::= 'ELSE' StatementSequence
+
+CaseStatement ::= 'CASE' expression 'OF' [Case] { '|' Case }
+	[ 'ELSE' StatementSequence ] 'END' 
+
+Case ::= [ CaseLabelList ':' StatementSequence ]
+
+CaseLabelList ::= LabelRange { [','] LabelRange }
+
+LabelRange ::= label [ '..' label ]
+
+label ::= ConstExpression
+
+WhileStatement ::= 'WHILE' expression 'DO' StatementSequence 'END'
+
+RepeatStatement ::= 'REPEAT' StatementSequence 'UNTIL' expression
+
+ForStatement ::= 'FOR' ident ':=' expression 'TO' expression [ 'BY' ConstExpression ]
+	'DO' StatementSequence 'END'
+	
+LoopStatement ::= 'LOOP' StatementSequence 'END'
+
+ExitStatement ::= 'EXIT'
+
+procedure ::= 'PROCEDURE' | 'PROC'
+
+ProcedureType ::= procedure [ '^'] [FormalParameters]  //  '^' is an object callback
+
+ProcedureDeclaration ::= 
+        ProcedureHeading ['INLINE'| 'INVAR'] [ ';' ] ( ProcedureBody | 'END' )
+	// type bound procs cannot be INLINE nor INVAR
+	
+ProcedureHeading ::= procedure [Receiver] identdef [ FormalParameters ]  
+Receiver ::= '(' ident ':' ident ')'
+
+block ::= 'BEGIN' StatementSequence
+
+ProcedureBody ::= DeclarationSequence block 'END' ident
+	
+DeclarationSequence ::= 
+	{ 'CONST' { ConstDeclaration [';'] } 
+	| 'TYPE' { TypeDeclaration [';'] } 
+	| 'VAR' { VariableDeclaration [';'] } 
+	| ProcedureDeclaration [';'] }
+
+ReturnStatement ::= 'RETURN' 
+	[ expression ] // leads to LL(k) ambig with qualident statement; resolve by checking if proc has return type
+
+FormalParameters ::= '(' [ FPSection { \LA: 1:(ident|'IN'|'VAR') | (1:';' & 2:(ident|'IN'|'VAR'))\ 
+                                              [';'] FPSection } [ [';'] '..'] ]  ')' [ ':' ReturnType ]
+
+ReturnType ::= NamedType
+
+FPSection ::= [VAR|IN] ident { [','] ident } ':' FormalType 
+
+FormalType ::= type
+
+module ::= 'MODULE' ident [ MetaParams ] [';'] 
+	{ ImportList | DeclarationSequence }
+	[ block ] 'END' ident ['.'] 
+	
+ImportList ::= 'IMPORT' import { [ ',' ] import } [';']
+
+import ::= [ \LL:2\ ident ':=' ] ident  { '.' ident }  [ MetaActuals ] 
+
+MetaActuals ::= '(' ConstExpression { [','] ConstExpression } ')' 
+
+MetaParams ::= '(' MetaSection { [';'] MetaSection } ')'
+
+MetaSection ::= [ TYPE | CONST ] ident { \LL:2\ [','] ident } [ ':' NamedType ]
+
+reserved_for_future_extensions- ::= 
+
+/// Pragmas
+%module ::= 'Luon'
+%namespace ::= 'Ln'
+%suppress ::= ';' ',' '.' ':'
+
+//%no_syntree ::= 'true'
+
