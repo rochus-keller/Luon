@@ -38,6 +38,10 @@ Derived the syntax from Oberon+ and Micron and generated a parser using [the gra
 Adopted the AST infrastructure from Micron and extended the AST for full program coverage.
 Implemented a recursive descent parser (modified the one generated  by [EbnfStudio](https://github.com/rochus-keller/EbnfStudio)) which generates the AST.
 
+#### Status on October 16, 2024
+
+Improved language: constructors generate object, extended for arrays and hashmaps; extra set constructor no longer needed. Can generate AST for ongoing AWFY with no memory leaks.
+
 #### Precompiled versions
 
 Not available at this time.

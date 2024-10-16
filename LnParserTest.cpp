@@ -26,6 +26,7 @@
 #include <QElapsedTimer>
 #include <LnPpLexer.h>
 #include <LnParser.h>
+#include <LnParser2.h>
 #include <LnSynTree.h>
 using namespace Ln;
 
@@ -95,7 +96,6 @@ public:
     }
 };
 
-#if 0
 class Lex2 : public Scanner2
 {
 public:
@@ -110,7 +110,6 @@ public:
     }
     QString source() const { return lex.getSource(); }
 };
-#endif
 
 static void checkParser(const QStringList& files)
 {
@@ -147,6 +146,37 @@ static void checkParser(const QStringList& files)
     qDebug() << "#### finished with" << ok << "files ok of total" << files.size() << "files" << "in" << timer.elapsed() << " [ms]";
 }
 
+static void checkParser2(const QStringList& files)
+{
+    int ok = 0;
+    QElapsedTimer timer;
+    timer.start();
+    foreach( const QString& file, files )
+    {
+        Lex2 lex;
+        lex.lex.setStream(file);
+        QFile out;
+        out.open(stdout, QIODevice::WriteOnly);
+        //IlAsmRenderer ar(&out);
+        //MilEmitter e(&ar);
+        AstModel mdl;
+        Parser2 p(&mdl,&lex);
+        qDebug() << "**** parsing" << file.mid(root.size()+1);
+        p.RunParser(MetaActualList());
+        if( !p.errors.isEmpty() )
+        {
+            foreach( const Parser2::Error& e, p.errors )
+                qCritical() << e.path.mid(root.size()+1) << e.row << e.col << e.msg;
+            // break;
+        }else
+        {
+            ok++;
+            qDebug() << "ok";
+        }
+    }
+    qDebug() << "#### finished with" << ok << "files ok of total" << files.size() << "files" << "in" << timer.elapsed() << " [ms]";
+}
+
 int main(int argc, char *argv[])
 {
     QCoreApplication a(argc, argv);
@@ -175,7 +205,8 @@ int main(int argc, char *argv[])
         }
     }
 #else
-    checkParser(files);
+    // checkParser(files);
+    checkParser2(files);
 #endif
 
     return 0;

@@ -67,7 +67,7 @@ namespace Ln {
 		void ConstDeclaration();
         Expression* ConstExpression();
         void TypeDeclaration();
-        Type* type();
+        Type* type(bool deanonymize = true);
         Type* NamedType();
         Type* ArrayType();
         Expression* length();
@@ -90,11 +90,9 @@ namespace Ln {
         Expression* literal();
         Expression* constructor();
         enum { FirstComponent, Named, Anonymous };
-        void component();
+        Expression* component();
         Expression* factor(bool lvalue = false);
         Expression* variableOrFunctionCall(bool lvalue);
-        Expression* set();
-        Expression* element();
         Statement* statement();
         Statement* assignmentOrProcedureCall();
         Statement* StatementSequence();
@@ -114,7 +112,7 @@ namespace Ln {
 		void procedure();
         Type* ProcedureType();
 		void ProcedureDeclaration();
-		void Receiver();
+        Quali Receiver();
         Statement* block();
         void DeclarationSequence();
         Statement* ReturnStatement();
@@ -128,16 +126,18 @@ namespace Ln {
         MetaParamList MetaParams();
         MetaParamList MetaSection(bool& isType);
     protected:
-        Declaration* addDecl(const Token& id, quint8 visi, quint8 mode, bool* doublette = 0);
-        Declaration* addDecl(const IdentDef& id, quint8 mode, bool* doublette = 0);
+        Declaration* addDecl(const Token& id, quint8 visi, quint8 mode);
+        Declaration* addDecl(const IdentDef& id, quint8 mode);
         void error( const Token&, const QString& msg);
         void error( int row, int col, const QString& msg );
-        DeclList toList(Declaration* d);
+        Declaration* addHelper(Type* t);
+        void clearTemps();
 
 	protected:
         MetaActualList metaActuals;
         Declaration* thisMod, *thisDecl;
         QList<Type*> componentTypeStack;
+        QList<Type*> temporaries;
         AstModel* mdl;
         Importer* imp;
         Token cur;

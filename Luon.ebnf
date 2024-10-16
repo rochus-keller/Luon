@@ -80,15 +80,19 @@ term ::= factor {MulOperator factor}
 
 MulOperator ::= '*' | '/' | 'DIV' | 'MOD' | '&' | 'AND'
 
-literal ::= number | string | hexstring | hexchar | 'NIL' | set | 'TRUE' | 'FALSE'
+literal ::= number | string | hexstring | hexchar | 'NIL' | 'TRUE' | 'FALSE'
 
-constructor ::= NamedType '{' [ component {[','] component} ] '}' 
-                           | hexstring
+constructor ::= [NamedType] '{' [ component {[','] component} ] '}'  
+                            // TODO: support empty or incomplete constructors with default values for undefineds
+                            // TODO: structured constructor create instance
 
-component ::= [\LL:2\ ident '='] ConstExpression
+component ::= 
+        \LL:2\ ident ':' expression // explicit record field name (ident is like a label, thus ':')
+        | '[' expression ']' ':' expression // explicit array element or hashmap key/value pair
+        | expression ['..' expression] // value mapped to record or array by field/element order; '..' only for sets
 
 factor ::= 
-        \LA: 1:ident & 2:'{'\ constructor
+        \LA: 1:'{' | 1:ident & 2:'{'\ constructor
         | literal
 	| variableOrFunctionCall // replaces: designator [ActualParameters]
 	| '(' expression ')' 
@@ -96,10 +100,6 @@ factor ::=
 
 variableOrFunctionCall ::= designator // designator includes [ ActualParameters ] 
 	
-set ::= '{' [ element {[','] element} ] '}'
-
-element ::= expression ['..' expression]
-
 statement ::= 
         assignmentOrProcedureCall
 	| IfStatement | CaseStatement |
@@ -195,5 +195,5 @@ reserved_for_future_extensions- ::=
 %namespace ::= 'Ln'
 %suppress ::= ';' ',' '.' ':'
 
-//%no_syntree ::= 'true'
+%no_syntree ::= 'true'
 

@@ -20,17 +20,17 @@
 #include <QtDebug>
 using namespace Ln;
 
-Declaration AstModel::globalScope;
+Declaration* AstModel::globalScope = 0;
 Type* AstModel::types[BasicType::Max] = {0};
 
 
 AstModel::AstModel():helper(0),helperId(0)
 {
-    openScope(&globalScope);
-
-    if( globalScope.mode == Declaration::NoMode )
+    if( globalScope == 0 )
     {
-        globalScope.mode = Declaration::Scope;
+        globalScope = new Declaration();
+        globalScope->mode = Declaration::Scope;
+        openScope(globalScope);
         types[BasicType::Undefined] = newType(BasicType::Undefined,1);
         types[BasicType::NoType] = newType(BasicType::NoType,1);
         types[BasicType::StrLit] = newType(BasicType::StrLit,1);
@@ -94,16 +94,16 @@ AstModel::AstModel():helper(0),helperId(0)
         addBuiltin("PRINTLN", Builtin::PRINTLN);
         addBuiltin("RAISE", Builtin::RAISE);
         addBuiltin("SETENV", Builtin::SETENV);
-    }
+    }else
+        openScope(globalScope);
 }
 
 AstModel::~AstModel()
 {
     for( int i = 1; i < scopes.size(); i++ ) // start with 1, 0 is globalScope
-        delete scopes[i];
+        Declaration::deleteAll(scopes[i]);
     scopes.clear();
-    if( helper )
-        delete helper;
+    Declaration::deleteAll( helper );
 }
 
 void AstModel::openScope(Declaration* scope)
@@ -112,10 +112,7 @@ void AstModel::openScope(Declaration* scope)
     {
         scope = new Declaration();
         scope->mode = Declaration::Scope;
-        scope->type = 0;
-        scope->next = 0;
     }
-    scope->scope = true;
     scopes.push_back(scope);
 }
 
@@ -126,10 +123,13 @@ Declaration* AstModel::closeScope(bool takeMembers)
     if( takeMembers )
     {
         res = scopes.back()->link;
+        if( res )
+            Q_ASSERT(!res->inList);
         scopes.back()->link = 0;
-        delete scopes.back();
+        Declaration::deleteAll(scopes.back());
     }else if( scopes.back()->mode == Declaration::Module )
     {
+        // append the helpers to the module so they are guaranteed to have the same life span as the module
         Q_ASSERT(scopes.back()->next == 0);
         scopes.back()->next = helper;
         helper = 0;
@@ -138,31 +138,23 @@ Declaration* AstModel::closeScope(bool takeMembers)
     return res;
 }
 
-Declaration*AstModel::addDecl(const QByteArray& name, bool* doublette)
+Declaration*AstModel::addDecl(const QByteArray& name)
 {
-    if( doublette )
-        *doublette = false;
     Declaration* scope = scopes.back();
-    Declaration** obj = &scope->link;
 
-    while(*obj != 0 && (*obj)->name.constData() != name.constData() )
-        obj = &((*obj)->next);
-    if((*obj) == 0 )
+    Declaration* decl = new Declaration();
+    decl->name = name;
+    if( scope->mode != Declaration::Scope )
+        decl->outer = scope;
+    if( scope->link == 0 )
+        scope->link = decl;
+    else
     {
-        Declaration* decl = new Declaration();
-        decl->link = 0;
-        decl->next = 0;
-        decl->name = name;
-        if( scope->mode != Declaration::Scope )
-            decl->outer = scope;
-        *obj = decl;
-        return decl;
-    }else
-    {
-        if( doublette  )
-            *doublette = true;
-        return (*obj);
+        Declaration* last = scope->link->getLast();
+        last->next = decl;
+        decl->inList = true;
     }
+    return decl;
 }
 
 Declaration*AstModel::addHelper()
@@ -171,20 +163,10 @@ Declaration*AstModel::addHelper()
     decl->link = 0;
     decl->next = helper;
     helper = decl;
+    decl->inList = true;
     decl->name = "$" + QByteArray::number(++helperId);
     decl->outer = getTopModule();
     return decl;
-}
-
-void AstModel::removeDecl(Declaration* del)
-{
-    Declaration* scope = scopes.back();
-    Declaration** obj = &scope->link;
-    while( (*obj) && (*obj) != del )
-        obj = &((*obj)->next);
-    *obj = del->next;
-    del->next = 0;
-    delete del;
 }
 
 Declaration*AstModel::findDecl(const QByteArray& id, bool recursive) const
@@ -197,7 +179,7 @@ Declaration*AstModel::findDecl(const QByteArray& id, bool recursive) const
             if( cur->name.constData() == id.constData() )
                 return cur;
             else
-                cur = cur->next;
+                cur = cur->getNext();
         }
         if( !recursive )
             return 0;
@@ -212,7 +194,7 @@ Declaration*AstModel::findDecl(Declaration* import, const QByteArray& id) const
     Q_ASSERT(import && import->mode == Declaration::Import);
     Declaration* obj = import->link;
     while( obj != 0 && obj->name.constData() != id.constData() )
-        obj = obj->next;
+        obj = obj->getNext();
     return obj;
 }
 
@@ -231,15 +213,10 @@ Declaration*AstModel::getTopModule() const
 
 void AstModel::cleanupGlobals()
 {
-    if( globalScope.mode == Declaration::Scope )
+    if( globalScope )
     {
-        if( globalScope.next )
-            delete globalScope.next;
-        globalScope.next = 0;
-        if( globalScope.link )
-            delete globalScope.link;
-        globalScope.link = 0;
-        globalScope.mode = Declaration::NoMode;
+        Declaration::deleteAll(globalScope);
+        globalScope = 0;
         for( int i = 0; i < BasicType::Max; i++ )
         {
             delete types[i];
@@ -306,7 +283,7 @@ QPair<int, int> Type::getFieldCount() const
             res.first++;
         else if( d->mode == Declaration::Variant )
             res.second++;
-        d = d->next;
+        d = d->getNext();
     }
     return res;
 }
@@ -318,7 +295,7 @@ Type::~Type()
     //    delete base;
     if( form != ConstEnum )
         for( int i = 0; i < subs.size(); i++ )
-            delete subs[i];
+            Declaration::deleteAll(subs[i]);
     if( expr )
         delete expr;
 }
@@ -380,16 +357,16 @@ const char* Declaration::s_mode[] = {
 
 Declaration::~Declaration()
 {
+#if 0
+    // use deleteAll instead
     if( next )
         delete next;
-    if( link
-            && mode != Declaration::Import  // imports are just referenced, not owned
-            )
-        delete link;
+#endif
+    if( link )
+        Declaration::deleteAll(link);
     if( type && ownstype )
         delete type;
-    if( body )
-        delete body;
+    Statement::deleteAll(body);
     if( expr )
         delete expr;
 }
@@ -419,6 +396,26 @@ int Declaration::getIndexOf(Declaration* ref) const
         d = d->next;
     }
     return -1;
+}
+
+Declaration*Declaration::getLast() const
+{
+    Declaration* d = const_cast<Declaration*>(this);
+    while( d && d->next )
+        d = d->next;
+    return d;
+}
+
+void Declaration::deleteAll(Declaration* d)
+{
+    if( d )
+        Q_ASSERT( !d->inList );
+    while( d )
+    {
+        Declaration* tmp = d->next;
+        delete d;
+        d = tmp;
+    }
 }
 
 
@@ -620,22 +617,44 @@ Expression*Expression::createFromToken(quint16 tt, const RowCol& rc)
 
 Statement*Statement::getLast() const
 {
-    if( next )
-        return next->getLast();
-    else
-        return const_cast<Statement*>(this);
+    Statement* s = const_cast<Statement*>(this);
+    while( s && s->next )
+        s = s->next;
+    return s;
+}
+
+void Statement::append(Statement* s)
+{
+    Q_ASSERT( s && !s->inList );
+    Statement* last = getLast();
+    last->next = s;
+    s->inList = true;
 }
 
 Statement::~Statement()
 {
-    if( body )
-        delete body;
+    deleteAll(body);
+#if 0
+    // no recursive delete here, use deleteAll instead
     if( next )
         delete next;
+#endif
     if( lhs )
         delete lhs;
     if( rhs )
         delete rhs;
+}
+
+void Statement::deleteAll(Statement* s)
+{
+    if( s )
+        Q_ASSERT(!s->inList); // only apply deleteAll to head of list
+    while( s )
+    {
+        Statement* tmp = s->next;
+        delete s;
+        s = tmp;
+    }
 }
 
 Ln::Expression::~Expression()
@@ -646,4 +665,21 @@ Ln::Expression::~Expression()
         delete rhs;
     if( next )
         delete next;
+}
+
+DeclList AstModel::toList(Declaration* d)
+{
+    if( d == 0 )
+        return DeclList();
+    Q_ASSERT( !d->inList );
+    DeclList res;
+    while( d )
+    {
+        d->inList = 0;
+        res << d;
+        Declaration* old = d;
+        d = d->next;
+        old->next = 0; // the next based list is converted to DeclList, avoid two redundant lists
+    }
+    return res;
 }

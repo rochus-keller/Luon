@@ -101,17 +101,16 @@ namespace Ln
         ~Type();
     };
 
-    struct Statement;
+    class Statement;
 
     class Declaration
     {
     public:
         enum Mode { NoMode, Scope, Module, TypeDecl, Builtin, ConstDecl, Import, Field, Variant,
                     VarDecl, LocalDecl,
-                    Procedure, ForwardDecl, ParamDecl,
+                    Procedure, ParamDecl,
                     Max };
         static const char* s_mode[];
-        Declaration* next; // list of all declarations in outer scope
         Declaration* link; // member list or alias proc or imported module decl
         Declaration* outer; // the owning declaration to reconstruct the qualident
         Statement* body; // procs
@@ -125,21 +124,30 @@ namespace Ln
         uint inline_ : 1;
         uint invar : 1;
         uint meta : 1;
-        uint scope : 1;
         uint ownstype : 1;
+        uint inList : 1; // private
+        uint receiver : 1;
         uint mode : 5;
         uint id : 16; // used for built-in code and local/param number
         QVariant data; // value for Const and Enum, path for Import, name for Extern
         Expression* expr; // const decl, enum, meta actuals
+
         Declaration():next(0),link(0),type(0),body(0),id(0),mode(0),visi(0),ownstype(false),expr(0),
-            inline_(false),invar(false),meta(false),scope(false),outer(0),access(0){}
-        ~Declaration();
+            inline_(false),invar(false),meta(false),outer(0),access(0),inList(0),receiver(0){}
 
         QList<Declaration*> getParams() const;
         int getIndexOf(Declaration*) const;
         bool isLvalue() const { return mode == VarDecl || mode == LocalDecl || mode == ParamDecl; }
         bool isPublic() const { return visi >= ReadOnly; }
-    };
+        Declaration* getNext() const { return next; }
+        Declaration* getLast() const;
+        static void deleteAll(Declaration*);
+
+    private:
+        ~Declaration();
+        Declaration* next; // list of all declarations in outer scope
+        friend class AstModel;
+   };
     typedef QList<Declaration*> DeclList;
 
     class Expression {
@@ -156,7 +164,8 @@ namespace Ln
             Index, // a[i]
             Cast, AutoCast,
             Call,
-            Literal, Set, Range,
+            Literal,
+            Constructor, Range, KeyValue,
             NameRef, // temporary, will be resolved by validator
             MAX
         };
@@ -212,7 +221,8 @@ namespace Ln
         MetaActualList metaActuals;
     };
 
-    struct Statement {
+    class Statement {
+    public:
         enum Kind { Invalid,
             Assig, Call, If, Elsif, Else, Case, CaseLabel,
             Loop, While, Repeat, Exit, Return, ForAssig, ForToBy
@@ -220,13 +230,20 @@ namespace Ln
         quint8 kind;
 
         RowCol pos;
-        Expression* lhs; // proc, assig lhs
-        Expression* rhs; // rhs, args, cond, case, label, return
-        Statement* next; // list of statements
-        Statement* body; // then
+        Expression* lhs; // owns: proc, assig lhs
+        Expression* rhs; // owns: rhs, args, cond, case, label, return
+        Statement* body; // owns: then
+
+        Statement(Kind k = Invalid, const RowCol& pos = RowCol()):kind(k),pos(pos),lhs(0),rhs(0),
+            next(0),body(0),inList(false) {}
         Statement* getLast() const;
-        Statement(Kind k = Invalid, const RowCol& pos = RowCol()):kind(k),pos(pos),lhs(0),rhs(0),next(0),body(0) {}
+        void append(Statement*s);
+        static void deleteAll(Statement*);
+    private:
         ~Statement();
+
+        Statement* next; // owns: list of statements
+        bool inList;
     };
 
     typedef QList<Declaration*> MetaParamList;
@@ -247,9 +264,8 @@ namespace Ln
 
         void openScope(Declaration* scope);
         Declaration* closeScope(bool takeMembers = false);
-        Declaration* addDecl(const QByteArray&, bool* doublette = 0 );
+        Declaration* addDecl(const QByteArray&);
         Declaration* addHelper();
-        void removeDecl(Declaration*);
         Declaration* findDecl(const QByteArray&, bool recursive = true) const;
         Declaration* findDecl(Declaration* import, const QByteArray&) const;
         Declaration* getTopScope() const { return scopes.back(); }
@@ -259,6 +275,7 @@ namespace Ln
         Type* getType(quint8 basicType) const { return types[basicType]; }
 
         static void cleanupGlobals();
+        static DeclList toList(Declaration* d);
     protected:
         Type* newType(int form, int size);
         Type* addType(const QByteArray& name, int form, int size);
@@ -268,7 +285,7 @@ namespace Ln
         QList<Declaration*> scopes;
         Declaration* helper;
         quint32 helperId;
-        static Declaration globalScope;
+        static Declaration* globalScope;
         static Type* types[BasicType::Max];
 
     };

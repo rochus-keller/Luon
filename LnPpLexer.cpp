@@ -52,6 +52,7 @@ void PpLexer::setStream(QIODevice*d, const QString& sourcePath, const QDateTime&
 bool PpLexer::setStream(const QString& sourcePath)
 {
     d_lex.setStream(sourcePath);
+    return true;
 }
 
 Token PpLexer::nextToken()
