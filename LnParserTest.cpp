@@ -28,6 +28,7 @@
 #include <LnParser.h>
 #include <LnParser2.h>
 #include <LnSynTree.h>
+#include <LnValidator.h>
 using namespace Ln;
 
 QStringList collectFiles( const QDir& dir, const QStringList& suffix )
@@ -166,10 +167,20 @@ static void checkParser2(const QStringList& files)
         if( !p.errors.isEmpty() )
         {
             foreach( const Parser2::Error& e, p.errors )
-                qCritical() << e.path.mid(root.size()+1) << e.row << e.col << e.msg;
+                qCritical() << e.path.mid(root.size()+1) << e.pos.d_row << e.pos.d_col << e.msg;
             // break;
         }else
         {
+            Validator v(&mdl);
+            Parser2::Result r = p.takeResult();
+            if( !v.validate(r.first) )
+            {
+                foreach( const Validator::Error& e, v.errors )
+                    qCritical() << e.path.mid(root.size()+1) << e.pos.d_row << e.pos.d_col << e.msg;
+            }
+            foreach(Type* t, r.second)
+                delete t;
+
             ok++;
             qDebug() << "ok";
         }

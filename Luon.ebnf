@@ -156,6 +156,8 @@ block ::= 'BEGIN' StatementSequence
 
 ProcedureBody ::= DeclarationSequence block 'END' ident
 	
+// The order of declarations is generally not relevant; but we require that the record declaration a bound procedure
+// refers to is in the same scope and prior to the bound procedure declaration
 DeclarationSequence ::= 
 	{ 'CONST' { ConstDeclaration [';'] } 
 	| 'TYPE' { TypeDeclaration [';'] } 

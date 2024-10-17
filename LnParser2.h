@@ -45,12 +45,13 @@ namespace Ln {
         Parser2(AstModel* m, Scanner2* s, Importer* imp = 0):scanner(s),mdl(m),imp(imp),thisMod(0),thisDecl(0) {}
         ~Parser2();
         void RunParser(const MetaActualList& ma);
-        Declaration* takeModule(); // get module declaration and take ownership (otherwise deleted by parser)
+        typedef QPair<Declaration*, QList<Type*> > Result; // module + list of temporary types
+        Result takeResult(); // get module declaration and take ownership (otherwise deleted by parser)
         struct Error {
 		    QString msg;
-		    int row, col;
+            RowCol pos;
 		    QString path;
-		    Error( const QString& m, int r, int c, const QString& p):msg(m),row(r),col(c),path(p){}
+            Error( const QString& m, const RowCol& pos, const QString& p):msg(m),pos(pos),path(p){}
 		};
 		QList<Error> errors;
 	protected:
@@ -129,7 +130,7 @@ namespace Ln {
         Declaration* addDecl(const Token& id, quint8 visi, quint8 mode);
         Declaration* addDecl(const IdentDef& id, quint8 mode);
         void error( const Token&, const QString& msg);
-        void error( int row, int col, const QString& msg );
+        void error( const RowCol&, const QString& msg );
         Declaration* addHelper(Type* t);
         void clearTemps();
 

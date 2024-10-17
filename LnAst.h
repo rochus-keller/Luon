@@ -127,13 +127,14 @@ namespace Ln
         uint ownstype : 1;
         uint inList : 1; // private
         uint receiver : 1;
-        uint mode : 5;
+        uint validated : 1;
+        uint mode : 4;
         uint id : 16; // used for built-in code and local/param number
         QVariant data; // value for Const and Enum, path for Import, name for Extern
         Expression* expr; // const decl, enum, meta actuals
 
         Declaration():next(0),link(0),type(0),body(0),id(0),mode(0),visi(0),ownstype(false),expr(0),
-            inline_(false),invar(false),meta(false),outer(0),access(0),inList(0),receiver(0){}
+            inline_(false),invar(false),meta(false),outer(0),access(0),inList(0),receiver(0),validated(0){}
 
         QList<Declaration*> getParams() const;
         int getIndexOf(Declaration*) const;
@@ -250,6 +251,7 @@ namespace Ln
 
     struct ModuleData {
         QByteArrayList path;
+        QString source;
         MetaParamList metaParams;
         MetaActualList metaActuals;
         QByteArray suffix;

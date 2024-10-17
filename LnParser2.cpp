@@ -584,11 +584,13 @@ void Parser2::RunParser(const MetaActualList& ma) {
     Luon();
 }
 
-Declaration*Parser2::takeModule()
+Parser2::Result Parser2::takeResult()
 {
-    // TODO temporaries
-    Declaration* res = thisMod;
+    Result res;
+    res.first = thisMod;
+    res.second = temporaries;
     thisMod = 0;
+    temporaries.clear();
     return res;
 }
 
@@ -596,7 +598,7 @@ void Parser2::next() {
 	cur = la;
 	la = scanner->next();
 	while( la.d_type == Tok_Invalid ) {
-		errors << Error(la.d_val, la.d_lineNr, la.d_colNr, la.d_sourcePath);
+        errors << Error(la.d_val, RowCol(la.d_lineNr, la.d_colNr), la.d_sourcePath);
 		la = scanner->next();
 	}
 }
@@ -611,12 +613,13 @@ Token Parser2::peek(int off) {
 }
 
 void Parser2::invalid(const char* what) {
-	errors << Error(QString("invalid %1").arg(what),la.d_lineNr, la.d_colNr, la.d_sourcePath);
+    errors << Error(QString("invalid %1").arg(what),RowCol(la.d_lineNr, la.d_colNr), la.d_sourcePath);
 }
 
 bool Parser2::expect(int tt, bool pkw, const char* where) {
 	if( la.d_type == tt) { next(); return true; }
-	else { errors << Error(QString("'%1' expected in %2").arg(tokenTypeString(tt)).arg(where),la.d_lineNr, la.d_colNr, la.d_sourcePath); return false; }
+    else { errors << Error(QString("'%1' expected in %2").arg(tokenTypeString(tt)).arg(where),
+                           RowCol(la.d_lineNr, la.d_colNr), la.d_sourcePath); return false; }
 }
 
 static inline void dummy() {}
@@ -711,6 +714,8 @@ void Parser2::ConstDeclaration() {
     const IdentDef id = identdef();
     expect(Tok_Eq, false, "ConstDeclaration");
     Declaration* d = addDecl(id, Declaration::ConstDecl);
+    if( d == 0 )
+        return;
     d->expr = ConstExpression();
 }
 
@@ -725,6 +730,8 @@ void Parser2::TypeDeclaration() {
 
     // declare the type immediately so it is known in the forthcoming declaration
     Declaration* d = addDecl(id,Declaration::TypeDecl);
+    if( d == 0 )
+        return;
     thisDecl = d;
     if( FIRST_NamedType(la.d_type) ) {
         t = NamedType();
@@ -849,6 +856,8 @@ void Parser2::FieldList() {
     for(int i = 0; i < l.size(); i++ )
     {
         Declaration* d = addDecl(l[i],Declaration::Field);
+        if( d == 0 )
+            continue;
         d->type = t;
     }
 }
@@ -886,6 +895,8 @@ DeclList Parser2::constEnum() {
     DeclList res;
 
     Declaration* d = addDecl(cur, 0, Declaration::ConstDecl);
+    if( d == 0 )
+        return res;
 
     if( la.d_type == Tok_Eq ) {
         expect(Tok_Eq, false, "constEnum");
@@ -900,6 +911,8 @@ DeclList Parser2::constEnum() {
         }
         expect(Tok_ident, false, "constEnum");
         d = addDecl(cur, 0, Declaration::ConstDecl);
+        if( d == 0 )
+            continue;
         res << d;
     }
     return res;
@@ -916,6 +929,8 @@ void Parser2::VariableDeclaration() {
     {
         Declaration* d = addDecl(id,outer->mode == Declaration::Module ?
                                      Declaration::VarDecl : Declaration::LocalDecl);
+        if( d == 0 )
+            continue;
         d->outer = outer;
         d->type = t;
     }
@@ -1641,8 +1656,17 @@ void Parser2::ProcedureDeclaration() {
 
     Quali receiver;
     const Token t = la;
+    Declaration* record = 0;
     if( FIRST_Receiver(la.d_type) ) {
         receiver = Receiver();
+        record = mdl->findDecl(receiver.second);
+        if( record == 0 || record->mode != Declaration::TypeDecl ||
+                record->type == 0 || record->type->form != Type::Record )
+        {
+            error(t, "receiver must be a record type declaration");
+            record = 0;
+        }else
+            mdl->openScope(0);
     }
 
     const IdentDef id = identdef();
@@ -1650,6 +1674,8 @@ void Parser2::ProcedureDeclaration() {
         return; // invalid syntax
 
     Declaration* procDecl = addDecl(id, Declaration::Procedure);
+    if( procDecl == 0 )
+        return;
 
     mdl->openScope(procDecl);
 
@@ -1699,6 +1725,16 @@ void Parser2::ProcedureDeclaration() {
         invalid("ProcedureDeclaration");
 
     mdl->closeScope();
+    if( record )
+    {
+        DeclList l = AstModel::toList(mdl->closeScope(true));
+        for(int i = 0; i < l.size(); i++ )
+        {
+            if( record->type->findField(l[i]->name) )
+                error(l[i]->pos, "name not unique in receiver");
+        }
+        record->type->subs += l;
+    }
 }
 
 Parser2::Quali Parser2::Receiver() {
@@ -1783,6 +1819,7 @@ Type* Parser2::FormalParameters() {
 			expect(Tok_2Dot, false, "FormalParameters");
             cur.d_val = Token::getSymbol("..");
             Declaration* d = addDecl(cur,0,Declaration::ParamDecl);
+            Q_ASSERT(d);
             d->outer = mdl->getTopScope();
             d->type = mdl->getType(BasicType::NoType);
         }
@@ -1829,6 +1866,8 @@ void Parser2::FPSection() {
     for(int i = 0; i < l.size(); i++ )
     {
         Declaration* d = addDecl(l[i], 0, Declaration::ParamDecl);
+        if( d == 0 )
+            continue;
         d->access = a;
         d->type = t;
     }
@@ -1862,6 +1901,7 @@ void Parser2::module() {
 
     ModuleData md;
     md.path = scanner->path();
+    md.source = scanner->source();
     md.path += cur.d_val;
     if( imp )
         md.fullName = Token::getSymbol(imp->modulePath(md.path));
@@ -1870,7 +1910,7 @@ void Parser2::module() {
     md.metaActuals = metaActuals;
 
     if( FIRST_MetaParams(la.d_type) ) {
-        md.metaParams = MetaParams(); // TODO: owner, add to scope
+        md.metaParams = MetaParams();
     }
 
     m->data = QVariant::fromValue(md);
@@ -1892,6 +1932,8 @@ void Parser2::module() {
         id.name.d_val = "$begin";
         id.visi = IdentDef::Private;
         Declaration* procDecl = addDecl(id, Declaration::Procedure);
+        if( procDecl == 0 )
+            return;
         mdl->openScope(procDecl);
         procDecl->body = block();
         mdl->closeScope();
@@ -1937,6 +1979,8 @@ void Parser2::import() {
         localName = tl.last();
 
     Declaration* importDecl = addDecl(localName, 0, Declaration::Import);
+    if( importDecl == 0 )
+        return;
 
     QByteArrayList path;
     foreach( const Token& t, tl)
@@ -2007,7 +2051,9 @@ MetaParamList Parser2::MetaSection(bool& isType) {
     MetaParamList res;
     for( int i = 0; i < ids.size(); i++ )
     {
-        Declaration* decl = addDecl(cur, 0, isType ? Declaration::TypeDecl : Declaration::ConstDecl);
+        Declaration* decl = addDecl(ids[i], 0, isType ? Declaration::TypeDecl : Declaration::ConstDecl);
+        if( decl == 0 )
+            continue;
         decl->meta = true;
         decl->type = t;
         if( t == 0 )
@@ -2026,6 +2072,11 @@ Declaration*Parser2::addDecl(const Token& id, quint8 visi, quint8 mode)
 {
     // NOTE: we don't check here whether names are unique; this is to be done in the validator
     Declaration* d = mdl->addDecl(id.d_val);
+    if( d == 0 )
+    {
+        error( id, "a declaration with this name already exists");
+        return 0;
+    }
     d->mode = mode;
     d->visi = visi;
     d->pos.d_row = id.d_lineNr;
@@ -2041,13 +2092,13 @@ Declaration*Parser2::addDecl(const Parser2::IdentDef& id, quint8 mode)
 void Parser2::error(const Token& t, const QString& msg)
 {
     Q_ASSERT(!msg.isEmpty());
-    errors << Error(msg,t.d_lineNr, t.d_colNr, t.d_sourcePath);
+    errors << Error(msg,RowCol(t.d_lineNr, t.d_colNr), t.d_sourcePath);
 }
 
-void Parser2::error(int row, int col, const QString& msg)
+void Parser2::error(const RowCol& pos, const QString& msg)
 {
     Q_ASSERT(!msg.isEmpty());
-    errors << Error(msg, row, col, scanner->source());
+    errors << Error(msg, pos, scanner->source());
 }
 
 Declaration*Parser2::addHelper(Type* t)

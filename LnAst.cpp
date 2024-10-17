@@ -42,14 +42,14 @@ AstModel::AstModel():helper(0),helperId(0)
         types[BasicType::CHAR] = addType("CHAR", BasicType::CHAR, 1 );
         types[BasicType::INT32] = addType("INT", BasicType::INT32, 4 );
         types[BasicType::UINT32] = addType("UINT", BasicType::UINT32, 4 );
-        types[BasicType::INT64] = addType("LONG", BasicType::INT64, 8 );
+        types[BasicType::INT64] = addType("LONGINT", BasicType::INT64, 8 ); // NOTE: LONG is already a function
         types[BasicType::UINT64] = addType("ULONG", BasicType::UINT64, 8 );
         types[BasicType::LONGREAL] = addType("FLOAT", BasicType::LONGREAL, 8 );
         addTypeAlias("FLT64", types[BasicType::LONGREAL] );
         types[BasicType::SET] = addType("SET", BasicType::SET, 4 );
+        types[BasicType::STRING] = addType("STRING", BasicType::STRING, 4 );
 
         addTypeAlias("INTEGER", types[BasicType::INT32] );
-        addTypeAlias("LONGINT", types[BasicType::INT64] );
 
         addBuiltin("ABS", Builtin::ABS);
         addBuiltin("CAP", Builtin::CAP);
@@ -138,22 +138,31 @@ Declaration* AstModel::closeScope(bool takeMembers)
     return res;
 }
 
-Declaration*AstModel::addDecl(const QByteArray& name)
+Declaration* AstModel::addDecl(const QByteArray& name)
 {
     Declaration* scope = scopes.back();
-
+    Declaration** last;
+    if( scope->link == 0 )
+        last = &scope->link;
+    else
+    {
+        Declaration* d = scope->link;
+        while( d && d->next )
+        {
+            if( d->name.constData() == name.constData() )
+                return 0; // duplicate
+            d = d->next;
+        }
+        Q_ASSERT( d && d->next == 0 );
+        last = &d->next;
+    }
     Declaration* decl = new Declaration();
     decl->name = name;
     if( scope->mode != Declaration::Scope )
         decl->outer = scope;
-    if( scope->link == 0 )
-        scope->link = decl;
-    else
-    {
-        Declaration* last = scope->link->getLast();
-        last->next = decl;
-        decl->inList = true;
-    }
+    decl->inList = scope->link != 0;
+    *last = decl;
+
     return decl;
 }
 

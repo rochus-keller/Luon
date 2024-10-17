@@ -8,7 +8,8 @@ SOURCES += \
     LnParser.cpp \
     LnSynTree.cpp \
     $$PWD/LnAst.cpp \
-    $$PWD/LnParser2.cpp
+    $$PWD/LnParser2.cpp \
+    $$PWD/LnValidator.cpp
 
 HEADERS += \
     LnLexer.h \
@@ -19,5 +20,6 @@ HEADERS += \
     LnParser.h \
     LnSynTree.h \
     $$PWD/LnAst.h \
-    $$PWD/LnParser2.h
+    $$PWD/LnParser2.h \
+    $$PWD/LnValidator.h
 
