@@ -308,8 +308,8 @@ static inline bool allOctal( const QByteArray& str, int suffix )
 Token Lexer::number()
 {
     // number   = integer | real
-    // integer  = digit {hexDigit|'_'} ['O'|'B'|'H'] ['U'|'UI'|'UB'|'US'|'UL'|'I'|'S'|'L']
-    // real     = digit {digit|'_'} '.' {digit} [Exponent]
+    // integer  = digit {hexDigit|'_'} ['O'|'B'|'H']
+    // real     = digit {digit|'_'} '.' {digit|'_'} [Exponent]
     // Exponent = ('E' | 'D' | 'F' ) ['+' | '-'] digit {digit}
     // hexDigit = digit | 'A' ... 'F'
     // digit    = '0' ... '9'
@@ -330,7 +330,6 @@ Token Lexer::number()
     bool isBinary = false;
     bool isOctal = false;
     bool isDecimal = false;
-    bool isSigned = false;
     bool isChar = false;
     bool isReal = false;
     quint8 byteWidth = 0;
@@ -371,19 +370,16 @@ Token Lexer::number()
         while( true )
         {
             const char c = lookAhead(off);
-            if( !::isdigit(c) )
+            if( !::isdigit(c) && c != '_' )
                 break;
             else
                 off++;
             rhsPlaces++;
         }
         const char de = lookAhead(off);
-        if( de == 'E' || de == 'D' || de == 'F' || de == 'e' || de == 'd' || de == 'f' )
+        if( de == 'E' || de == 'e' )
         {
-            if( de == 'D' || de == 'd' )
-                byteWidth = 8;
-            else if( de == 'F' || de == 'f' )
-                byteWidth = 4;
+            byteWidth = 8;
 
             expPos = off;
             off++;
@@ -408,23 +404,6 @@ Token Lexer::number()
     }
     if( !isHex && !isBinary && !isOctal && !isChar && !isReal )
         isDecimal = true;
-    if( isHex || isBinary || isOctal || isDecimal )
-    {
-        c = lookAhead(off);
-        if( c == 'L' || c == 'l' )
-        {
-
-            off += 1;
-            suffix += 1;
-            switch( c )
-            {
-            case 'l':
-            case 'L':
-                byteWidth = 8;
-                break;
-            }
-        }
-    }
 
     QByteArray str = d_line.mid(d_colNr, off );
     Q_ASSERT( !str.isEmpty() );
@@ -455,30 +434,23 @@ Token Lexer::number()
         }
         lhs.replace('_',"");
         mantissa.replace('_',"");
-        bool mOk, lOk;
+        bool lOk;
         const quint64 l = lhs.toULongLong(&lOk);
-        const quint64 m = mantissa.toULongLong(&mOk); // !ok if mantissa is too large
         const int e = expPos != -1 ? str.mid(expPos+1).toInt() : 0;
-        tok.d_double = byteWidth != 4 && ( !mOk || byteWidth == 8 || e > 127 || e < -126 || m > 8388607 );
-        if( byteWidth == 4 && ( !lOk || e > 127 || e < -126 || l > 8388607 ) )
+        if(e > 1023 || e < -1022 || l > 9007199254740991L)
             return token( Tok_Invalid, off, "literal too large for REAL" );
-        if( tok.d_double && ( e > 1023 || e < -1022 || l > 9007199254740991L ) )
-            return token( Tok_Invalid, off, "literal too large for LONGREAL" );
         return tok;
     }else
     {
-        if( byteWidth )
-        {
-            bool ok;
-            QByteArray digits = str.left(str.size()-suffix);
-            digits.replace('_',"");
-            const int base = isHex ? 16 : isOctal ? 8 : isBinary ? 2 : 10;
-            const quint64 number = digits.toULongLong(&ok, base);
-            const quint64 limit = qPow(255,byteWidth) / ( isSigned ? 2.0 : 1.0 );
-            if( number >  limit || !ok )
-                return token( Tok_Invalid, off, QString("literal too large for an %1 bit %2integer")
-                              .arg(byteWidth*8).arg(isSigned ? "signed ":"" ).toUtf8() );
-        }
+        // integer
+        bool ok;
+        QByteArray digits = str.left(str.size()-suffix);
+        digits.replace('_',"");
+        const int base = isHex ? 16 : isOctal ? 8 : isBinary ? 2 : 10;
+        const quint64 number = digits.toULongLong(&ok, base);
+        const quint64 limit = (1L << 52) - 1;
+        if( number >  limit || !ok )
+            return token( Tok_Invalid, off, "literal too large for INTEGER");
         return token( Tok_integer, off, str );
     }
 }

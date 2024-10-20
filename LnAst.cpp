@@ -29,7 +29,7 @@ AstModel::AstModel():helper(0),helperId(0)
     if( globalScope == 0 )
     {
         globalScope = new Declaration();
-        globalScope->mode = Declaration::Scope;
+        globalScope->kind = Declaration::Scope;
         openScope(globalScope);
         types[BasicType::Undefined] = newType(BasicType::Undefined,1);
         types[BasicType::NoType] = newType(BasicType::NoType,1);
@@ -40,16 +40,12 @@ AstModel::AstModel():helper(0),helperId(0)
 
         types[BasicType::BOOLEAN] = addType("BOOLEAN", BasicType::BOOLEAN, 1 );
         types[BasicType::CHAR] = addType("CHAR", BasicType::CHAR, 1 );
-        types[BasicType::INT32] = addType("INT", BasicType::INT32, 4 );
-        types[BasicType::UINT32] = addType("UINT", BasicType::UINT32, 4 );
-        types[BasicType::INT64] = addType("LONGINT", BasicType::INT64, 8 ); // NOTE: LONG is already a function
-        types[BasicType::UINT64] = addType("ULONG", BasicType::UINT64, 8 );
-        types[BasicType::LONGREAL] = addType("FLOAT", BasicType::LONGREAL, 8 );
-        addTypeAlias("FLT64", types[BasicType::LONGREAL] );
+        types[BasicType::INTEGER] = addType("INTEGER", BasicType::INTEGER, 8 );
+        types[BasicType::REAL] = addType("REAL", BasicType::REAL, 8 );
         types[BasicType::SET] = addType("SET", BasicType::SET, 4 );
         types[BasicType::STRING] = addType("STRING", BasicType::STRING, 4 );
 
-        addTypeAlias("INTEGER", types[BasicType::INT32] );
+        addTypeAlias("INT", types[BasicType::INTEGER] );
 
         addBuiltin("ABS", Builtin::ABS);
         addBuiltin("CAP", Builtin::CAP);
@@ -68,22 +64,17 @@ AstModel::AstModel():helper(0),helperId(0)
         addBuiltin("FLT", Builtin::FLT);
         addBuiltin("GETENV", Builtin::GETENV);
         addBuiltin("LEN", Builtin::LEN);
-        addBuiltin("LONG", Builtin::LONG);
         addBuiltin("MAX", Builtin::MAX);
         addBuiltin("MIN", Builtin::MIN);
         addBuiltin("ODD", Builtin::ODD);
         addBuiltin("ORD", Builtin::ORD);
-        addBuiltin("SHORT", Builtin::SHORT);
-        addBuiltin("SIGNED", Builtin::SIGNED);
         addBuiltin("SIZE", Builtin::SIZE);
         addBuiltin("STRLEN", Builtin::STRLEN);
-        addBuiltin("UNSIGNED", Builtin::UNSIGNED);
         addBuiltin("VARARG", Builtin::VARARG);
         addBuiltin("VARARGS", Builtin::VARARGS);
         addBuiltin("ASSERT", Builtin::ASSERT);
         addBuiltin("COPY", Builtin::COPY);
         addBuiltin("DEC", Builtin::DEC);
-        addBuiltin("DISPOSE", Builtin::DISPOSE);
         addBuiltin("EXCL", Builtin::EXCL);
         addBuiltin("HALT", Builtin::HALT);
         addBuiltin("INC", Builtin::INC);
@@ -111,7 +102,7 @@ void AstModel::openScope(Declaration* scope)
     if( scope == 0 )
     {
         scope = new Declaration();
-        scope->mode = Declaration::Scope;
+        scope->kind = Declaration::Scope;
     }
     scopes.push_back(scope);
 }
@@ -158,7 +149,7 @@ Declaration* AstModel::addDecl(const QByteArray& name)
     }
     Declaration* decl = new Declaration();
     decl->name = name;
-    if( scope->mode != Declaration::Scope )
+    if( scope->kind != Declaration::Scope )
         decl->outer = scope;
     decl->inList = scope->link != 0;
     *last = decl;
@@ -169,10 +160,8 @@ Declaration* AstModel::addDecl(const QByteArray& name)
 Declaration*AstModel::addHelper()
 {
     Declaration* decl = new Declaration();
-    decl->link = 0;
     decl->next = helper;
     helper = decl;
-    decl->inList = true;
     decl->name = "$" + QByteArray::number(++helperId);
     decl->outer = getTopModule();
     return decl;
@@ -200,7 +189,7 @@ Declaration*AstModel::findDecl(Declaration* import, const QByteArray& id) const
 {
     if( import == 0 )
         return findDecl(id);
-    Q_ASSERT(import && import->mode == Declaration::Import);
+    Q_ASSERT(import && import->kind == Declaration::Import);
     Declaration* obj = import->link;
     while( obj != 0 && obj->name.constData() != id.constData() )
         obj = obj->getNext();
@@ -215,7 +204,7 @@ QByteArray AstModel::getTempName()
 Declaration*AstModel::getTopModule() const
 {
     for( int i = 0; i < scopes.size(); i++ )
-        if( scopes[i]->mode == Declaration::Module )
+        if( scopes[i]->kind == Declaration::Module )
             return scopes[i];
     return 0;
 }
@@ -251,25 +240,28 @@ Type*AstModel::addType(const QByteArray& name, int form, int size)
 void AstModel::addTypeAlias(const QByteArray& name, Type* t)
 {
     Declaration* d = addDecl(Token::getSymbol(name.toUpper()));
-    d->mode = Declaration::TypeDecl;
+    d->validated = true;
+    d->kind = Declaration::TypeDecl;
     d->type = t;
     if( t->decl == 0 )
         t->decl = d;
     Declaration* d2 = addDecl(Token::getSymbol(name.toLower()));
-    d2->mode = Declaration::TypeDecl;
+    d2->kind = Declaration::TypeDecl;
     d2->type = t;
+    d2->validated = true;
 }
 
 void AstModel::addBuiltin(const QByteArray& name, Builtin::Type t)
 {
     Declaration* d = addDecl(Token::getSymbol(name.toUpper()));
-    d->mode = Declaration::Builtin;
+    d->kind = Declaration::Builtin;
     d->type = types[BasicType::NoType];
     d->id = t;
     d = addDecl(Token::getSymbol(name.toLower()));
-    d->mode = Declaration::Builtin;
+    d->kind = Declaration::Builtin;
     d->type = types[BasicType::NoType];
     d->id = t;
+    d->validated = true;
 }
 
 Declaration*Type::findField(const QByteArray& name) const
@@ -288,9 +280,9 @@ QPair<int, int> Type::getFieldCount() const
     QPair<int, int> res;
     foreach( Declaration* d, subs)
     {
-        if( d->mode == Declaration::Field )
+        if( d->kind == Declaration::Field )
             res.first++;
-        else if( d->mode == Declaration::Variant )
+        else if( d->kind == Declaration::Variant )
             res.second++;
         d = d->getNext();
     }
@@ -317,17 +309,13 @@ QVariant BasicType::getMax(BasicType::Type t)
         return true;
     case CHAR:
         return std::numeric_limits<quint8>::max();
-    case UINT32:
-        return std::numeric_limits<quint32>::max();
-    case UINT64:
-        return std::numeric_limits<quint64>::max();
     case SET:
         return 31;
-    case INT32:
-        return std::numeric_limits<qint32>::max();
-    case INT64:
-        return std::numeric_limits<qint64>::max();
-    case LONGREAL:
+    case INTEGER:
+        // see https://en.wikipedia.org/wiki/Double-precision_floating-point_format#IEEE_754_double-precision_binary_floating-point_format:_binary64
+        // https://pursuit.purescript.org/packages/purescript-int-53/4.0.0/docs/Data.Int53
+        return (1 << SignedIntBitWidth)-1; // 9,007,199,254,740,991
+    case REAL:
         return std::numeric_limits<double>::max();
     }
     return QVariant();
@@ -341,17 +329,9 @@ QVariant BasicType::getMin(BasicType::Type t)
         return false;
     case CHAR:
         return std::numeric_limits<quint8>::min();
-    case UINT32:
-        return std::numeric_limits<quint32>::min();
-    case UINT64:
-        return std::numeric_limits<quint64>::min();
-    case SET:
-        return 31;
-    case INT32:
-        return std::numeric_limits<qint32>::min();
-    case INT64:
-        return std::numeric_limits<qint64>::min();
-    case LONGREAL:
+    case INTEGER:
+        return -(1 << SignedIntBitWidth); // -9,007,199,254,740,991
+    case REAL:
         return std::numeric_limits<double>::min();
     }
     return QVariant();
@@ -371,7 +351,9 @@ Declaration::~Declaration()
     if( next )
         delete next;
 #endif
-    if( link )
+    if( link
+            && kind != Declaration::Import  // imports are just referenced, not owned
+            )
         Declaration::deleteAll(link);
     if( type && ownstype )
         delete type;
@@ -384,7 +366,7 @@ QList<Declaration*> Declaration::getParams() const
 {
     Declaration* d = link;
     QList<Declaration*> res;
-    while( d && d->mode == Declaration::ParamDecl )
+    while( d && d->kind == Declaration::ParamDecl )
     {
         res << d;
         d = d->next;
@@ -398,7 +380,7 @@ int Declaration::getIndexOf(Declaration* ref) const
     Declaration* d = link;
     while( d )
     {
-        if( d->mode == ref->mode )
+        if( d->kind == ref->kind )
             idx++;
         if( d == ref )
             return idx;
@@ -413,6 +395,20 @@ Declaration*Declaration::getLast() const
     while( d && d->next )
         d = d->next;
     return d;
+}
+
+Declaration*Declaration::find(const QByteArray& name, bool recursive)
+{
+    Declaration* d = link;
+    while( d )
+    {
+        if( d->name.constData() == name.constData() )
+            return d;
+        d = d->next;
+    }
+    if( recursive && outer )
+        return outer->find(name);
+    return 0;
 }
 
 void Declaration::deleteAll(Declaration* d)
@@ -463,11 +459,15 @@ bool Expression::isConst() const
 {
     switch(kind)
     {
-    case LocalVar:
-    case ModuleVar:
-    case Param:
-        return false;
-    case ConstDecl:
+    case DeclRef: {
+            Declaration* d = val.value<Declaration*>();
+            if( d && ( d->kind == Declaration::VarDecl || d->kind == Declaration::LocalDecl
+                       || d->kind == Declaration::ParamDecl ))
+                return false;
+            else
+                return true;
+        }
+    case ConstVal:
     case Literal:
         return true;
     }
@@ -475,18 +475,19 @@ bool Expression::isConst() const
     if( kind == Call )
     {
         Expression* args = val.value<Expression*>();
-
-        if( lhs->kind == ProcDecl )
+        if( lhs == 0 )
+            return true;
+        Declaration* d = lhs->val.value<Declaration*>();
+        if( d->kind == Declaration::Procedure )
         {
-            Declaration* d = lhs->val.value<Declaration*>();
-            if( !d->invar )
+            if( d->mode != Declaration::Invar )
                 return false;
             else
                 return allConst(args);
-        }else if( lhs->kind == Builtin )
+        }else if( d->kind == Declaration::Builtin )
         {
             // TODO
-            switch( lhs->val.toInt() )
+            switch( d->id )
             {
             case Builtin::LEN:
                 return true;
@@ -518,29 +519,17 @@ bool Expression::isConst() const
     return true;
 }
 
-bool Expression::isLiteral() const
-{
-    return kind == Literal || kind == ConstDecl;
-}
-
-QVariant Expression::getLiteralValue() const
-{
-    if( kind == Literal )
-        return val;
-    else if( kind == ConstDecl )
-        return val.value<Declaration*>()->data;
-    else
-        return QVariant();
-}
-
 DeclList Expression::getFormals() const
 {
-    if( kind == ProcDecl )
-        return val.value<Declaration*>()->getParams();
-    else if( type && type->form == Type::Proc )
+    if( kind == DeclRef )
+    {
+        Declaration* d = val.value<Declaration*>();
+        if( d && d->kind == Declaration::Procedure )
+            return d->getParams();
+    }else if( type && type->form == Type::Proc )
         return type->subs;
-    else
-        return DeclList();
+
+    return DeclList();
 }
 
 bool Expression::isLvalue() const
@@ -548,8 +537,13 @@ bool Expression::isLvalue() const
     // no, we need this function as a barrier for byVal propagation
     //if( byVal )
     //    return false;
-    return kind == LocalVar || kind == Param || kind == ModuleVar ||
-            kind == Select || kind == Index;
+    if( kind == DeclRef )
+    {
+        Declaration* d = val.value<Declaration*>();
+        Q_ASSERT(d);
+        return d->kind == Declaration::LocalDecl || d->kind == Declaration::VarDecl || d->kind == Declaration::ParamDecl;
+    }
+    return kind == Select || kind == Index;
 }
 
 void Expression::setByVal()

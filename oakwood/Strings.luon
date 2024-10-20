@@ -1,0 +1,11 @@
+(* Source: The Oakwood Guidelines for Oberon-2 Compiler Developers, Revision: 1A First Issue, Oct. 1995 *)
+MODULE Strings;
+PROCEDURE Length (s: ARRAY OF CHAR): INTEGER EXTERN;
+PROCEDURE Insert (source: ARRAY OF CHAR; pos: INTEGER; dest: ARRAY OF CHAR) EXTERN;
+PROCEDURE Append (extra: ARRAY OF CHAR; dest: ARRAY OF CHAR) EXTERN;
+PROCEDURE Delete (s: ARRAY OF CHAR; pos, n: INTEGER) EXTERN;
+PROCEDURE Replace (source: ARRAY OF CHAR; pos: INTEGER; dest: ARRAY OF CHAR) EXTERN;
+PROCEDURE Extract (source: ARRAY OF CHAR; pos, n: INTEGER; dest: ARRAY OF CHAR) EXTERN;
+PROCEDURE Pos (pattern, s: ARRAY OF CHAR; pos: INTEGER): INTEGER EXTERN;
+PROCEDURE Cap (s: ARRAY OF CHAR) EXTERN;
+END Strings.

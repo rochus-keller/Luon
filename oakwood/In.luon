@@ -1,0 +1,10 @@
+(* Source: The Oakwood Guidelines for Oberon-2 Compiler Developers, Revision: 1A First Issue, Oct. 1995 *)
+MODULE In;
+VAR Done: BOOLEAN;
+PROCEDURE Open EXTERN;
+PROCEDURE Char (VAR ch: CHAR) EXTERN;
+PROCEDURE Int (VAR i: INTEGER) EXTERN;
+PROCEDURE Real (VAR x: REAL) EXTERN;
+PROCEDURE String (str: ARRAY OF CHAR) EXTERN;
+PROCEDURE Name (name: ARRAY OF CHAR) EXTERN;
+END In.

@@ -17,7 +17,7 @@
 #include "LnParser2.h"
 using namespace Ln;
 
-static const quint64 maxUlong = 0x3fffffffffffff; // 53 bits
+static const quint64 maxUlong = (1L << BasicType::SignedIntBitWidth) - 1; // 52 bits
 
 static inline bool FIRST_Luon(int tt) {
 	return tt == Tok_MODULE;
@@ -636,11 +636,6 @@ Expression* Parser2::number() {
         QByteArray number = cur.d_val.toLower();
         number.replace('_',"");
         Type* type = 0;
-        if( number.size() > 1 && number[number.size()-1] == 'l' )
-        {
-            number.chop(1);
-            type = mdl->getType(BasicType::UINT64);
-        }
         const char suffix = ( number.size() > 1 ? number[number.size()-1] : '0' );
         if( !::isdigit(suffix) )
             number.chop(1);
@@ -660,12 +655,7 @@ Expression* Parser2::number() {
             break;
         }
         if( type == 0 )
-        {
-            if( res->val.toULongLong() > 0xffffffff )
-                type = mdl->getType(BasicType::UINT32);
-            else
-                type = mdl->getType(BasicType::UINT64);
-        }
+            type = mdl->getType(BasicType::INTEGER);
         if( res->val.toULongLong() > maxUlong )
             error(tok,QString("can only represent unsigned integers from 0 to %1").arg(maxUlong) );
         res->type = type;
@@ -673,15 +663,15 @@ Expression* Parser2::number() {
 		expect(Tok_real, false, "number");
         QByteArray str = cur.d_val;
         str.replace('_',"");
-        res->type = mdl->getType(BasicType::LONGREAL);
+        res->type = mdl->getType(BasicType::REAL);
         res->val = str.toDouble();
     } else
 		invalid("number");
     return res;
 }
 
-Parser2::Quali Parser2::qualident() {
-    Quali res;
+Qualident Parser2::qualident() {
+    Qualident res;
     if( ( peek(1).d_type == Tok_ident && peek(2).d_type == Tok_Dot )  ) {
         expect(Tok_ident, false, "qualident");
         res.first = cur.d_val;
@@ -732,7 +722,6 @@ void Parser2::TypeDeclaration() {
     Declaration* d = addDecl(id,Declaration::TypeDecl);
     if( d == 0 )
         return;
-    thisDecl = d;
     if( FIRST_NamedType(la.d_type) ) {
         t = NamedType();
     }else
@@ -743,7 +732,6 @@ void Parser2::TypeDeclaration() {
         d->ownstype = true;
     }
     d->type = t;
-    thisDecl = 0;
 }
 
 Type* Parser2::type(bool deanonymize) {
@@ -770,7 +758,7 @@ Type* Parser2::type(bool deanonymize) {
 }
 
 Type* Parser2::NamedType() {
-    Quali q = qualident();
+    Qualident q = qualident();
     Type* res = new Type();
     res->form = Type::NameRef;
     res->expr = new Expression(Expression::NameRef, la.toRowCol());
@@ -927,7 +915,7 @@ void Parser2::VariableDeclaration() {
     Declaration* outer = mdl->getTopScope();
     foreach( const IdentDef& id, ids )
     {
-        Declaration* d = addDecl(id,outer->mode == Declaration::Module ?
+        Declaration* d = addDecl(id,outer->kind == Declaration::Module ?
                                      Declaration::VarDecl : Declaration::LocalDecl);
         if( d == 0 )
             continue;
@@ -939,7 +927,7 @@ void Parser2::VariableDeclaration() {
 // designator results in an lvalue if possible, unless needsLvalue is false
 Expression* Parser2::designator(bool needsLvalue) {
 
-    Quali q = qualident();
+    Qualident q = qualident();
     Expression* res = new Expression(Expression::NameRef, cur.toRowCol());
     res->val = QVariant::fromValue(q);
 
@@ -991,10 +979,12 @@ Expression* Parser2::designator(bool needsLvalue) {
             }
             expect(Tok_Rpar, false, "selector");
 
+#if 0
+            // TODO: move to validator
             if( res->kind == Expression::Builtin && res->val.toInt() == Builtin::ASSERT )
             {
                 Expression* e = new Expression(Expression::Literal,lpar.toRowCol());
-                e->type = mdl->getType(BasicType::UINT32);
+                e->type = mdl->getType(BasicType::INTEGER);
                 e->val = lpar.d_lineNr;
                 Expression::appendArg(args,e);
                 e = new Expression(Expression::Literal,lpar.toRowCol());
@@ -1002,6 +992,7 @@ Expression* Parser2::designator(bool needsLvalue) {
                 e->val = "\"" + lpar.d_sourcePath.toUtf8() + "\"";
                 Expression::appendArg(args,e);
             }
+#endif
 
             Expression* tmp = new Expression(Expression::Call, lpar.toRowCol() ); // could be call or typecast at this point
             tmp->lhs = res; // proc
@@ -1220,7 +1211,7 @@ Expression* Parser2::component() {
     Expression* res;
     if( ( peek(1).d_type == Tok_ident && peek(2).d_type == Tok_Colon )  ) {
         expect(Tok_ident, false, "component");
-        Quali q;
+        Qualident q;
         q.second = cur.d_val;
         expect(Tok_Colon, false, "component");
         const Token t = cur;
@@ -1590,7 +1581,7 @@ Statement* Parser2::ForStatement() {
     Statement* res = new Statement(Statement::ForAssig, cur.toRowCol());
     expect(Tok_ident, false, "ForStatement");
     res->lhs = new Expression(Expression::NameRef, cur.toRowCol() );
-    res->lhs->val = QVariant::fromValue(Quali(QByteArray(),cur.d_val));
+    res->lhs->val = QVariant::fromValue(Qualident(QByteArray(),cur.d_val));
 	expect(Tok_ColonEq, false, "ForStatement");
     res->rhs = expression();
     if(res->rhs == 0 )
@@ -1654,13 +1645,13 @@ Type* Parser2::ProcedureType() {
 void Parser2::ProcedureDeclaration() {
     procedure();
 
-    Quali receiver;
+    Qualident receiver;
     const Token t = la;
     Declaration* record = 0;
     if( FIRST_Receiver(la.d_type) ) {
         receiver = Receiver();
         record = mdl->findDecl(receiver.second);
-        if( record == 0 || record->mode != Declaration::TypeDecl ||
+        if( record == 0 || record->kind != Declaration::TypeDecl ||
                 record->type == 0 || record->type->form != Type::Record )
         {
             error(t, "receiver must be a record type declaration");
@@ -1682,47 +1673,69 @@ void Parser2::ProcedureDeclaration() {
     if( !receiver.first.isEmpty() )
     {
         Declaration* d = mdl->addDecl(receiver.first);
-        d->mode = Declaration::ParamDecl;
+        d->kind = Declaration::ParamDecl;
         d->pos = t.toRowCol();
-        d->receiver = 1;
+        d->mode = Declaration::Receiver;
         d->type = new Type();
-        d->ownstype = true;
         d->type->form = Type::NameRef;
         d->type->expr = new Expression(Expression::NameRef,t.toRowCol());
+        temporaries.append(d->type);
         receiver.first.clear();
         d->type->expr->val = QVariant::fromValue(receiver);
-        procDecl->receiver = 1;
+        procDecl->mode = Declaration::Receiver;
     }
 
     if( FIRST_FormalParameters(la.d_type) ) {
         procDecl->type = FormalParameters();
     }
 
-    if( la.d_type == Tok_INLINE || la.d_type == Tok_INVAR ) {
-        if( la.d_type == Tok_INLINE ) {
-            expect(Tok_INLINE, true, "ProcedureDeclaration");
-            procDecl->inline_ = true;
-        } else if( la.d_type == Tok_INVAR ) {
-            expect(Tok_INVAR, true, "ProcedureDeclaration");
-            procDecl->invar = true;
+    if( ( ( peek(1).d_type == Tok_Semi && peek(2).d_type == Tok_EXTERN ) || peek(1).d_type == Tok_EXTERN )  ) {
+        if( la.d_type == Tok_Semi ) {
+            expect(Tok_Semi, false, "ProcedureDeclaration");
+        }
+        expect(Tok_EXTERN, true, "ProcedureDeclaration");
+        if( procDecl->mode != 0 )
+            error(cur, "not allowed for bound procedures");
+        else
+            procDecl->mode = Declaration::Extern;
+        if( la.d_type == Tok_ident ) {
+            expect(Tok_ident, false, "ProcedureDeclaration");
+            procDecl->data = cur.d_val;
+        }
+    }else
+    {
+        if( la.d_type == Tok_INLINE || la.d_type == Tok_INVAR ) {
+            if( la.d_type == Tok_INLINE ) {
+                expect(Tok_INLINE, true, "ProcedureDeclaration");
+                if( procDecl->mode != 0 )
+                    error(cur, "not allowed for bound procedures");
+                else
+                    procDecl->mode = Declaration::Inline;
+            } else if( la.d_type == Tok_INVAR ) {
+                expect(Tok_INVAR, true, "ProcedureDeclaration");
+                if( procDecl->mode != 0 )
+                    error(cur, "not allowed for bound procedures");
+                else
+                    procDecl->mode = Declaration::Invar;
+            } else
+                invalid("ProcedureDeclaration");
+        }
+        if( la.d_type == Tok_Semi ) {
+            expect(Tok_Semi, false, "ProcedureDeclaration");
+        }
+        if( FIRST_ProcedureBody(la.d_type) ) {
+            // inlined ProcedureBody();
+            DeclarationSequence();
+            procDecl->body = block();
+            expect(Tok_END, true, "ProcedureBody");
+            expect(Tok_ident, false, "ProcedureBody");
+            if( procDecl->name.constData() != cur.d_val.constData() )
+                error(cur, QString("name after END differs from procedure name") );
+        } else if( la.d_type == Tok_END ) {
+            expect(Tok_END, true, "ProcedureDeclaration");
         } else
             invalid("ProcedureDeclaration");
     }
-    if( la.d_type == Tok_Semi ) {
-        expect(Tok_Semi, false, "ProcedureDeclaration");
-    }
-    if( FIRST_ProcedureBody(la.d_type) ) {
-        // inlined ProcedureBody();
-        DeclarationSequence();
-        procDecl->body = block();
-        expect(Tok_END, true, "ProcedureBody");
-        expect(Tok_ident, false, "ProcedureBody");
-        if( procDecl->name.constData() != cur.d_val.constData() )
-            error(cur, QString("name after END differs from procedure name") );
-    } else if( la.d_type == Tok_END ) {
-        expect(Tok_END, true, "ProcedureDeclaration");
-    } else
-        invalid("ProcedureDeclaration");
 
     mdl->closeScope();
     if( record )
@@ -1737,8 +1750,8 @@ void Parser2::ProcedureDeclaration() {
     }
 }
 
-Parser2::Quali Parser2::Receiver() {
-    Quali res;
+Qualident Parser2::Receiver() {
+    Qualident res;
 	expect(Tok_Lpar, false, "Receiver");
 	expect(Tok_ident, false, "Receiver");
     res.first = cur.d_val;
@@ -1886,7 +1899,7 @@ void Parser2::module() {
         return;
     }
     Declaration* m = new Declaration();
-    m->mode = Declaration::Module;
+    m->kind = Declaration::Module;
     if( thisMod )
     {
         clearTemps();
@@ -1903,10 +1916,7 @@ void Parser2::module() {
     md.path = scanner->path();
     md.source = scanner->source();
     md.path += cur.d_val;
-    if( imp )
-        md.fullName = Token::getSymbol(imp->modulePath(md.path));
-    else
-        md.fullName = Token::getSymbol(md.path.join('/'));
+    md.fullName = Token::getSymbol(md.path.join('/'));
     md.metaActuals = metaActuals;
 
     if( FIRST_MetaParams(la.d_type) ) {
@@ -1982,16 +1992,16 @@ void Parser2::import() {
     if( importDecl == 0 )
         return;
 
-    QByteArrayList path;
+    Import import;
     foreach( const Token& t, tl)
-        path << t.d_val;
-    importDecl->data = QVariant::fromValue(path);
+        import.path << t.d_val;
 
     if( FIRST_MetaActuals(la.d_type) ) {
         expect(Tok_Lpar, false, "MetaActuals");
         importDecl->expr = ConstExpression();
         if( importDecl->expr == 0 )
             return;
+        import.metaActuals.append(importDecl->expr);
         Expression* last = importDecl->expr;
         while( la.d_type == Tok_Comma || FIRST_ConstExpression(la.d_type) ) {
             if( la.d_type == Tok_Comma ) {
@@ -2001,10 +2011,12 @@ void Parser2::import() {
             if( e == 0 )
                 return;
             last->next = e;
+            import.metaActuals.append(e);
             last = e;
         }
         expect(Tok_Rpar, false, "MetaActuals");
 	}
+    importDecl->data = QVariant::fromValue(import);
 }
 
 MetaParamList Parser2::MetaParams() {
@@ -2054,7 +2066,7 @@ MetaParamList Parser2::MetaSection(bool& isType) {
         Declaration* decl = addDecl(ids[i], 0, isType ? Declaration::TypeDecl : Declaration::ConstDecl);
         if( decl == 0 )
             continue;
-        decl->meta = true;
+        decl->mode = Declaration::Meta;
         decl->type = t;
         if( t == 0 )
         {
@@ -2077,7 +2089,7 @@ Declaration*Parser2::addDecl(const Token& id, quint8 visi, quint8 mode)
         error( id, "a declaration with this name already exists");
         return 0;
     }
-    d->mode = mode;
+    d->kind = mode;
     d->visi = visi;
     d->pos.d_row = id.d_lineNr;
     d->pos.d_col = id.d_colNr;
@@ -2105,7 +2117,7 @@ Declaration*Parser2::addHelper(Type* t)
 {
     Declaration* decl = mdl->addHelper();
     // we need these syntetic declarations because emitter doesn't support anonymous types
-    decl->mode = Declaration::TypeDecl;
+    decl->kind = Declaration::TypeDecl;
     decl->type = t;
     decl->ownstype = true;
     decl->outer = thisMod;

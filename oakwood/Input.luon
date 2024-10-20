@@ -1,0 +1,10 @@
+(* Source: The Oakwood Guidelines for Oberon-2 Compiler Developers, Revision: 1A First Issue, Oct. 1995 *)
+(* replaced all LONGINT by INT32, TimeUnit is CONST *)
+MODULE Input;
+	CONST TimeUnit = 1000000;
+	PROCEDURE Available (): INTEGER EXTERN;
+	PROCEDURE Read (VAR ch: CHAR) EXTERN;
+	PROCEDURE Mouse (VAR keys: SET; VAR x, y: INTEGER) EXTERN;
+	PROCEDURE SetMouseLimits (w, h: INTEGER) EXTERN;
+	PROCEDURE Time (): INTEGER EXTERN;
+END Input.

@@ -13,11 +13,11 @@ Luon ::=  module
 
 ident ::= // ( letter | '_' ) {letter | digit | '_'}
 
-// int, integer, uint; long, longint, ulong
-integer ::= // digit {hexDigit|'_'} ['O'|'B'|'H'] ['L']
+// int, integer, width 53 bits 
+integer ::= // digit {hexDigit|'_'} ['O'|'B'|'H']
 
-// float
-real ::= // digit {digit|'_'} '.' {digit} ['E' ['+' | '-'] digit {digit}]
+// real, width 64 bits
+real ::= // digit {digit|'_'} '.' {digit|'_'} ['E' ['+' | '-'] digit {digit}]
 
 number ::= integer | real
 
@@ -146,8 +146,12 @@ procedure ::= 'PROCEDURE' | 'PROC'
 ProcedureType ::= procedure [ '^'] [FormalParameters]  //  '^' is an object callback
 
 ProcedureDeclaration ::= 
-        ProcedureHeading ['INLINE'| 'INVAR'] [ ';' ] ( ProcedureBody | 'END' )
-	// type bound procs cannot be INLINE nor INVAR
+        ProcedureHeading ( 
+             \LL:2\ [ ';' ] 'EXTERN' [ident]  // TODO: maybe we need some additions for the FFI
+            | ['INLINE'| 'INVAR'] [ ';' ] ( ProcedureBody | 'END' ) 
+            )
+            // type bound procs cannot be INLINE, INVAR, nor EXTERN
+
 	
 ProcedureHeading ::= procedure [Receiver] identdef [ FormalParameters ]  
 Receiver ::= '(' ident ':' ident ')'

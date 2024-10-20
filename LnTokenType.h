@@ -56,6 +56,7 @@ namespace Ln {
 		Tok_ELSIF,
 		Tok_END,
 		Tok_EXIT,
+		Tok_EXTERN,
 		Tok_FALSE,
 		Tok_FOR,
 		Tok_HASHMAP,

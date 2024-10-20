@@ -49,6 +49,7 @@ namespace Ln {
 			case Tok_ELSIF: return "ELSIF";
 			case Tok_END: return "END";
 			case Tok_EXIT: return "EXIT";
+			case Tok_EXTERN: return "EXTERN";
 			case Tok_FALSE: return "FALSE";
 			case Tok_FOR: return "FOR";
 			case Tok_HASHMAP: return "HASHMAP";
@@ -135,6 +136,7 @@ namespace Ln {
 			case Tok_ELSIF: return "Tok_ELSIF";
 			case Tok_END: return "Tok_END";
 			case Tok_EXIT: return "Tok_EXIT";
+			case Tok_EXTERN: return "Tok_EXTERN";
 			case Tok_FALSE: return "Tok_FALSE";
 			case Tok_FOR: return "Tok_FOR";
 			case Tok_HASHMAP: return "Tok_HASHMAP";
@@ -369,10 +371,21 @@ namespace Ln {
 				}
 				break;
 			case 'X':
-				if( at(str,len,i+2) == 'I' ){
+				switch( at(str,len,i+2) ){
+				case 'I':
 					if( at(str,len,i+3) == 'T' ){
 						res = Tok_EXIT; i += 4;
 					}
+					break;
+				case 'T':
+					if( at(str,len,i+3) == 'E' ){
+						if( at(str,len,i+4) == 'R' ){
+							if( at(str,len,i+5) == 'N' ){
+								res = Tok_EXTERN; i += 6;
+							}
+						}
+					}
+					break;
 				}
 				break;
 			}

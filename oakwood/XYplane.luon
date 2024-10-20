@@ -1,0 +1,10 @@
+(* Source: The Oakwood Guidelines for Oberon-2 Compiler Developers, Revision: 1A First Issue, Oct. 1995 *)
+MODULE XYplane;
+CONST draw = 1; erase = 0;
+VAR X-, Y-, W-, H-: INTEGER;
+PROCEDURE Open EXTERN;
+PROCEDURE Clear EXTERN;
+PROCEDURE Dot (x, y, mode: INTEGER) EXTERN;
+PROCEDURE IsDot (x, y: INTEGER): BOOLEAN EXTERN;
+PROCEDURE Key (): CHAR EXTERN;
+END XYplane.

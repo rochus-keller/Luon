@@ -29,6 +29,7 @@ namespace Ln
 
     struct BasicType
     {
+        enum { SignedIntBitWidth = 52 };
         enum Type {
                Undefined,
                NoType,
@@ -38,10 +39,9 @@ namespace Ln
                Nil,
                BOOLEAN,
                CHAR,
-               UINT32, UINT64,
-               INT32, INT64,
-               LONGREAL,
-               SET,
+               INTEGER, // max. representable signed int in LuaJIT, use MAX and MIN
+               REAL,    // double
+               SET,     // cut at uint32
                STRING,
                Max
              };
@@ -55,10 +55,10 @@ namespace Ln
         enum Type {
             // functions
             ABS, CAP, BITAND, BITASR, BITNOT, BITOR, BITS, BITSHL, BITSHR,
-            BITXOR, CAST, CHR, DEFAULT, EQUALS, FLOOR, FLT, GETENV, LEN, LONG, MAX,
-            MIN, ODD, ORD, SHORT, SIGNED, SIZE, STRLEN, UNSIGNED, VARARG, VARARGS,
+            BITXOR, CAST, CHR, DEFAULT, EQUALS, FLOOR, FLT, GETENV, LEN, MAX,
+            MIN, ODD, ORD, SIZE, STRLEN, VARARG, VARARGS,
             // procedures
-            ASSERT, COPY, DEC, DISPOSE, EXCL, HALT, INC,
+            ASSERT, COPY, DEC, EXCL, HALT, INC,
             INCL, NEW, PCALL, PRINT, PRINTLN, RAISE, SETENV,
             // end
             Max
@@ -81,14 +81,13 @@ namespace Ln
         Declaration* decl;
         Expression* expr; // array len, quali, key
 
-        bool isUInt() const { return form >= BasicType::UINT32 && form <= BasicType::UINT64; }
-        bool isInt() const { return form >= BasicType::INT32 && form <= BasicType::INT64; }
-        bool isNumber() const { return form >= BasicType::UINT32 && form <= BasicType::LONGREAL; }
-        bool isReal() const { return form == BasicType::LONGREAL; }
-        bool isInteger() const { return form >= BasicType::UINT32 && form <= BasicType::INT64; }
+        bool isNumber() const { return form == BasicType::INTEGER || form == BasicType::REAL; }
+        bool isReal() const { return form == BasicType::REAL; }
+        bool isInteger() const { return form == BasicType::INTEGER;  }
         bool isSet() const { return form == BasicType::SET; }
         bool isBoolean() const { return form == BasicType::BOOLEAN; }
         bool isSimple() const { return form >= BasicType::StrLit && form < BasicType::Max; }
+        bool isReference() const {return form >= Record && form <= Proc; }
         bool isText() const { return form == BasicType::StrLit || form == BasicType::CHAR ||
                     ( form == Array && base && base->form == BasicType::CHAR ) ||
                     ( form == BasicType::STRING ); }
@@ -106,12 +105,12 @@ namespace Ln
     class Declaration
     {
     public:
-        enum Mode { NoMode, Scope, Module, TypeDecl, Builtin, ConstDecl, Import, Field, Variant,
+        enum Kind { Invalid, Scope, Module, TypeDecl, Builtin, ConstDecl, Import, Field, Variant,
                     VarDecl, LocalDecl,
                     Procedure, ParamDecl,
                     Max };
         static const char* s_mode[];
-        Declaration* link; // member list or alias proc or imported module decl
+        Declaration* link; // member list or imported module decl
         Declaration* outer; // the owning declaration to reconstruct the qualident
         Statement* body; // procs
         Type* type;
@@ -121,34 +120,34 @@ namespace Ln
         uint visi : 2;
         enum Access { ByValue, IN, VAR };
         uint access : 2;
-        uint inline_ : 1;
-        uint invar : 1;
-        uint meta : 1;
+        enum Mode { Normal, Receiver, Inline, Invar, Extern, Meta };
+        uint mode : 3;
         uint ownstype : 1;
         uint inList : 1; // private
-        uint receiver : 1;
+        uint validating : 1;
         uint validated : 1;
-        uint mode : 4;
+        uint kind : 4;
         uint id : 16; // used for built-in code and local/param number
         QVariant data; // value for Const and Enum, path for Import, name for Extern
         Expression* expr; // const decl, enum, meta actuals
 
-        Declaration():next(0),link(0),type(0),body(0),id(0),mode(0),visi(0),ownstype(false),expr(0),
-            inline_(false),invar(false),meta(false),outer(0),access(0),inList(0),receiver(0),validated(0){}
+        Declaration():next(0),link(0),type(0),body(0),id(0),kind(0),mode(0), visi(0),ownstype(false),expr(0),
+            outer(0),access(0),inList(0),validating(0),validated(0){}
 
         QList<Declaration*> getParams() const;
         int getIndexOf(Declaration*) const;
-        bool isLvalue() const { return mode == VarDecl || mode == LocalDecl || mode == ParamDecl; }
+        bool isLvalue() const { return kind == VarDecl || kind == LocalDecl || kind == ParamDecl; }
         bool isPublic() const { return visi >= ReadOnly; }
         Declaration* getNext() const { return next; }
         Declaration* getLast() const;
+        Declaration* find(const QByteArray& name, bool recursive = true);
         static void deleteAll(Declaration*);
 
     private:
         ~Declaration();
         Declaration* next; // list of all declarations in outer scope
         friend class AstModel;
-   };
+    };
     typedef QList<Declaration*> DeclList;
 
     class Expression {
@@ -156,18 +155,18 @@ namespace Ln
         enum Kind {
             Invalid,
             Plus, Minus, Not, // Unary
-            Eq, Neq, Lt, Leq, Gt, Geq, In, // Relation
+            Eq, Neq, Lt, Leq, Gt, Geq, In, Is, // Relation
             Add, Sub, Or, // AddOp
             Mul, Fdiv, Div, Mod, And, // MulOp
-            LocalVar, Param, Builtin, // val is index of local or param or builtin
-            ModuleVar, ProcDecl, ConstDecl, TypeDecl, // val is declaration
+            DeclRef, // val is declaration
             Select, // f.g, val is field declaration
             Index, // a[i]
-            Cast, AutoCast,
+            Cast,
             Call,
             Literal,
             Constructor, Range, KeyValue,
-            NameRef, // temporary, will be resolved by validator
+            NameRef, // temporary, will be resolved by validator to DeclRef and ConstVal
+            ConstVal,
             MAX
         };
 #ifdef _DEBUG
@@ -185,8 +184,6 @@ namespace Ln
         Expression* rhs; // for binary ops
         Expression* next; // for args, set elems, and caselabellist
         bool isConst() const;
-        bool isLiteral() const;
-        QVariant getLiteralValue() const;
         DeclList getFormals() const;
         bool isLvalue() const; // true if result of expression is usually a ref to type; can be changed with byVal
         void setByVal();
@@ -199,7 +196,7 @@ namespace Ln
         ~Expression();
     };
 
-    struct Value {
+    struct Value { // TODO: do we need this?
         enum Mode { None, Val, Const, Builtin, Procedure, VarDecl, LocalDecl, ParamDecl, TypeDecl };
         quint8 mode;
         quint8 visi;
@@ -215,11 +212,11 @@ namespace Ln
                     mode == Declaration::ParamDecl; }
         bool isCallable() const;
     };
-    typedef QList<Value> MetaActualList;
+    typedef QList<Expression*> MetaActualList;
 
     struct Import {
         QByteArrayList path;
-        MetaActualList metaActuals;
+        MetaActualList metaActuals; // alias of importDecl->expr, deleted there
     };
 
     class Statement {
@@ -257,6 +254,8 @@ namespace Ln
         QByteArray suffix;
         QByteArray fullName; // path.join('/') + suffix as symbol
     };
+
+    typedef QPair<QByteArray,QByteArray> Qualident;
 
     class AstModel
     {

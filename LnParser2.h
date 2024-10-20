@@ -33,16 +33,9 @@ namespace Ln {
         virtual QByteArrayList path() const { return QByteArrayList(); } // prefix without module name
     };
 
-    class Importer {
-    public:
-        virtual Declaration* loadModule( const Import& imp ) = 0;
-        virtual QByteArray moduleSuffix( const MetaActualList& imp ) = 0;
-        virtual QByteArray modulePath( const QByteArrayList& imp ) = 0;
-    };
-
 	class Parser2 {
 	public:
-        Parser2(AstModel* m, Scanner2* s, Importer* imp = 0):scanner(s),mdl(m),imp(imp),thisMod(0),thisDecl(0) {}
+        Parser2(AstModel* m, Scanner2* s):scanner(s),mdl(m),thisMod(0) {}
         ~Parser2();
         void RunParser(const MetaActualList& ma);
         typedef QPair<Declaration*, QList<Type*> > Result; // module + list of temporary types
@@ -57,8 +50,7 @@ namespace Ln {
 	protected:
 		void Luon();
         Expression* number();
-        typedef QPair<QByteArray,QByteArray> Quali;
-        Quali qualident();
+        Qualident qualident();
         struct IdentDef {
             Token name;
             enum Visi { Private, ReadOnly, Public } visi;
@@ -113,7 +105,7 @@ namespace Ln {
 		void procedure();
         Type* ProcedureType();
 		void ProcedureDeclaration();
-        Quali Receiver();
+        Qualident Receiver();
         Statement* block();
         void DeclarationSequence();
         Statement* ReturnStatement();
@@ -136,11 +128,10 @@ namespace Ln {
 
 	protected:
         MetaActualList metaActuals;
-        Declaration* thisMod, *thisDecl;
+        Declaration* thisMod;
         QList<Type*> componentTypeStack;
         QList<Type*> temporaries;
         AstModel* mdl;
-        Importer* imp;
         Token cur;
 		Token la;
 		Scanner2* scanner;
