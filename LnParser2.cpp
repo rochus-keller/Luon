@@ -571,10 +571,7 @@ static inline bool FIRST_MetaSection(int tt) {
 Parser2::~Parser2()
 {
     if( thisMod )
-    {
-        clearTemps();
         Declaration::deleteAll(thisMod);
-    }
 }
 
 void Parser2::RunParser() {
@@ -583,13 +580,10 @@ void Parser2::RunParser() {
     Luon();
 }
 
-Parser2::Result Parser2::takeResult()
+Declaration* Parser2::takeResult()
 {
-    Result res;
-    res.first = thisMod;
-    res.second = temporaries;
+    Declaration* res = thisMod;
     thisMod = 0;
-    temporaries.clear();
     return res;
 }
 
@@ -724,21 +718,21 @@ void Parser2::TypeDeclaration() {
     if( FIRST_NamedType(la.d_type) ) {
         t = NamedType();
     }else
-        t = type(false);
-    if( t && t->decl == 0 && t->form != Type::NameRef )
     {
-        t->decl = d;
-        d->ownstype = true;
+        t = type(false);
+        if( t && t->decl == 0 )
+        {
+            t->decl = d;
+            d->ownstype = true;
+        }
     }
     d->type = t;
 }
 
 Type* Parser2::type(bool deanonymize) {
-    bool isNewType = true;
     Type* res = 0;
 	if( FIRST_NamedType(la.d_type) ) {
         res = NamedType();
-        isNewType = false;
     } else if( FIRST_ArrayType(la.d_type) ) {
         res = ArrayType();
 	} else if( FIRST_DictType(la.d_type) ) {
@@ -751,7 +745,7 @@ Type* Parser2::type(bool deanonymize) {
         res = enumeration();
 	} else
 		invalid("type");
-    if( res && res->form != BasicType::Undefined && isNewType && deanonymize )
+    if( res && res->form != BasicType::Undefined && res->form != Type::NameRef && deanonymize )
         addHelper(res);
     return res;
 }
@@ -760,9 +754,9 @@ Type* Parser2::NamedType() {
     Qualident q = qualident();
     Type* res = new Type();
     res->form = Type::NameRef;
-    res->expr = new Expression(Expression::NameRef, la.toRowCol());
-    res->expr->val = QVariant::fromValue(q);
-    temporaries.append(res);
+    Declaration* helper = addHelper(res);
+    helper->pos = la.toRowCol();
+    helper->data = QVariant::fromValue(q);
     return res;
 }
 
@@ -865,7 +859,7 @@ Type* Parser2::enumeration() {
     expect(Tok_Lpar, false, "enumeration");
     Type* res = new Type();
     if( FIRST_constEnum(la.d_type) ) {
-        res->subs = constEnum();
+        res->subs = constEnum(); // ConstEnum exist both in the scope list as well as the type subs
         foreach( Declaration* d, res->subs )
             d->type = res;
         res->form = Type::ConstEnum;
@@ -1735,9 +1729,12 @@ void Parser2::ProcedureDeclaration() {
         for(int i = 0; i < l.size(); i++ )
         {
             if( record->type->find(l[i]->name) )
+            {
                 error(l[i]->pos, "name not unique in receiver");
+                Declaration::deleteAll(l[i]);
+            }else
+                record->type->subs.append(l[i]);
         }
-        record->type->subs += l;
     }
 }
 
@@ -1892,10 +1889,7 @@ void Parser2::module() {
     Declaration* m = new Declaration();
     m->kind = Declaration::Module;
     if( thisMod )
-    {
-        clearTemps();
         Declaration::deleteAll(thisMod);
-    }
     thisMod = m;
     mdl->openScope(m);
 
@@ -2119,9 +2113,3 @@ Declaration*Parser2::addHelper(Type* t)
     return decl;
 }
 
-void Parser2::clearTemps()
-{
-    foreach( Type* t, temporaries )
-        delete t;
-    temporaries.clear();
-}

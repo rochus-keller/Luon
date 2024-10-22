@@ -241,6 +241,7 @@ namespace Ln
         Statement(Kind k = Invalid, const RowCol& pos = RowCol()):kind(k),pos(pos),lhs(0),rhs(0),
             next(0),body(0),inList(false) {}
         Statement* getLast() const;
+        Statement* getNext() const { return next; }
         void append(Statement*s);
         static void deleteAll(Statement*);
     private:

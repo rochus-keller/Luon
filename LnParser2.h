@@ -39,7 +39,7 @@ namespace Ln {
         ~Parser2();
         void RunParser();
         typedef QPair<Declaration*, QList<Type*> > Result; // module + list of temporary types
-        Result takeResult(); // get module declaration and take ownership (otherwise deleted by parser)
+        Declaration* takeResult(); // get module declaration and take ownership (otherwise deleted by parser)
         struct Error {
 		    QString msg;
             RowCol pos;
@@ -124,12 +124,10 @@ namespace Ln {
         void error( const Token&, const QString& msg);
         void error( const RowCol&, const QString& msg );
         Declaration* addHelper(Type* t);
-        void clearTemps();
 
 	protected:
         Declaration* thisMod;
         QList<Type*> componentTypeStack;
-        QList<Type*> temporaries;
         AstModel* mdl;
         Token cur;
 		Token la;

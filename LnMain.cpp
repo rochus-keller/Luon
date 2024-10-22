@@ -158,23 +158,22 @@ public:
         Ln::AstModel mdl;
         Ln::Parser2 p(&mdl,&lex);
         p.RunParser();
-        Ln::Parser2::Result res;
+        Ln::Declaration* module = 0;
         if( !p.errors.isEmpty() )
         {
             foreach( const Ln::Parser2::Error& e, p.errors )
                 qCritical() << QFileInfo(e.path).fileName() << e.pos.d_row << e.pos.d_col << e.msg;
         }else
         {
-            res = p.takeResult();
+            module = p.takeResult();
             Ln::Validator v(&mdl, this);
 
-            if( !v.validate(res.first, imp) )
+            if( !v.validate(module, imp) )
             {
                 foreach( const Ln::Validator::Error& e, v.errors )
                     qCritical() << QFileInfo(e.path).fileName() << e.pos.d_row << e.pos.d_col << e.msg;
-                Ln::Declaration::deleteAll(res.first);
-                res.first = 0;
-                ms->decl = 0;
+                Ln::Declaration::deleteAll(module);
+                module = 0;
                 ms->imp = Ln::Import();
             }else
             {
@@ -182,12 +181,9 @@ public:
         }
         // TODO: uniquely extend the name of generic module instantiations
 
-        ms->decl = res.first;
+        ms->decl = module;
 
-        foreach(Ln::Type* t, res.second)
-            delete t;
-
-        return res.first;
+        return module;
     }
 
     QString toFile(const Ln::Import& imp)

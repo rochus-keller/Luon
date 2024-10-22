@@ -43,6 +43,10 @@ bool Validator::validate(Declaration* module, const Import& import)
     }
     module->data = QVariant::fromValue(md);
 
+    scopeStack.push_back(module);
+    for( int i = 0; i < md.metaParams.size(); i++ )
+        visitDecl(md.metaParams[i]);
+    scopeStack.pop_back();
     if( !import.metaActuals.isEmpty() )
     {
         // trying to instantiate
@@ -56,11 +60,26 @@ bool Validator::validate(Declaration* module, const Import& import)
         {
             if( md.metaParams[i]->kind == Declaration::TypeDecl )
             {
+                if( !assigCompat(md.metaParams[i]->type, md.metaActuals[i]->type) )
+                    errors << Error("actual meta type not compatible with meta parameter type",
+                                    md.metaActuals[i]->pos, import.importer);
+                if( md.metaParams[i]->type && md.metaParams[i]->ownstype )
+                    delete md.metaParams[i]->type;
                 md.metaParams[i]->type = md.metaActuals[i]->type;
                 md.metaParams[i]->ownstype = false;
             }else
             {
-                // TODO
+                if( !md.metaActuals[i]->isConst() )
+                    errors << Error("expecting a const expression", md.metaActuals[i]->pos, import.importer);
+                if( md.metaParams[i]->type && md.metaParams[i]->ownstype )
+                    delete md.metaParams[i]->type;
+                if( !assigCompat(md.metaParams[i]->type, md.metaActuals[i]) )
+                    errors << Error("expression not compatible with meta parameter type",
+                                    md.metaActuals[i]->pos, import.importer);
+                if( md.metaParams[i]->type && md.metaParams[i]->ownstype )
+                    delete md.metaParams[i]->type;
+                md.metaParams[i]->type = md.metaActuals[i]->type;
+                md.metaParams[i]->data = md.metaActuals[i]->val;
             }
         }
     }
@@ -89,14 +108,15 @@ void Validator::visitScope(Declaration* scope)
     QList<Declaration*> bounds_ = boundProcs;
     boundProcs.clear();
     foreach(Declaration* p, bounds_)
-        visitBody(p);
+        visitScope(p);
     cur = scope->link;
     while( cur )
     {
         if( cur->kind == Declaration::Procedure )
-            visitBody(cur);
+            visitScope(cur);
         cur = cur->getNext();
     }
+    visitBody(scope->body);
     scopeStack.pop_back();
 }
 
@@ -112,10 +132,7 @@ void Validator::visitDecl(Declaration* d)
     case Declaration::LocalDecl:
     case Declaration::ParamDecl:
     case Declaration::Field:
-        if( d->type && d->type->form == Type::NameRef )
-            d->type = resolve(d->type);
-        else
-            visitType(d->type);
+        visitType(d->type);
         break;
     case Declaration::ConstDecl:
         visitExpr(d->expr);
@@ -129,10 +146,7 @@ void Validator::visitDecl(Declaration* d)
         break;
     case Declaration::Procedure: {
         // only header is evaluated here
-        if( d->type && d->type->form == Type::NameRef )
-            d->type = resolve(d->type);
-        else
-            visitType(d->type);
+        visitType(d->type);
         const QList<Declaration*> params = d->getParams();
         for( int i = 0; i < params.size(); i++ )
             visitDecl(params[i]);
@@ -159,11 +173,55 @@ void Validator::visitImport(Declaration* import)
     import->validated = true;
 }
 
-void Validator::visitBody(Declaration* body)
+void Validator::visitBody(Statement* s)
 {
-    if( body->validated )
-        return;
-    // TODO
+    // already in the right scope when called
+
+    while( s )
+    {
+        switch(s->kind)
+        {
+        case Statement::Assig:
+            assigOp(s);
+            break;
+        case Statement::Call:
+            callOp(s);
+            break;
+        case Statement::If:
+            s = ifOp(s);
+            break;
+        case Statement::Case:
+            s = caseStat(s);
+            break;
+        case Statement::Loop:
+            loopStack.push_back(s);
+            visitBody(s->body);
+            loopStack.pop_back();
+            break;
+        case Statement::While:
+        case Statement::Repeat:
+            loopStat(s);
+            break;
+        case Statement::Exit:
+            if( loopStack.isEmpty() )
+                error(s->pos, "exit statement requires a surrounding loop statement");
+            break;
+        case Statement::Return:
+            returnOp(s);
+            break;
+        case Statement::ForAssig:
+            s = forStat(s);
+            break;
+        case Statement::ForToBy:
+        case Statement::CaseLabel:
+        case Statement::Elsif:
+        case Statement::Else:
+            break; // ignore, only visited in case of error
+        default:
+            Q_ASSERT(false);
+        }
+        s = s->getNext();
+    }
 }
 
 void Validator::visitExpr(Expression* e, Type* hint)
@@ -243,57 +301,70 @@ void Validator::visitType(Type* type)
     if( type == 0 || type->validated )
         return;
     type->validated = true;
-    if( type->base && type->base->form == Type::NameRef )
-        type->base = resolve(type->base);
-    else
-        visitType(type->base);
-    if( type->expr )
+    switch( type->form )
     {
+    case Type::Record:
+    case Type::Proc:
+    case Type::ConstEnum:
+        foreach( Declaration* d, type->subs )
+        {
+            if( d->kind == Declaration::Procedure )
+                boundProcs << d; // do body later
+            visitDecl(d);
+        }
+        visitType(type->base);
+        break;
+    case Type::Array:
+    case Type::HashMap:
         visitExpr(type->expr );
         if( type->form == Type::Array )
         {
-            if( !type->expr->isConst() || !type->expr->type->isInteger() )
-                error(type->expr->pos,"expecting constant integer expression");
-            else
+            if( type->expr )
             {
-                const qint64 tmp = type->expr->val.toLongLong();
-                if( tmp < 0 || tmp > std::numeric_limits<quint32>::max() )
-                    error(type->expr->pos,"invalid array length");
+                if( !type->expr->isConst() || !deref(type->expr->type)->isInteger() )
+                    error(type->expr->pos,"expecting constant integer expression");
                 else
-                    type->len = tmp;
+                {
+                    const qint64 tmp = type->expr->val.toLongLong();
+                    if( tmp < 0 || tmp > std::numeric_limits<quint32>::max() )
+                        error(type->expr->pos,"invalid array length");
+                    else
+                        type->len = tmp;
+                }
             }
         }else if( type->form == Type::HashMap && type->expr->kind == Expression::DeclRef )
         {
             if( type->expr->val.value<Declaration*>()->kind != Declaration::TypeDecl )
                 error(type->expr->pos,"expecting a type name");
         }
-    }
-    foreach( Declaration* d, type->subs )
-    {
-        if( d->kind == Declaration::Procedure )
-            boundProcs << d; // do body later
-        visitDecl(d);
+        visitType(type->base);
+        break;
+    case Type::NameRef:
+        // we no longer replace NameRefs by the original type, because doing so requires essentially to
+        // completeley treat each declaration and expression in the first batch; if we then don't succeed
+        // to resolve the type (e.g. because we resolve meta actuals and the resolution chain finally depends
+        // on exactly this import to be completed), we would have to run several iterations to find all yet unresolved
+        // types, or it's not even possible to break circular dependencies. If we leaf NameRefs instead, we
+        // just pass the NameRef to the declarations and expressions as their types and come back later to
+        // complete the process. The price is that we need deref.
+        resolve(type);
+        break;
     }
 }
 
-Type* Validator::resolve(Type* nameRef)
+void Validator::resolve(Type* nameRef)
 {
     Q_ASSERT(nameRef->form == Type::NameRef);
+    if( nameRef->validated )
+        return;
     Qualident q = nameRef->expr->val.value<Qualident>();
     Declaration* d = find(q, nameRef->expr->pos);
-    if( d == 0 )
-        return mdl->getType(BasicType::NoType);
-
+    if(d == 0)
+        return;
+    nameRef->validated = true;
     if( d->kind != Declaration::TypeDecl )
-    {
-        error(nameRef->expr->pos,"identifier doesn't refer to a type declaration");
-        return mdl->getType(BasicType::NoType);
-    }
-
-    if( !d->validating && !d->validated )
-        visitDecl(d);
-
-    return d->type;
+        return error(nameRef->expr->pos,"identifier doesn't refer to a type declaration");
+    nameRef->base = d->type;
 }
 
 static inline void toConstVal(Expression* e)
@@ -315,18 +386,19 @@ void Validator::unaryOp(Expression* e)
 {
     if( e->lhs->type == 0 )
         return; // already reported
+    Type* lhsT = deref(e->lhs->type);
     if( e->kind == Expression::Plus || e->kind == Expression::Minus )
     {
-        if( !e->lhs->type->isNumber() )
+        if( !lhsT->isNumber() )
             return error(e->pos, "unary operator not applicable to this type");
     }else if( e->kind == Expression::Not )
     {
-        if( !e->lhs->type->isBoolean() )
+        if( !lhsT->isBoolean() )
             return error(e->pos, "unary '~' or 'NOT' not applicable to this type");
     }
     if( e->lhs == 0 )
         return; // already reported
-    e->type = e->lhs->type;
+    e->type = lhsT;
 
     switch( e->kind )
     {
@@ -395,10 +467,12 @@ void Validator::binaryOp(Expression* e)
 
 void Validator::arithOp(Expression* e)
 {
-    e->type = e->lhs->type;
-    if( e->lhs->type->isNumber() && e->rhs->type->isNumber() )
+    Type* lhsT = deref(e->lhs->type);
+    Type* rhsT = deref(e->rhs->type);
+    e->type = lhsT;
+    if( lhsT->isNumber() && rhsT->isNumber() )
     {
-        if( e->lhs->type->isInteger() && e->rhs->type->isInteger() )
+        if( lhsT->isInteger() && rhsT->isInteger() )
             switch(e->kind)
             {
             case Expression::Mul:
@@ -440,7 +514,7 @@ void Validator::arithOp(Expression* e)
                 error(e->pos,"operator not supported for integer operands");
                 break;
             }
-        else if( e->lhs->type->isReal() && e->rhs->type->isReal() )
+        else if( lhsT->isReal() && rhsT->isReal() )
             switch(e->kind)
             {
             case Expression::Mul:
@@ -477,7 +551,7 @@ void Validator::arithOp(Expression* e)
             }
         else
             error(e->pos,"operands are not of the same type");
-    }else if( e->lhs->type->isSet() && e->rhs->type->isSet() )
+    }else if( lhsT->isSet() && rhsT->isSet() )
     {
         switch(e->kind)
         {
@@ -513,7 +587,7 @@ void Validator::arithOp(Expression* e)
             error(e->pos,"operator not supported for set operands");
             break;
         }
-    }else if(e->lhs->type->isBoolean() && e->rhs->type->isBoolean())
+    }else if(lhsT->isBoolean() && rhsT->isBoolean())
     {
         switch(e->kind)
         {
@@ -535,8 +609,8 @@ void Validator::arithOp(Expression* e)
             error(e->pos,"operator not supported for boolean operands");
             break;
         }
-    }else if((e->lhs->type->form == BasicType::StrLit || e->lhs->type->form == BasicType::CHAR) &&
-             (e->rhs->type->form == BasicType::StrLit || e->rhs->type->form == BasicType::CHAR))
+    }else if((lhsT->form == BasicType::StrLit || lhsT->form == BasicType::CHAR) &&
+             (rhsT->form == BasicType::StrLit || rhsT->form == BasicType::CHAR))
     {
         if( e->kind != Expression::Add )
             error(e->pos,"only the '+' operator can be applied to string and char literals");
@@ -546,11 +620,11 @@ void Validator::arithOp(Expression* e)
         {
             QByteArray lhs;
             QByteArray rhs;
-            if( e->lhs->type->form == BasicType::CHAR)
+            if( lhsT->form == BasicType::CHAR)
                 lhs = QByteArray(1,(char)e->lhs->val.toUInt());
             else
                 lhs = e->lhs->val.toByteArray();
-            if( e->rhs->type->form == BasicType::CHAR)
+            if( rhsT->form == BasicType::CHAR)
                 rhs = QByteArray(1,(char)e->rhs->val.toUInt());
             else
                 rhs = e->rhs->val.toByteArray();
@@ -565,13 +639,14 @@ void Validator::arithOp(Expression* e)
 void Validator::relOp(Expression* e)
 {
     e->type = mdl->getType(BasicType::BOOLEAN);
-    if( e->lhs->type->isNumber() && e->rhs->type->isNumber() )
+    Type* lhsT = deref(e->lhs->type);
+    Type* rhsT = deref(e->rhs->type);
+    if( lhsT->isNumber() && rhsT->isNumber() )
     {
-        if( e->lhs->type->isInteger() && e->rhs->type->isInteger() ||
-                e->lhs->type->form == Type::ConstEnum  && e->rhs->type->form == Type::ConstEnum )
+        if( lhsT->isInteger() && rhsT->isInteger() ||
+                lhsT->form == Type::ConstEnum  && rhsT->form == Type::ConstEnum )
         {
-            if( e->lhs->type->form == Type::ConstEnum  && e->rhs->type->form == Type::ConstEnum &&
-                    e->lhs->type != e->rhs->type )
+            if( lhsT->form == Type::ConstEnum  && rhsT->form == Type::ConstEnum && lhsT != rhsT)
                 error(e->pos, "cannot compare the elements of different enumeration types");
 
             switch(e->kind)
@@ -622,7 +697,7 @@ void Validator::relOp(Expression* e)
                 error(e->pos,"operator not supported for integer operands");
                 break;
             }
-        }else if(e->lhs->type->isReal() && e->rhs->type->isReal() )
+        }else if(lhsT->isReal() && rhsT->isReal() )
         {
             switch(e->kind)
             {
@@ -674,12 +749,12 @@ void Validator::relOp(Expression* e)
             }
         }else
             error(e->pos, "operands are not of the same type");
-    }else if( e->lhs->type->isReference() && e->rhs->type->form == BasicType::Nil ||
-              e->lhs->type->form == BasicType::Nil && e->rhs->type->isReference() ||
-              e->lhs->type->form == BasicType::Nil && e->rhs->type->form == BasicType::Nil ||
-              e->lhs->type->isReference() && e->rhs->type->isReference() ||
-              e->lhs->type->isSet() && e->rhs->type->isSet() ||
-              e->lhs->type->isBoolean() && e->rhs->type->isBoolean() )
+    }else if( lhsT->isReference() && rhsT->form == BasicType::Nil ||
+              lhsT->form == BasicType::Nil && rhsT->isReference() ||
+              lhsT->form == BasicType::Nil && rhsT->form == BasicType::Nil ||
+              lhsT->isReference() && rhsT->isReference() ||
+              lhsT->isSet() && rhsT->isSet() ||
+              lhsT->isBoolean() && rhsT->isBoolean() )
     {
         switch(e->kind)
         {
@@ -703,6 +778,204 @@ void Validator::relOp(Expression* e)
         }
     }else
         error(e->pos, "operands not compatible with operator");
+}
+
+void Validator::assigOp(Statement* s)
+{
+    if( s->lhs == 0 || s->rhs == 0 )
+        return;
+    visitExpr(s->lhs);
+    visitExpr(s->rhs, s->lhs->type);
+    if( !assigCompat(s->lhs->type, s->rhs) )
+        error(s->pos,"left side not assignment compatible with right side");
+}
+
+Statement* Validator::ifOp(Statement* s)
+{
+    visitExpr(s->rhs);
+    if( s->rhs == 0 || s->rhs->type == 0 )
+        return s;
+    if( !deref(s->rhs->type)->isBoolean() )
+        error(s->rhs->pos, "expecting boolean expression");
+    visitBody(s->body);
+    while( s->getNext() && s->getNext()->kind == Statement::Elsif )
+    {
+        s = s->getNext();
+        visitExpr(s->rhs);
+        visitBody(s->body);
+    }
+    if( s->getNext() && s->getNext()->kind == Statement::Else )
+    {
+        s = s->getNext();
+        visitBody(s->body);
+    }
+    return s;
+}
+
+static qint64 getLabelValue(Expression* e, bool& ok)
+{
+    ok = true;
+    if( e->type->isInteger() || e->type->form == Type::ConstEnum || e->type->form == BasicType::CHAR )
+        return e->val.toLongLong();
+    else if( e->type->form == BasicType::StrLit )
+    {
+        const QByteArray str = e->val.toByteArray();
+        if( str.length() != 1 )
+        {
+            ok = false;
+            return 0;
+        }else
+            return (quint8)str[0];
+    }else
+    {
+        ok = false;
+        return 0;
+    }
+}
+
+static QList<qint64> getNumbers(Expression* e, bool&  ok)
+{
+    QList<qint64> res;
+    if( e->kind == Expression::Range )
+    {
+        const qint64 a = getLabelValue(e->lhs,ok);
+        if( !ok )
+            return res;
+        const qint64 b = getLabelValue(e->rhs,ok);
+        if( !ok )
+            return res;
+        if( a <= b )
+            for( int i = a; i <= b; i++ )
+                res << i;
+        else
+            for( int i = b; i <= a; i++ )
+                res << i;
+    }else
+    {
+        res << getLabelValue(e,ok);
+    }
+    return res;
+}
+
+Statement*Validator::caseStat(Statement* s)
+{
+    visitExpr(s->rhs);
+    Expression* caseExp = s->rhs;
+    QSet<qint64> labels;
+    bool typecase = false;
+    bool first = true;
+    while(s->getNext() && s->getNext()->kind == Statement::CaseLabel )
+    {
+        s = s->getNext();
+        visitExpr(s->rhs);
+        if( s->rhs->kind == Expression::DeclRef && s->rhs->val.value<Declaration*>()->kind == Declaration::TypeDecl )
+        {
+            if( first )
+            {
+                typecase = true;
+                if( deref(caseExp->type)->form != Type::Record )
+                    error(caseExp->pos, "type case only supported for record types");
+            }
+            if( !typecase )
+                error(s->pos, "expecting integer, enumeration or char type label");
+            else if( s->rhs->next )
+                error(s->rhs->next->pos,"only one case label supported per type case");
+            else if( !assigCompat(caseExp->type, s->rhs) )
+                error(s->rhs->next->pos,"case label type must be an extension of the case expression type");
+        }else
+        {
+            Expression* l = s->rhs;
+            while( l )
+            {
+                if( !first && typecase )
+                    error(s->pos, "expecting a type declaration name");
+                else if( !l->isConst() )
+                    error(l->pos,"expecting constant expression");
+                else
+                {
+                    bool ok;
+                    QList<qint64> n = getNumbers(l, ok);
+                    if( !ok )
+                        error(l->pos, "expecting integer, enumeration or char type label");
+                    else if( !assigCompat(caseExp->type, l->kind == Expression::Range ? l->lhs : l ) )
+                        error(l->pos,"label type is not compatible with case expression");
+                    else
+                    {
+                        foreach( qint64 v, n )
+                        {
+                            if( labels.contains(v) )
+                            {
+                                error(l->pos, "duplicate labels");
+                                break;
+                            }
+                            labels.insert(v);
+                        }
+                    }
+                }
+                l = l->next;
+            }
+        }
+        visitBody(s->body);
+        first = false;
+    }
+    if( s->getNext() && s->getNext()->kind == Statement::Else )
+    {
+        s = s->getNext();
+        visitBody(s->body);
+    }
+    return s;
+}
+
+Statement*Validator::forStat(Statement* s)
+{
+    // TODO: support enums?
+    visitExpr(s->lhs);
+    visitExpr(s->rhs);
+    if( s->lhs->type == 0 || s->rhs->type == 0 )
+        return s;
+    if( !deref(s->lhs->type)->isInteger() || !s->lhs->isLvalue() )
+        error(s->lhs->pos, "expecting an integer variable");
+    if( !deref(s->rhs->type)->isInteger() )
+        error(s->rhs->pos, "expecting an integer expression");
+    if( s->getNext() && s->getNext()->kind == Statement::ForToBy )
+    {
+        s = s->getNext();
+        visitExpr(s->lhs);
+        visitExpr(s->rhs);
+        if( s->lhs->type == 0 )
+            return s;
+        if( !deref(s->lhs->type)->isInteger() )
+            error(s->lhs->pos, "expecting an integer expression");
+        if( s->rhs )
+        {
+            if( !s->rhs->isConst() || !deref(s->rhs->type)->isInteger() )
+                error(s->lhs->pos, "expecting a constant integer expression");
+        }
+        visitBody(s->body);
+    }
+    return s;
+}
+
+void Validator::loopStat(Statement* s)
+{
+    visitExpr( s->rhs );
+    if( s->rhs == 0 || s->rhs->type == 0 )
+        return;
+    if( !deref(s->rhs->type)->isBoolean() )
+        error(s->rhs->pos, "expecting boolean expression");
+    visitBody(s->body);
+}
+
+void Validator::returnOp(Statement* s)
+{
+    visitExpr(s->rhs);
+    Q_ASSERT(!scopeStack.isEmpty() && scopeStack.back()->kind == Declaration::Procedure);
+    if( s->rhs && scopeStack.back()->type == 0 )
+        error(s->rhs->pos,"the procedure doesn't return a value");
+    else if( s->rhs == 0 && scopeStack.back()->type != 0 )
+        error(s->pos,"a value must be returned");
+    else if( s->rhs != 0 && scopeStack.back()->type != 0 && !assigCompat(scopeStack.back()->type, s->rhs) )
+        error(s->rhs->pos,"the returned value is not compatible with the function return type");
 }
 
 void Validator::resolve(Expression* nameRef)
@@ -772,9 +1045,10 @@ void Validator::selectOp(Expression* e)
 {
     if( e->lhs == 0 || e->lhs->type == 0 )
         return;
-    if( e->lhs->type->form == Type::Record )
+    Type* lhsT = deref(e->lhs->type);
+    if( lhsT->form == Type::Record )
     {
-        Declaration* field = e->type->find(e->val.toByteArray());
+        Declaration* field = lhsT->find(e->val.toByteArray());
         if( field == 0 )
             error(e->pos,QString("the record doesn't have a field named '%1'"). arg(e->val.toString()) );
         else
@@ -799,13 +1073,14 @@ void Validator::callOp(Expression* e)
             e->rhs->kind == Expression::DeclRef &&
             e->rhs->val.value<Declaration*>()->kind == Declaration::TypeDecl;
 
+    Type* lhsT = deref(e->lhs->type);
     if( isTypeCast )
     {
         e->kind = Expression::Cast;
-        e->type = e->lhs->type;
+        e->type = deref(e->rhs->type);
         if( e->rhs->next )
             return error(e->rhs->next->pos,"type guard requires a single argument");
-        if( e->lhs->type->form != Type::Record )
+        if( lhsT->form != Type::Record )
             return error(e->rhs->pos,"a type guard is not supported for this type");
     }else
     {
@@ -813,11 +1088,11 @@ void Validator::callOp(Expression* e)
         {
             if( proc->kind != Declaration::Procedure && proc->kind != Declaration::Builtin )
                 return error(e->lhs->pos,"this expression cannot be called");
-            e->type = e->lhs->type;
-        }else if( e->lhs->type->form != Type::Proc )
+            e->type = lhsT;
+        }else if( lhsT->form != Type::Proc )
             return error(e->lhs->pos,"this expression cannot be called");
         else
-            e->type = e->lhs->type->base;
+            e->type = lhsT->base;
 
         const DeclList formals = e->lhs->getFormals();
         QList<Expression*> actuals = Expression::getList(e->rhs);
@@ -848,19 +1123,34 @@ void Validator::callOp(Expression* e)
     }
 }
 
+void Validator::callOp(Statement* s)
+{
+    Q_ASSERT( s->lhs );
+    if( s->lhs->kind != Expression::Call )
+    {
+        Expression* call = new Expression(Expression::Call, s->pos);
+        call->lhs = s->lhs;
+        s->lhs = call;
+    }
+    visitExpr(s->lhs);
+}
+
 void Validator::indexOp(Expression* e)
 {
     if( e->lhs == 0 || e->lhs->type == 0 || e->rhs == 0 ||e->rhs->type == 0 )
         return;
 
-    e->type = e->lhs->type->base;
-    if( e->lhs->type->form == Type::Array )
+    Type* lhsT = deref(e->lhs->type);
+    Type* rhsT = deref(e->rhs->type);
+
+    e->type = lhsT->base;
+    if( lhsT->form == Type::Array )
     {
-        if( !e->rhs->type->isInteger() )
+        if( !rhsT->isInteger() )
             error(e->rhs->pos,"expecting an array index of integer type");
-    }else if(e->lhs->type->form == Type::HashMap)
+    }else if(lhsT->form == Type::HashMap)
     {
-        if( !assigCompat(e->lhs->type->expr->type, e->rhs->type ) )
+        if( !assigCompat(lhsT->expr->type, rhsT ) )
             error(e->rhs->pos,"expression not compatible with key type");
     }else
         error(e->pos,"cannot index an element in given type");
@@ -868,12 +1158,14 @@ void Validator::indexOp(Expression* e)
 
 void Validator::inOp(Expression* e)
 {
-    if( e->lhs == 0 || e->lhs->type == 0 || e->rhs == 0 ||e->rhs->type == 0 )
+    if( e->lhs == 0 || e->lhs->type == 0 || e->rhs == 0 || e->rhs->type == 0 )
         return;
+    Type* lhsT = deref(e->lhs->type);
+    Type* rhsT = deref(e->rhs->type);
     e->type = mdl->getType(BasicType::BOOLEAN);
-    if( !e->lhs->type->isInteger() )
+    if( !lhsT->isInteger() )
         return error(e->lhs->pos,"expecting integer type");
-    if( !e->rhs->type->isSet() )
+    if( !rhsT->isSet() )
         return error(e->rhs->pos,"expecting set type");
     if( e->isConst() )
     {
@@ -890,14 +1182,16 @@ void Validator::isOp(Expression* e)
 {
     if( e->lhs == 0 || e->lhs->type == 0 || e->rhs == 0 ||e->rhs->type == 0 )
         return;
+    Type* lhsT = deref(e->lhs->type);
+    Type* rhsT = deref(e->rhs->type);
     e->type = mdl->getType(BasicType::BOOLEAN);
-    if( e->lhs->type->form != Type::Record )
+    if( lhsT->form != Type::Record )
         return error(e->lhs->pos,"expecting record type");
-    if( e->rhs->type->form != Type::Record )
+    if( rhsT->form != Type::Record )
         return error(e->rhs->pos,"expecting record type");
     if( e->rhs->kind != Expression::DeclRef || e->rhs->val.value<Declaration*>()->kind != Declaration::TypeDecl )
         return error(e->rhs->pos,"expecting a type declaration");
-    if( !Type::isSubtype(e->lhs->type, e->rhs->type) )
+    if( !Type::isSubtype(lhsT, rhsT) )
         return error(e->rhs->pos,"rhs type must be an extension of lhs type"); // TODO: ANYREC
 }
 
@@ -918,7 +1212,7 @@ void Validator::constructor(Expression* e, Type* hint)
     if( e->type == 0 )
     {
         if( hint )
-            e->type = hint;
+            e->type = deref(hint);
         else
             e->type = mdl->getType(BasicType::SET);
     }
@@ -1001,7 +1295,7 @@ void Validator::constructor(Expression* e, Type* hint)
             visitExpr(c);
             if( c->kind == Expression::Range && !sameType(c->lhs->type, c->rhs->type) )
                 error(e->pos,"types in range must be the same");
-            if( c->type && !c->type->isInteger() )
+            if( c->type && !deref(c->type)->isInteger() )
                 return error(c->pos,"expecting integer compontents for SET constructors");
         }else
         {
@@ -1046,8 +1340,24 @@ void Validator::constructor(Expression* e, Type* hint)
     }
 }
 
+Type*Validator::deref(Type* t) const
+{
+    if( t == 0 )
+        return 0;
+    if( t->form == Type::NameRef )
+    {
+        Q_ASSERT( t->validated );
+        if( t->base == 0 )
+            return t;
+        return deref(t->base);
+    }else
+        return t;
+}
+
 bool Validator::assigCompat(Type* lhs, Type* rhs) const
 {
+    lhs = deref(lhs);
+    rhs = deref(rhs);
     if( lhs == 0 || rhs == 0 )
         return false;
 
@@ -1080,6 +1390,8 @@ bool Validator::assigCompat(Type* lhs, Declaration* rhs) const
     if( rhs->kind == Declaration::TypeDecl )
         return false;
 
+    lhs = deref(lhs);
+
     // Tv is a procedure type and e is the name of a procedure whose formal parameters match those of Tv.
     if( lhs->form == Type::Proc && rhs->mode == Declaration::Procedure )
         return matchFormals(lhs->subs, rhs->getParams()) && matchResultType(lhs->base,rhs->type);
@@ -1088,8 +1400,8 @@ bool Validator::assigCompat(Type* lhs, Declaration* rhs) const
     if( lhs->form == Type::ConstEnum )
         return lhs->subs.contains(rhs);
 
-    if( lhs->form == Type::Array && lhs->base->form == BasicType::CHAR && lhs->len > 0 &&
-            rhs->mode == Declaration::ConstDecl && rhs->type->form == BasicType::StrLit )
+    if( lhs->form == Type::Array && deref(lhs->base)->form == BasicType::CHAR && lhs->len > 0 &&
+            rhs->mode == Declaration::ConstDecl && deref(rhs->type)->form == BasicType::StrLit )
         return strlen(rhs->data.toByteArray().constData()) < lhs->len;
 
     return assigCompat(lhs, rhs->type);
@@ -1097,19 +1409,21 @@ bool Validator::assigCompat(Type* lhs, Declaration* rhs) const
 
 bool Validator::assigCompat(Type* lhs, const Expression* rhs) const
 {
+    lhs = deref(lhs);
     if( lhs == 0 || rhs == 0 )
         return false;
 
+    Type* rhsT = deref(rhs->type);
     if( rhs->kind == Expression::DeclRef )
         return assigCompat(lhs, rhs->val.value<Declaration*>() );
 
-    if( lhs->form == Type::Array && lhs->base->form == BasicType::CHAR && lhs->len > 0 &&
+    if( lhs->form == Type::Array && deref(lhs->base)->form == BasicType::CHAR && lhs->len > 0 &&
             ( rhs->kind == Expression::Literal ||rhs->kind == Expression::ConstVal ) &&
-            rhs->type->form == BasicType::StrLit)
+            rhsT->form == BasicType::StrLit)
         return strlen(rhs->val.toByteArray().constData()) < lhs->len;
 
     // A string of length 1 can be used wherever a character constant is allowed and vice versa.
-    if( lhs->form == BasicType::CHAR && rhs->type->form == BasicType::StrLit )
+    if( lhs->form == BasicType::CHAR && rhsT->form == BasicType::StrLit )
         return strlen(rhs->val.toByteArray().constData()) == 1;
 
     return assigCompat(lhs, rhs->type);
@@ -1117,7 +1431,7 @@ bool Validator::assigCompat(Type* lhs, const Expression* rhs) const
 
 bool Validator::paramCompat(Declaration* lhs, const Expression* rhs) const
 {
-    Q_ASSERT(lhs->mode == Declaration::ParamDecl);
+    Q_ASSERT(lhs->kind == Declaration::ParamDecl);
 
 #if 0
     // TODO
@@ -1150,6 +1464,8 @@ bool Validator::matchFormals(const QList<Declaration*>& a, const QList<Declarati
 
 bool Validator::matchResultType(Type* lhs, Type* rhs) const
 {
+    lhs = deref(lhs);
+    rhs = deref(rhs);
     if( lhs == 0 || rhs == 0 )
         return false;
     return sameType(lhs,rhs) || (lhs->form == BasicType::NoType && rhs->form == BasicType::NoType);

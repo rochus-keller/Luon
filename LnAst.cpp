@@ -132,28 +132,30 @@ Declaration* AstModel::closeScope(bool takeMembers)
 Declaration* AstModel::addDecl(const QByteArray& name)
 {
     Declaration* scope = scopes.back();
-    Declaration** last;
+
+    Declaration* decl = new Declaration();
+    decl->name = name;
+    if( scope->kind != Declaration::Scope )
+        decl->outer = scope;
+
     if( scope->link == 0 )
-        last = &scope->link;
+        scope->link = decl;
     else
     {
         Declaration* d = scope->link;
         while( d && d->next )
         {
             if( d->name.constData() == name.constData() )
+            {
+                delete decl;
                 return 0; // duplicate
+            }
             d = d->next;
         }
         Q_ASSERT( d && d->next == 0 );
-        last = &d->next;
+        d->next = decl;
+        decl->inList = true;
     }
-    Declaration* decl = new Declaration();
-    decl->name = name;
-    if( scope->kind != Declaration::Scope )
-        decl->outer = scope;
-    decl->inList = scope->link != 0;
-    *last = decl;
-
     return decl;
 }
 
@@ -303,14 +305,16 @@ QList<Declaration*> Type::fieldList() const
 
 Type::~Type()
 {
-    // all anonymous types are resolved, therefore base is no longer owned by a type
-    //if( base )
-    //    delete base;
     if( form != ConstEnum )
         for( int i = 0; i < subs.size(); i++ )
             Declaration::deleteAll(subs[i]);
     if( expr )
         delete expr;
+    // if( base && base->form == NameRef && form != NameRef )
+        // A NameRef points to the resolved Type via base which cannot be owned by NameRef per definition
+        // On the other hand, each Type which has a base shall delete NameRef
+        // NOTE: this doesn't work; base could have been delete before we do the check here
+        // delete base;
 }
 
 QVariant BasicType::getMax(BasicType::Type t)
@@ -696,7 +700,7 @@ DeclList AstModel::toList(Declaration* d)
 {
     if( d == 0 )
         return DeclList();
-    Q_ASSERT( !d->inList );
+    Q_ASSERT( !d->inList ); // applies to the head
     DeclList res;
     while( d )
     {

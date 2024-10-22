@@ -47,23 +47,31 @@ namespace Ln
         void visitScope( Declaration* scope );
         void visitDecl( Declaration* );
         void visitImport(Declaration* import);
-        void visitBody(Declaration* body);
+        void visitBody(Statement* body);
         void visitExpr(Expression*, Type* hint = 0);
         void visitType(Type*);
-        Type* resolve(Type* nameRef);
+        void resolve(Type* nameRef);
         bool resolve(Type** nameRef);
         void unaryOp(Expression*);
         void binaryOp(Expression*);
         void arithOp(Expression*);
         void relOp(Expression*);
+        void assigOp(Statement*);
+        Statement* ifOp(Statement*);
+        Statement* caseStat(Statement*);
+        Statement* forStat(Statement*);
+        void loopStat(Statement*);
+        void returnOp(Statement*);
         void resolve(Expression* nameRef);
         Declaration* find(const Qualident& q, const RowCol& pos);
         void selectOp(Expression*);
         void callOp(Expression*);
+        void callOp(Statement*);
         void indexOp(Expression*);
         void inOp(Expression*);
         void isOp(Expression*);
         void constructor(Expression*, Type* hint);
+        Type* deref(Type*) const;
 
         bool assigCompat(Type* lhs, Type* rhs) const;
         bool assigCompat(Type* lhs, Declaration* rhs) const;
@@ -80,6 +88,7 @@ namespace Ln
         QList<Expression*> unresolveds;
         QList<Declaration*> scopeStack;
         QList<Declaration*> boundProcs;
+        QList<Statement*> loopStack;
     };
 }
 
