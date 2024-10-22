@@ -264,26 +264,38 @@ void AstModel::addBuiltin(const QByteArray& name, Builtin::Type t)
     d->validated = true;
 }
 
-Declaration*Type::findField(const QByteArray& name) const
+bool Type::isSubtype(Type* super, Type* sub)
 {
-    // TODO: search also through inlined records
+    if( super == 0 || sub == 0 )
+        return false;
+    while( sub && super != sub )
+    {
+        sub = sub->base;
+    }
+    return super == sub;
+}
+
+Declaration*Type::find(const QByteArray& name, bool recursive) const
+{
     foreach( Declaration* d, subs)
     {
         if(d->name.constData() == name.constData())
             return d;
     }
+    if( form == Record && base )
+        return base->find(name);
     return 0;
 }
 
-QPair<int, int> Type::getFieldCount() const
+QList<Declaration*> Type::fieldList() const
 {
-    QPair<int, int> res;
+    QList<Declaration*> res;
+    if( form == Record && base)
+        res = base->fieldList();
     foreach( Declaration* d, subs)
     {
         if( d->kind == Declaration::Field )
-            res.first++;
-        else if( d->kind == Declaration::Variant )
-            res.second++;
+            res << d;
         d = d->getNext();
     }
     return res;
@@ -433,7 +445,6 @@ bool Value::isCallable() const
         return true;
 
     case Declaration::Field:
-    case Declaration::Variant:
     case Declaration::VarDecl:
     case Declaration::LocalDecl:
     case Value::Val:
@@ -512,7 +523,7 @@ bool Expression::isConst() const
         return allConst(args);
     }
 
-    if( lhs && !lhs->isConst() )
+    if( lhs && !lhs->byName && !lhs->isConst() )
         return false;
     if( rhs && !rhs->isConst() )
         return false;
@@ -576,6 +587,17 @@ void Expression::appendArg(Expression* exp, Expression* arg)
         Q_ASSERT(exp->next == 0);
         exp->next = arg;
     }
+}
+
+QList<Expression*> Expression::getList(Expression* e)
+{
+    QList<Expression*> res;
+    while( e )
+    {
+        res << e;
+        e = e->next;
+    }
+    return res;
 }
 
 Expression*Expression::createFromToken(quint16 tt, const RowCol& rc)

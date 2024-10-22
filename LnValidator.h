@@ -33,7 +33,7 @@ namespace Ln
     public:
         Validator(AstModel* mdl, Importer* imp);
 
-        bool validate(Declaration* module);
+        bool validate(Declaration* module, const Import& import = Import());
 
         struct Error {
             QString msg;
@@ -45,24 +45,41 @@ namespace Ln
     protected:
         void error( const RowCol&, const QString& msg );
         void visitScope( Declaration* scope );
-        void visitDecl( Declaration* scope );
+        void visitDecl( Declaration* );
         void visitImport(Declaration* import);
         void visitBody(Declaration* body);
-        void visitExpr(Expression*);
+        void visitExpr(Expression*, Type* hint = 0);
+        void visitType(Type*);
         Type* resolve(Type* nameRef);
+        bool resolve(Type** nameRef);
         void unaryOp(Expression*);
         void binaryOp(Expression*);
         void arithOp(Expression*);
         void relOp(Expression*);
         void resolve(Expression* nameRef);
         Declaration* find(const Qualident& q, const RowCol& pos);
+        void selectOp(Expression*);
+        void callOp(Expression*);
+        void indexOp(Expression*);
+        void inOp(Expression*);
+        void isOp(Expression*);
+        void constructor(Expression*, Type* hint);
 
+        bool assigCompat(Type* lhs, Type* rhs) const;
+        bool assigCompat(Type* lhs, Declaration* rhs) const;
+        bool assigCompat(Type* lhs, const Expression* rhs) const;
+        bool paramCompat(Declaration* lhs, const Expression* rhs) const;
+        bool matchFormals(const QList<Declaration*>& a, const QList<Declaration*>& b) const;
+        bool matchResultType(Type* lhs, Type* rhs) const;
+        bool sameType(Type* lhs, Type* rhs) const;
+        bool equalTypes(Type* lhs, Type* rhs) const;
     private:
         AstModel* mdl;
         Importer* imp;
         Declaration* module;
         QList<Expression*> unresolveds;
         QList<Declaration*> scopeStack;
+        QList<Declaration*> boundProcs;
     };
 }
 

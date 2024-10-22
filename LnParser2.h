@@ -37,7 +37,7 @@ namespace Ln {
 	public:
         Parser2(AstModel* m, Scanner2* s):scanner(s),mdl(m),thisMod(0) {}
         ~Parser2();
-        void RunParser(const MetaActualList& ma);
+        void RunParser();
         typedef QPair<Declaration*, QList<Type*> > Result; // module + list of temporary types
         Result takeResult(); // get module declaration and take ownership (otherwise deleted by parser)
         struct Error {
@@ -127,7 +127,6 @@ namespace Ln {
         void clearTemps();
 
 	protected:
-        MetaActualList metaActuals;
         Declaration* thisMod;
         QList<Type*> componentTypeStack;
         QList<Type*> temporaries;

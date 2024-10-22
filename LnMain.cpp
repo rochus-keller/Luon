@@ -123,7 +123,10 @@ public:
     QByteArray moduleSuffix( const Ln::MetaActualList& ma )
     {
         // TODO: this is an intermediate solution assuming everything is built from sources in full everytime.
-        return "$" + QByteArray::number(modules.size());
+        if( ma.isEmpty() )
+            return QByteArray();
+        else
+            return "$" + QByteArray::number(modules.size());
     }
 
     Ln::Declaration* loadModule( const Ln::Import& imp )
@@ -154,7 +157,7 @@ public:
         //Ln::MilEmitter e(&r);
         Ln::AstModel mdl;
         Ln::Parser2 p(&mdl,&lex);
-        p.RunParser(imp.metaActuals);
+        p.RunParser();
         Ln::Parser2::Result res;
         if( !p.errors.isEmpty() )
         {
@@ -164,7 +167,8 @@ public:
         {
             res = p.takeResult();
             Ln::Validator v(&mdl, this);
-            if( !v.validate(res.first) )
+
+            if( !v.validate(res.first, imp) )
             {
                 foreach( const Ln::Validator::Error& e, v.errors )
                     qCritical() << QFileInfo(e.path).fileName() << e.pos.d_row << e.pos.d_col << e.msg;
@@ -174,14 +178,6 @@ public:
                 ms->imp = Ln::Import();
             }else
             {
-                Ln::ModuleData md = res.first->data.value<Ln::ModuleData>();
-                md.suffix = moduleSuffix(imp.metaActuals);
-                if( !md.suffix.isEmpty() )
-                {
-                    md.fullName = Ln::Token::getSymbol(md.fullName + md.suffix);
-                    res.first->name = Ln::Token::getSymbol(res.first->name + md.suffix);
-                }
-                res.first->data = QVariant::fromValue(md);
             }
         }
         // TODO: uniquely extend the name of generic module instantiations

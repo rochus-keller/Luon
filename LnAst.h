@@ -74,7 +74,7 @@ namespace Ln
         quint8 form;
         bool deferred;
         bool anonymous;
-        bool selfref;
+        bool validated;
         quint32 len; // array length
         Type* base; // array/pointer base type, return type
         QList<Declaration*> subs; // list of record fields or enum elements, or params for proc type
@@ -91,12 +91,13 @@ namespace Ln
         bool isText() const { return form == BasicType::StrLit || form == BasicType::CHAR ||
                     ( form == Array && base && base->form == BasicType::CHAR ) ||
                     ( form == BasicType::STRING ); }
-        bool isStructured() const { return form == Array || form == Record; }
+        bool isStructured() const { return form == Array || form == Record || form == HashMap; }
+        static bool isSubtype(Type* super, Type* sub);
 
-        Declaration* findField(const QByteArray& name) const;
-        QPair<int,int> getFieldCount() const; // fixed, variant
+        Declaration* find(const QByteArray& name, bool recursive = true) const;
+        QList<Declaration*> fieldList() const;
 
-        Type():form(0),len(0),base(0),decl(0),deferred(false),anonymous(false),selfref(false),expr(0){}
+        Type():form(0),len(0),base(0),decl(0),deferred(false),anonymous(false),expr(0),validated(false){}
         ~Type();
     };
 
@@ -105,7 +106,7 @@ namespace Ln
     class Declaration
     {
     public:
-        enum Kind { Invalid, Scope, Module, TypeDecl, Builtin, ConstDecl, Import, Field, Variant,
+        enum Kind { Invalid, Scope, Module, TypeDecl, Builtin, ConstDecl, Import, Field,
                     VarDecl, LocalDecl,
                     Procedure, ParamDecl,
                     Max };
@@ -174,9 +175,10 @@ namespace Ln
 #else
         quint8 kind;
 #endif
-        bool byVal; // option for LocalVar, Param, ModuleVar, Select, Index
-        bool needsLval;
-        quint8 visi;
+        uint byVal : 1; // option for LocalVar, Param, ModuleVar, Select, Index
+        uint needsLval : 1;
+        uint visi : 2;
+        uint byName : 1; // true if lhs of KeyValue is not an index or key, but a name
         RowCol pos;
         Type* type;
         QVariant val; // set elements and call args are ExpList embedded in val
@@ -189,10 +191,12 @@ namespace Ln
         void setByVal();
         static int getNumOfArgs(const Expression*);
         static void appendArg(Expression* exp, Expression* arg);
+        static QList<Expression*> getList(Expression* exp);
         static Expression* createFromToken(quint16,const RowCol&);
 
-        Expression(Kind k = Invalid, const RowCol& rc = RowCol()):kind(k),type(0),lhs(0),rhs(0),next(0),needsLval(false),
-            pos(rc),byVal(false),visi(0){}
+        Expression(Kind k = Invalid, const RowCol& rc = RowCol()):
+            kind(k),type(0),lhs(0),rhs(0),next(0),needsLval(false),
+            pos(rc),byVal(false),visi(0),byName(0){}
         ~Expression();
     };
 
@@ -217,6 +221,8 @@ namespace Ln
     struct Import {
         QByteArrayList path;
         MetaActualList metaActuals; // alias of importDecl->expr, deleted there
+        QString importer; // path
+        RowCol importedAt;
     };
 
     class Statement {

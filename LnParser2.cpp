@@ -526,7 +526,7 @@ static inline bool FIRST_ReturnType(int tt) {
 }
 
 static inline bool FIRST_FPSection(int tt) {
-	return tt == Tok_ident || tt == Tok_IN || tt == Tok_VAR;
+    return tt == Tok_ident || tt == Tok_IN || tt == Tok_VAR;
 }
 
 static inline bool FIRST_FormalType(int tt) {
@@ -577,10 +577,9 @@ Parser2::~Parser2()
     }
 }
 
-void Parser2::RunParser(const MetaActualList& ma) {
+void Parser2::RunParser() {
 	errors.clear();
 	next();
-    metaActuals = ma;
     Luon();
 }
 
@@ -807,7 +806,7 @@ Type* Parser2::DictType() {
     dict->form = Type::HashMap;
     dict->expr = key->expr;
     key->expr = 0;
-    delete key;
+    // is deleted via temporaries: delete key;
     dict->base = etype;
     return dict;
 }
@@ -978,21 +977,6 @@ Expression* Parser2::designator(bool needsLvalue) {
                 }
             }
             expect(Tok_Rpar, false, "selector");
-
-#if 0
-            // TODO: move to validator
-            if( res->kind == Expression::Builtin && res->val.toInt() == Builtin::ASSERT )
-            {
-                Expression* e = new Expression(Expression::Literal,lpar.toRowCol());
-                e->type = mdl->getType(BasicType::INTEGER);
-                e->val = lpar.d_lineNr;
-                Expression::appendArg(args,e);
-                e = new Expression(Expression::Literal,lpar.toRowCol());
-                e->type = mdl->getType(BasicType::StrLit);
-                e->val = "\"" + lpar.d_sourcePath.toUtf8() + "\"";
-                Expression::appendArg(args,e);
-            }
-#endif
 
             Expression* tmp = new Expression(Expression::Call, lpar.toRowCol() ); // could be call or typecast at this point
             tmp->lhs = res; // proc
@@ -1189,18 +1173,30 @@ Expression* Parser2::literal() {
 }
 
 Expression* Parser2::constructor() {
-    Expression* res = new Expression();
+    Expression* res = new Expression(Expression::Constructor, la.toRowCol());
     if( FIRST_NamedType(la.d_type) ) {
-        NamedType();
+        res->type = NamedType();
     }
     expect(Tok_Lbrace, false, "constructor");
     if( FIRST_component(la.d_type) ) {
-        component();
+        Expression* e = component();
+        if( e == 0 )
+        {
+            delete res;
+            return 0;
+        }
+        Expression::appendArg(res->rhs,e);
         while( la.d_type == Tok_Comma || FIRST_component(la.d_type) ) {
             if( la.d_type == Tok_Comma ) {
                 expect(Tok_Comma, false, "constructor");
             }
-            component();
+            Expression* e = component();
+            if( e == 0 )
+            {
+                delete res;
+                return 0;
+            }
+            Expression::appendArg(res->rhs,e);
         }
     }
     expect(Tok_Rbrace, false, "constructor");
@@ -1220,6 +1216,7 @@ Expression* Parser2::component() {
             return 0;
         res = new Expression(Expression::KeyValue, t.toRowCol());
         res->lhs = new Expression(Expression::NameRef);
+        res->byName = true;
         res->lhs->val = QVariant::fromValue(q);
         res->rhs = rhs;
     } else if( la.d_type == Tok_Lbrack ) {
@@ -1237,8 +1234,7 @@ Expression* Parser2::component() {
             return 0;
         }
         res = new Expression(Expression::KeyValue, t.toRowCol());
-        res->lhs = new Expression(Expression::Index, lhs->pos);
-        res->lhs->rhs = lhs; // special case of Index with no lhs
+        res->lhs = lhs;
         res->rhs = rhs;
     } else if( FIRST_expression(la.d_type) ) {
         res = expression();
@@ -1670,18 +1666,13 @@ void Parser2::ProcedureDeclaration() {
 
     mdl->openScope(procDecl);
 
-    if( !receiver.first.isEmpty() )
+    if( record )
     {
         Declaration* d = mdl->addDecl(receiver.first);
         d->kind = Declaration::ParamDecl;
         d->pos = t.toRowCol();
         d->mode = Declaration::Receiver;
-        d->type = new Type();
-        d->type->form = Type::NameRef;
-        d->type->expr = new Expression(Expression::NameRef,t.toRowCol());
-        temporaries.append(d->type);
-        receiver.first.clear();
-        d->type->expr->val = QVariant::fromValue(receiver);
+        d->type = record->type;
         procDecl->mode = Declaration::Receiver;
     }
 
@@ -1743,7 +1734,7 @@ void Parser2::ProcedureDeclaration() {
         DeclList l = AstModel::toList(mdl->closeScope(true));
         for(int i = 0; i < l.size(); i++ )
         {
-            if( record->type->findField(l[i]->name) )
+            if( record->type->find(l[i]->name) )
                 error(l[i]->pos, "name not unique in receiver");
         }
         record->type->subs += l;
@@ -1863,7 +1854,7 @@ void Parser2::FPSection() {
             a = Declaration::IN;
 		} else
 			invalid("FPSection");
-	}
+    }
 	expect(Tok_ident, false, "FPSection");
     TokenList l;
     l << cur;
@@ -1917,9 +1908,9 @@ void Parser2::module() {
     md.source = scanner->source();
     md.path += cur.d_val;
     md.fullName = Token::getSymbol(md.path.join('/'));
-    md.metaActuals = metaActuals;
 
     if( FIRST_MetaParams(la.d_type) ) {
+        const Token t = la;
         md.metaParams = MetaParams();
     }
 
@@ -1995,6 +1986,8 @@ void Parser2::import() {
     Import import;
     foreach( const Token& t, tl)
         import.path << t.d_val;
+    import.importedAt = importDecl->pos;
+    import.importer = scanner->source();
 
     if( FIRST_MetaActuals(la.d_type) ) {
         expect(Tok_Lpar, false, "MetaActuals");
