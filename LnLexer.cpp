@@ -448,7 +448,7 @@ Token Lexer::number()
         digits.replace('_',"");
         const int base = isHex ? 16 : isOctal ? 8 : isBinary ? 2 : 10;
         const quint64 number = digits.toULongLong(&ok, base);
-        const quint64 limit = (1L << 52) - 1;
+        const quint64 limit = (1LL << 52) - 1;
         if( number >  limit || !ok )
             return token( Tok_Invalid, off, "literal too large for INTEGER");
         return token( Tok_integer, off, str );

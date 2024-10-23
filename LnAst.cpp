@@ -118,7 +118,7 @@ Declaration* AstModel::closeScope(bool takeMembers)
             Q_ASSERT(!res->inList);
         scopes.back()->link = 0;
         Declaration::deleteAll(scopes.back());
-    }else if( scopes.back()->mode == Declaration::Module )
+    }else if( scopes.back()->kind == Declaration::Module )
     {
         // append the helpers to the module so they are guaranteed to have the same life span as the module
         Q_ASSERT(scopes.back()->next == 0);
@@ -196,6 +196,17 @@ Declaration*AstModel::findDecl(Declaration* import, const QByteArray& id) const
     while( obj != 0 && obj->name.constData() != id.constData() )
         obj = obj->getNext();
     return obj;
+}
+
+Declaration*AstModel::getTopScope() const
+{
+    for( int i = scopes.size() - 1; i >= 0; i-- )
+    {
+        Declaration* d = scopes[i];
+        if( d->kind == Declaration::Module || d->kind == Declaration::Procedure )
+            return d;
+    }
+    return 0;
 }
 
 QByteArray AstModel::getTempName()

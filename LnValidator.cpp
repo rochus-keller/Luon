@@ -58,11 +58,12 @@ bool Validator::validate(Declaration* module, const Import& import)
         }
         for( int i = 0; i < md.metaParams.size(); i++ )
         {
+            if( md.metaParams[i]->type->form != Type::Generic &&
+                    !assigCompat(md.metaParams[i]->type, md.metaActuals[i]->type) )
+                errors << Error("actual meta type not compatible with meta parameter type",
+                                md.metaActuals[i]->pos, import.importer);
             if( md.metaParams[i]->kind == Declaration::TypeDecl )
             {
-                if( !assigCompat(md.metaParams[i]->type, md.metaActuals[i]->type) )
-                    errors << Error("actual meta type not compatible with meta parameter type",
-                                    md.metaActuals[i]->pos, import.importer);
                 if( md.metaParams[i]->type && md.metaParams[i]->ownstype )
                     delete md.metaParams[i]->type;
                 md.metaParams[i]->type = md.metaActuals[i]->type;
@@ -73,18 +74,17 @@ bool Validator::validate(Declaration* module, const Import& import)
                     errors << Error("expecting a const expression", md.metaActuals[i]->pos, import.importer);
                 if( md.metaParams[i]->type && md.metaParams[i]->ownstype )
                     delete md.metaParams[i]->type;
-                if( !assigCompat(md.metaParams[i]->type, md.metaActuals[i]) )
-                    errors << Error("expression not compatible with meta parameter type",
-                                    md.metaActuals[i]->pos, import.importer);
-                if( md.metaParams[i]->type && md.metaParams[i]->ownstype )
-                    delete md.metaParams[i]->type;
                 md.metaParams[i]->type = md.metaActuals[i]->type;
                 md.metaParams[i]->data = md.metaActuals[i]->val;
             }
         }
     }
 
-    visitScope(module);
+    try
+    {
+        visitScope(module);
+    }catch(...){ }
+
     return errors.isEmpty();
 }
 
@@ -125,6 +125,7 @@ void Validator::visitDecl(Declaration* d)
     if( d->validated )
         return;
     d->validated = true;
+    Q_ASSERT(d->kind == Declaration::Field || d->outer);
     switch( d->kind )
     {
     case Declaration::TypeDecl:
@@ -169,6 +170,10 @@ void Validator::visitImport(Declaration* import)
     {
         // loadModule returns the module decl; we just need the list of module elements:
         import->link = mod->link;
+    }else
+    {
+        error(import->pos,"cannot import module");
+        throw "";
     }
     import->validated = true;
 }
@@ -261,11 +266,23 @@ void Validator::visitExpr(Expression* e, Type* hint)
     case Expression::DeclRef:
     case Expression::Cast:
     case Expression::KeyValue:
-        // NOP
+        resolve(e->type);
         break;
-    case Expression::NameRef:
-        resolve(e);
+    case Expression::NameRef: {
+        const QByteArray select = resolve(e);
+        if( !select.isEmpty() )
+        {
+            // the nameref was not a true qualident, but a select
+            Expression* nameRef = new Expression();
+            *nameRef = *e; // repurpose the new expr as the validated nameref
+            e->kind = Expression::Select;
+            e->val = select;
+            e->lhs = nameRef;
+            nameRef->next = 0;
+            selectOp(e);
+        }
         break;
+        }
     case Expression::Select:
         visitExpr(e->lhs);
         selectOp(e);
@@ -347,6 +364,7 @@ void Validator::visitType(Type* type)
         // types, or it's not even possible to break circular dependencies. If we leaf NameRefs instead, we
         // just pass the NameRef to the declarations and expressions as their types and come back later to
         // complete the process. The price is that we need deref.
+        type->validated = false;
         resolve(type);
         break;
     }
@@ -354,17 +372,23 @@ void Validator::visitType(Type* type)
 
 void Validator::resolve(Type* nameRef)
 {
-    Q_ASSERT(nameRef->form == Type::NameRef);
+    if( nameRef == 0 || nameRef->form != Type::NameRef)
+        return;
     if( nameRef->validated )
         return;
-    Qualident q = nameRef->expr->val.value<Qualident>();
-    Declaration* d = find(q, nameRef->expr->pos);
+    Q_ASSERT(nameRef->decl);
+    Q_ASSERT(nameRef->expr == 0);
+    Qualident q = nameRef->decl->data.value<Qualident>();
+    Declaration* d = find(q, nameRef->decl->pos);
     if(d == 0)
         return;
     nameRef->validated = true;
+    nameRef->base = d->type;
     if( d->kind != Declaration::TypeDecl )
         return error(nameRef->expr->pos,"identifier doesn't refer to a type declaration");
-    nameRef->base = d->type;
+    resolve(d->type);
+    if( d->type )
+        resolve(d->type->base);
 }
 
 static inline void toConstVal(Expression* e)
@@ -786,8 +810,10 @@ void Validator::assigOp(Statement* s)
         return;
     visitExpr(s->lhs);
     visitExpr(s->rhs, s->lhs->type);
-    if( !assigCompat(s->lhs->type, s->rhs) )
+    if( !assigCompat(s->lhs->type, s->rhs) ) {
+       // assigCompat(s->lhs->type, s->rhs); // TEST
         error(s->pos,"left side not assignment compatible with right side");
+    }
 }
 
 Statement* Validator::ifOp(Statement* s)
@@ -970,25 +996,48 @@ void Validator::returnOp(Statement* s)
 {
     visitExpr(s->rhs);
     Q_ASSERT(!scopeStack.isEmpty() && scopeStack.back()->kind == Declaration::Procedure);
-    if( s->rhs && scopeStack.back()->type == 0 )
+    if( s->rhs && (scopeStack.back()->type == 0 || scopeStack.back()->type->form == BasicType::NoType) )
         error(s->rhs->pos,"the procedure doesn't return a value");
-    else if( s->rhs == 0 && scopeStack.back()->type != 0 )
+    else if( s->rhs == 0 && scopeStack.back()->type != 0 && scopeStack.back()->type->form != BasicType::NoType)
         error(s->pos,"a value must be returned");
-    else if( s->rhs != 0 && scopeStack.back()->type != 0 && !assigCompat(scopeStack.back()->type, s->rhs) )
+    else if( s->rhs != 0 && scopeStack.back()->type != 0 && scopeStack.back()->type->form != BasicType::NoType
+             && !assigCompat(scopeStack.back()->type, s->rhs) )
         error(s->rhs->pos,"the returned value is not compatible with the function return type");
 }
 
-void Validator::resolve(Expression* nameRef)
+QByteArray Validator::resolve(Expression* nameRef)
 {
-    // NOTE: NameRef is used as designator or by named type; the former is handled here, the latter in resolve(Type*)
+    Q_ASSERT( !scopeStack.isEmpty() );
+
     Qualident q = nameRef->val.value<Qualident>();
-    Declaration* d = find(q,nameRef->pos);
+
+    Declaration* d = 0;
+    QByteArray select;
+    if( !q.first.isEmpty() )
+    {
+        // check whether this is a local name or an import
+        d = scopeStack.back()->find(q.first);
+        if( d == 0 )
+        {
+            error(nameRef->pos,QString("declaration '%1' not found").arg(q.first.constData()));
+            return QByteArray();
+        }else if( d->kind == Declaration::Import )
+            d = find(q,nameRef->pos, d);
+        else
+        {
+            // this is a local select, not an import
+            select = q.second;
+            q.second = q.first;
+            q.first.clear();
+            nameRef->val = QVariant::fromValue(q);
+        }
+    }else
+        d = find(q,nameRef->pos);
     if( d == 0 )
-        return;
-    if( !d->validated )
-        visitDecl(d);
-    if( !d->validated )
-        return;
+        return QByteArray();
+
+    resolve(d->type);
+
     // repurpose the expression
     if( d->kind == Declaration::ConstDecl )
     {
@@ -1002,9 +1051,10 @@ void Validator::resolve(Expression* nameRef)
         nameRef->val = QVariant::fromValue(d);
         nameRef->type = d->type;
     }
+    return select;
 }
 
-Declaration* Validator::find(const Qualident& q, const RowCol& pos)
+Declaration* Validator::find(const Qualident& q, const RowCol& pos, Declaration* import)
 {
     if( scopeStack.isEmpty() )
         return 0;
@@ -1012,7 +1062,8 @@ Declaration* Validator::find(const Qualident& q, const RowCol& pos)
     Declaration* d = 0;
     if( !q.first.isEmpty() )
     {
-        Declaration* import = scopeStack.back()->find(q.first);
+        if( import == 0 )
+            import = scopeStack.back()->find(q.first);
         if( import == 0 || import->kind != Declaration::Import )
         {
             error(pos,"identifier doesn't refer to an imported module");
@@ -1066,7 +1117,7 @@ void Validator::callOp(Expression* e)
         return;
 
     Declaration* proc = 0;
-    if( e->lhs->kind == Expression::DeclRef )
+    if( e->lhs->kind == Expression::DeclRef || e->lhs->kind == Expression::Select )
         proc = e->lhs->val.value<Declaration*>();
 
     const bool isTypeCast = (proc == 0 || proc->kind != Declaration::Builtin) &&
@@ -1094,29 +1145,35 @@ void Validator::callOp(Expression* e)
         else
             e->type = lhsT->base;
 
-        const DeclList formals = e->lhs->getFormals();
         QList<Expression*> actuals = Expression::getList(e->rhs);
 
-        if( proc && proc->kind != Declaration::Builtin && actuals.size() < formals.size() )
-            error(e->pos,"not enough actual arguments");
-
-        for( int i = 0; i < formals.size() && i < actuals.size(); i++ )
+        if( proc && proc->kind == Declaration::Builtin )
         {
-            if( !paramCompat(formals[i],actuals[i]) )
-                error(actuals[i]->pos, "actual argument not compatible with formal parameter");
-        }
-
-        if( proc && proc->kind != Declaration::Builtin && proc->id == Builtin::ASSERT )
+            if( proc->id == Builtin::ASSERT )
+            {
+                Expression* ee = new Expression(Expression::Literal,e->pos);
+                ee->type = mdl->getType(BasicType::INTEGER);
+                ee->val = e->lhs->pos.d_row;
+                Expression::appendArg(e->rhs,ee);
+                ee = new Expression(Expression::Literal,e->pos);
+                ee->type = mdl->getType(BasicType::StrLit);
+                ModuleData md = module->data.value<ModuleData>();
+                ee->val = md.fullName;
+                Expression::appendArg(e->rhs,ee);
+            }
+            checkBuiltinArgs(proc->id, actuals, &e->type, e->pos);
+        }else
         {
-            Expression* ee = new Expression(Expression::Literal,e->pos);
-            ee->type = mdl->getType(BasicType::INTEGER);
-            ee->val = e->lhs->pos.d_row;
-            Expression::appendArg(e->rhs,ee);
-            ee = new Expression(Expression::Literal,e->pos);
-            ee->type = mdl->getType(BasicType::StrLit);
-            ModuleData md = module->data.value<ModuleData>();
-            ee->val = md.fullName;
-            Expression::appendArg(e->rhs,ee);
+            const DeclList formals = e->lhs->getFormals();
+
+            if( actuals.size() < formals.size() )
+                error(e->pos,"not enough actual arguments");
+
+            for( int i = 0; i < formals.size() && i < actuals.size(); i++ )
+            {
+                if( !paramCompat(formals[i],actuals[i]) )
+                    error(actuals[i]->pos, "actual argument not compatible with formal parameter");
+            }
         }
 
         // TODO: call if const builtin or invar
@@ -1346,7 +1403,11 @@ Type*Validator::deref(Type* t) const
         return 0;
     if( t->form == Type::NameRef )
     {
-        Q_ASSERT( t->validated );
+        if( !t->validated )
+        {
+            Qualident q = t->decl->data.value<Qualident>();
+            qWarning() << "using unresolved NameRef:" << q.first.constData() << q.second.constData();
+        }
         if( t->base == 0 )
             return t;
         return deref(t->base);
@@ -1364,9 +1425,7 @@ bool Validator::assigCompat(Type* lhs, Type* rhs) const
     if( sameType(lhs,rhs) )
         return true;
 
-
-    // Te and Tv are non-open array types with the same length and have equal base types;
-    if( lhs->form == Type::Array && rhs->form == Type::Array && lhs->len != 0 && lhs->len == rhs->len &&
+    if( lhs->form == Type::Array && rhs->form == Type::Array && (lhs->len == 0 || lhs->len == rhs->len) &&
             equalTypes(lhs->base, rhs->base) )
         return true;
 
@@ -1390,10 +1449,13 @@ bool Validator::assigCompat(Type* lhs, Declaration* rhs) const
     if( rhs->kind == Declaration::TypeDecl )
         return false;
 
+    if( lhs == 0 )
+        return false;
+
     lhs = deref(lhs);
 
     // Tv is a procedure type and e is the name of a procedure whose formal parameters match those of Tv.
-    if( lhs->form == Type::Proc && rhs->mode == Declaration::Procedure )
+    if( lhs->form == Type::Proc && rhs->kind == Declaration::Procedure )
         return matchFormals(lhs->subs, rhs->getParams()) && matchResultType(lhs->base,rhs->type);
 
     // Tv is an enumeration type and e is a valid element of the enumeration;
@@ -1401,7 +1463,7 @@ bool Validator::assigCompat(Type* lhs, Declaration* rhs) const
         return lhs->subs.contains(rhs);
 
     if( lhs->form == Type::Array && deref(lhs->base)->form == BasicType::CHAR && lhs->len > 0 &&
-            rhs->mode == Declaration::ConstDecl && deref(rhs->type)->form == BasicType::StrLit )
+            rhs->kind == Declaration::ConstDecl && deref(rhs->type)->form == BasicType::StrLit )
         return strlen(rhs->data.toByteArray().constData()) < lhs->len;
 
     return assigCompat(lhs, rhs->type);
@@ -1410,7 +1472,7 @@ bool Validator::assigCompat(Type* lhs, Declaration* rhs) const
 bool Validator::assigCompat(Type* lhs, const Expression* rhs) const
 {
     lhs = deref(lhs);
-    if( lhs == 0 || rhs == 0 )
+    if( lhs == 0 || rhs == 0 || rhs->type == 0 )
         return false;
 
     Type* rhsT = deref(rhs->type);
@@ -1473,6 +1535,8 @@ bool Validator::matchResultType(Type* lhs, Type* rhs) const
 
 bool Validator::sameType(Type* lhs, Type* rhs) const
 {
+    lhs = deref(lhs);
+    rhs = deref(rhs);
     return lhs == rhs;
 }
 
@@ -1481,6 +1545,9 @@ bool Validator::equalTypes(Type* lhs, Type* rhs) const
     // Ta and Tb are the same type,
     if(sameType(lhs,rhs))
         return true;
+
+    lhs = deref(lhs);
+    rhs = deref(rhs);
 
     if( lhs == 0 || rhs == 0 )
         return false;
@@ -1502,4 +1569,178 @@ bool Validator::equalTypes(Type* lhs, Type* rhs) const
         return true;
 
     return false;
+}
+
+static inline void expectingNArgs(const QList<Expression*>& args,int n)
+{
+    if( args.size() != n )
+        throw QString("expecting %1 arguments").arg(n);
+}
+
+static inline void expectingNMArgs(const QList<Expression*>& args,int n, int m)
+{
+    if( args.size() < n || args.size() > m)
+        throw QString("expecting %1 to %2 arguments").arg(n).arg(m);
+}
+
+static void checkBitArith(const QList<Expression*>& args, Type** ret)
+{
+    expectingNArgs(args,2);
+    if( !args[0]->type->isInteger() )
+        throw QString("expecing integer first argument");
+    if( !args[1]->type->isInteger() )
+        throw QString("expecing integer second argument");
+    *ret = args[0]->type;
+}
+
+bool Validator::checkBuiltinArgs(quint8 builtin, const QList<Expression*>& args, Type** ret, const RowCol& pos)
+{
+    Q_ASSERT(ret);
+
+    *ret = mdl->getType(BasicType::NoType);
+
+    // TODO:
+    try
+    {
+    switch(builtin)
+    {
+    // functions:
+    case Builtin::ABS:
+        expectingNArgs(args,1);
+        if( !args.first()->type->isNumber() )
+            throw "expecting numeric argument";
+        *ret = args.first()->type;
+        break;
+    case Builtin::CAP:
+        expectingNArgs(args,1);
+        break;
+    case Builtin::BITAND:
+        checkBitArith(args, ret);
+        break;
+    case Builtin::BITASR:
+        checkBitArith(args, ret);
+        break;
+    case Builtin::BITNOT:
+        expectingNArgs(args,1);
+        if( !args.first()->type->isInteger() )
+            throw "expecting integer";
+        *ret = args[0]->type;
+        break;
+    case Builtin::BITOR:
+        checkBitArith(args, ret);
+        break;
+    case Builtin::BITS:
+        expectingNArgs(args,1);
+        break;
+    case Builtin::BITSHL:
+        checkBitArith(args, ret);
+        break;
+    case Builtin::BITSHR:
+        checkBitArith(args, ret);
+        break;
+    case Builtin::BITXOR:
+        checkBitArith(args, ret);
+        break;
+    case Builtin::CAST:
+        expectingNArgs(args,2);
+        break;
+    case Builtin::CHR:
+        expectingNArgs(args,1);
+        break;
+    case Builtin::DEFAULT:
+        expectingNArgs(args,1);
+        *ret = args[0]->type;
+        break;
+    case Builtin::FLOOR:
+        expectingNArgs(args,1);
+        if( !args.first()->type->isReal() )
+            throw "expecting real argument";
+        *ret = mdl->getType(BasicType::INTEGER);
+        break;
+    case Builtin::FLT:
+        expectingNArgs(args,1);
+        if( !args.first()->type->isInteger() )
+            throw "expecting integer argument";
+        *ret = mdl->getType(BasicType::REAL);
+        break;
+    case Builtin::GETENV:
+        expectingNArgs(args,2);
+        break;
+    case Builtin::LEN:
+        expectingNArgs(args,1);
+        *ret = mdl->getType(BasicType::INTEGER);
+        break;
+    case Builtin::MAX:
+        expectingNMArgs(args,1,2);
+        break;
+    case Builtin::MIN:
+        expectingNMArgs(args,1,2);
+        break;
+    case Builtin::ODD:
+        expectingNArgs(args,1);
+        break;
+    case Builtin::ORD:
+        expectingNArgs(args,1);
+        break;
+    case Builtin::SIZE:
+        expectingNArgs(args,1);
+        break;
+    case Builtin::STRLEN:
+        expectingNArgs(args,1);
+        break;
+    case Builtin::VARARG:
+        expectingNMArgs(args,2,3);
+        break;
+    case Builtin::VARARGS:
+        expectingNArgs(args,0);
+        break;
+
+    // procedures:
+    case Builtin::ASSERT:
+        expectingNArgs(args,1);
+        break;
+    case Builtin::DEC:
+        expectingNMArgs(args,1,2);
+        break;
+    case Builtin::EXCL:
+        expectingNArgs(args,2);
+        break;
+    case Builtin::HALT:
+        expectingNArgs(args,1);
+        break;
+    case Builtin::INC:
+        expectingNMArgs(args,1,2);
+        break;
+    case Builtin::INCL:
+        expectingNArgs(args,2);
+        break;
+    case Builtin::NEW:
+        expectingNMArgs(args,1,2);
+        break;
+    case Builtin::PCALL:
+        break;
+    case Builtin::PRINT:
+        expectingNArgs(args,1);
+        break;
+    case Builtin::PRINTLN:
+        expectingNArgs(args,1);
+       break;
+    case Builtin::RAISE:
+        expectingNArgs(args,1);
+        break;
+    case Builtin::SETENV:
+        expectingNArgs(args,2);
+        break;
+    }
+    }catch( const QString& err )
+    {
+        error(pos, err);
+        return false;
+    }catch( const char* str)
+    {
+        error(pos, str);
+        return false;
+    }
+
+    return true;
 }

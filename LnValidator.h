@@ -51,7 +51,6 @@ namespace Ln
         void visitExpr(Expression*, Type* hint = 0);
         void visitType(Type*);
         void resolve(Type* nameRef);
-        bool resolve(Type** nameRef);
         void unaryOp(Expression*);
         void binaryOp(Expression*);
         void arithOp(Expression*);
@@ -62,8 +61,8 @@ namespace Ln
         Statement* forStat(Statement*);
         void loopStat(Statement*);
         void returnOp(Statement*);
-        void resolve(Expression* nameRef);
-        Declaration* find(const Qualident& q, const RowCol& pos);
+        QByteArray resolve(Expression* nameRef);
+        Declaration* find(const Qualident& q, const RowCol& pos, Declaration* import = 0);
         void selectOp(Expression*);
         void callOp(Expression*);
         void callOp(Statement*);
@@ -72,6 +71,7 @@ namespace Ln
         void isOp(Expression*);
         void constructor(Expression*, Type* hint);
         Type* deref(Type*) const;
+        bool checkBuiltinArgs(quint8 builtin, const QList<Expression*>& args, Type** ret, const RowCol& pos);
 
         bool assigCompat(Type* lhs, Type* rhs) const;
         bool assigCompat(Type* lhs, Declaration* rhs) const;

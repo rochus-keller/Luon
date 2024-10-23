@@ -276,7 +276,7 @@ namespace Ln
         Declaration* addHelper();
         Declaration* findDecl(const QByteArray&, bool recursive = true) const;
         Declaration* findDecl(Declaration* import, const QByteArray&) const;
-        Declaration* getTopScope() const { return scopes.back(); }
+        Declaration* getTopScope() const;
         QByteArray getTempName();
         Declaration* getTopModule() const;
 

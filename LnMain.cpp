@@ -129,6 +129,12 @@ public:
             return "$" + QByteArray::number(modules.size());
     }
 
+    static inline void report(const QString& file, const Ln::RowCol& pos, const QString& msg)
+    {
+        QTextStream out(stdout);
+        out << QFileInfo(file).fileName() << ":" << pos.d_row << ":" << pos.d_col << ": " << msg << endl;
+    }
+
     Ln::Declaration* loadModule( const Ln::Import& imp )
     {
         ModuleSlot* ms = find(imp);
@@ -162,7 +168,7 @@ public:
         if( !p.errors.isEmpty() )
         {
             foreach( const Ln::Parser2::Error& e, p.errors )
-                qCritical() << QFileInfo(e.path).fileName() << e.pos.d_row << e.pos.d_col << e.msg;
+                report(e.path, e.pos, e.msg);
         }else
         {
             module = p.takeResult();
@@ -171,7 +177,7 @@ public:
             if( !v.validate(module, imp) )
             {
                 foreach( const Ln::Validator::Error& e, v.errors )
-                    qCritical() << QFileInfo(e.path).fileName() << e.pos.d_row << e.pos.d_col << e.msg;
+                    report(e.path, e.pos, e.msg);
                 Ln::Declaration::deleteAll(module);
                 module = 0;
                 ms->imp = Ln::Import();

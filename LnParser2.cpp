@@ -15,6 +15,7 @@
 */
 
 #include "LnParser2.h"
+#include <QtDebug>
 using namespace Ln;
 
 static const quint64 maxUlong = (1L << BasicType::SignedIntBitWidth) - 1; // 52 bits
@@ -922,6 +923,7 @@ Expression* Parser2::designator(bool needsLvalue) {
 
     Qualident q = qualident();
     Expression* res = new Expression(Expression::NameRef, cur.toRowCol());
+    // we don't know here whether quali is real, or whether it is a select of a local
     res->val = QVariant::fromValue(q);
 
     while( FIRST_selector(la.d_type) ) {
@@ -1657,6 +1659,8 @@ void Parser2::ProcedureDeclaration() {
     Declaration* procDecl = addDecl(id, Declaration::Procedure);
     if( procDecl == 0 )
         return;
+
+    procDecl->outer = mdl->getTopScope();
 
     mdl->openScope(procDecl);
 
