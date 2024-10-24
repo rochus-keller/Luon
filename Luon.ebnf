@@ -176,7 +176,9 @@ FormalParameters ::= '(' [ FPSection { \LA: 1:(ident|'IN'|'VAR') | (1:';' & 2:(i
 
 ReturnType ::= NamedType
 
-FPSection ::= [VAR|IN] ident { [','] ident } ':' FormalType 
+FPSection ::= [VAR|CONST] ident { [','] ident } ':' FormalType 
+            // VAR passes "by reference" (by value, but settable via multi-return)
+            // CONST passes by value and makes ref recursively immutable
 
 FormalType ::= type
 

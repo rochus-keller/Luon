@@ -527,7 +527,7 @@ static inline bool FIRST_ReturnType(int tt) {
 }
 
 static inline bool FIRST_FPSection(int tt) {
-    return tt == Tok_ident || tt == Tok_IN || tt == Tok_VAR;
+    return tt == Tok_ident || tt == Tok_CONST || tt == Tok_VAR;
 }
 
 static inline bool FIRST_FormalType(int tt) {
@@ -710,6 +710,7 @@ Expression* Parser2::ConstExpression() {
 void Parser2::TypeDeclaration() {
     const IdentDef id = identdef();
     expect(Tok_Eq, false, "TypeDeclaration");
+
     Type* t = 0;
 
     // declare the type immediately so it is known in the forthcoming declaration
@@ -859,11 +860,11 @@ Parser2::IdentDefList Parser2::IdentList() {
 Type* Parser2::enumeration() {
     expect(Tok_Lpar, false, "enumeration");
     Type* res = new Type();
+    res->form = Type::ConstEnum;
     if( FIRST_constEnum(la.d_type) ) {
         res->subs = constEnum(); // ConstEnum exist both in the scope list as well as the type subs
         foreach( Declaration* d, res->subs )
             d->type = res;
-        res->form = Type::ConstEnum;
     } else
         invalid("enumeration");
     expect(Tok_Rpar, false, "enumeration");
@@ -879,7 +880,7 @@ DeclList Parser2::constEnum() {
     Declaration* d = addDecl(cur, 0, Declaration::ConstDecl);
     if( d == 0 )
         return res;
-
+    d->mode = Declaration::Enum;
     if( la.d_type == Tok_Eq ) {
         expect(Tok_Eq, false, "constEnum");
         d->expr = ConstExpression();
@@ -895,6 +896,7 @@ DeclList Parser2::constEnum() {
         d = addDecl(cur, 0, Declaration::ConstDecl);
         if( d == 0 )
             continue;
+        d->mode = Declaration::Enum;
         res << d;
     }
     return res;
@@ -1624,14 +1626,19 @@ void Parser2::procedure() {
 
 Type* Parser2::ProcedureType() {
 	procedure();
-	if( la.d_type == Tok_Hat ) {
+    mdl->openScope(0);
+    if( la.d_type == Tok_Hat ) {
 		expect(Tok_Hat, false, "ProcedureType");
 	}
-    Type* res = mdl->getType(BasicType::NoType);
+    Type* ret = mdl->getType(BasicType::NoType);
 	if( FIRST_FormalParameters(la.d_type) ) {
-        res = FormalParameters();
+        ret = FormalParameters();
 	}
-    return res;
+    Type* p = new Type();
+    p->form = Type::Proc;
+    p->subs = AstModel::toList(mdl->closeScope(true));
+    p->base = ret;
+    return p;
 }
 
 void Parser2::ProcedureDeclaration() {
@@ -1808,10 +1815,10 @@ Type* Parser2::FormalParameters() {
 	expect(Tok_Lpar, false, "FormalParameters");
 	if( FIRST_FPSection(la.d_type) ) {
 		FPSection();
-        while( ( ( ( peek(1).d_type == Tok_ident || peek(1).d_type == Tok_IN ||
+        while( ( ( ( peek(1).d_type == Tok_ident || peek(1).d_type == Tok_CONST ||
                      peek(1).d_type == Tok_VAR ) ||
                    peek(1).d_type == Tok_Semi && ( peek(2).d_type == Tok_ident ||
-                                                   peek(2).d_type == Tok_IN || peek(2).d_type == Tok_VAR ) ) )  ) {
+                                                   peek(2).d_type == Tok_CONST || peek(2).d_type == Tok_VAR ) ) )  ) {
 			if( la.d_type == Tok_Semi ) {
 				expect(Tok_Semi, false, "FormalParameters");
 			}
@@ -1845,14 +1852,15 @@ Type* Parser2::ReturnType() {
 }
 
 void Parser2::FPSection() {
-    Declaration::Access a = Declaration::ByValue;
-	if( la.d_type == Tok_VAR || la.d_type == Tok_IN ) {
+    bool varParam = false;
+    bool ro = false;
+    if( la.d_type == Tok_VAR || la.d_type == Tok_CONST ) {
 		if( la.d_type == Tok_VAR ) {
 			expect(Tok_VAR, false, "FPSection");
-            a = Declaration::VAR;
-		} else if( la.d_type == Tok_IN ) {
-			expect(Tok_IN, false, "FPSection");
-            a = Declaration::IN;
+            varParam = true;
+        } else if( la.d_type == Tok_CONST ) {
+            expect(Tok_CONST, false, "FPSection");
+            ro = true;
 		} else
 			invalid("FPSection");
     }
@@ -1873,7 +1881,9 @@ void Parser2::FPSection() {
         Declaration* d = addDecl(l[i], 0, Declaration::ParamDecl);
         if( d == 0 )
             continue;
-        d->access = a;
+        d->varParam = varParam;
+        if( ro )
+            d->visi = Declaration::ReadOnly;
         d->type = t;
     }
 }

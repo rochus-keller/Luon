@@ -288,6 +288,29 @@ bool Type::isSubtype(Type* super, Type* sub)
     return super == sub;
 }
 
+bool Type::isDerefCharArray() const
+{
+    Type* t = deref();
+    if( t && t->form == Array && t->base )
+    {
+        Type* b = t->base->deref();
+        return b && b->form == BasicType::CHAR;
+    }
+    return false;
+}
+
+Type*Type::deref() const
+{
+    if( form == NameRef )
+    {
+        if( base == 0 )
+            return const_cast<Type*>(this);
+        else
+            return base->deref();
+    }
+    return const_cast<Type*>(this);
+}
+
 Declaration*Type::find(const QByteArray& name, bool recursive) const
 {
     foreach( Declaration* d, subs)
@@ -580,6 +603,24 @@ void Expression::setByVal()
         cur = cur->lhs;
     if( cur )
         cur->byVal = true;
+}
+
+bool Expression::isCharLiteral()
+{
+    if( type == 0 )
+        return false;
+    if( kind == Literal )
+    {
+        Type* t = type->deref();
+        if( t->form == BasicType::CHAR )
+            return true;
+        if( t->form == BasicType::StrLit )
+        {
+            const QByteArray str = val.toByteArray();
+            return strlen(str.constData()) == 1;
+        }
+    }
+    return false;
 }
 
 int Expression::getNumOfArgs(const Expression* e)

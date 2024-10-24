@@ -88,11 +88,11 @@ namespace Ln
         bool isBoolean() const { return form == BasicType::BOOLEAN; }
         bool isSimple() const { return form >= BasicType::StrLit && form < BasicType::Max; }
         bool isReference() const {return form >= Record && form <= Proc; }
-        bool isText() const { return form == BasicType::StrLit || form == BasicType::CHAR ||
-                    ( form == Array && base && base->form == BasicType::CHAR ) ||
-                    ( form == BasicType::STRING ); }
         bool isStructured() const { return form == Array || form == Record || form == HashMap; }
         static bool isSubtype(Type* super, Type* sub);
+
+        bool isDerefCharArray() const;
+        Type* deref() const;
 
         Declaration* find(const QByteArray& name, bool recursive = true) const;
         QList<Declaration*> fieldList() const;
@@ -119,13 +119,11 @@ namespace Ln
         RowCol pos;
         enum Visi { NA, Private, ReadOnly, ReadWrite };
         uint visi : 2;
-        enum Access { ByValue, IN, VAR };
-        uint access : 2;
-        enum Mode { Normal, Receiver, Inline, Invar, Extern, Meta };
+        uint varParam : 1; // var param
+        enum Mode { Normal, Receiver, Inline, Invar, Extern, Meta, Enum };
         uint mode : 3;
         uint ownstype : 1;
         uint inList : 1; // private
-        uint validating : 1;
         uint validated : 1;
         uint kind : 4;
         uint id : 16; // used for built-in code and local/param number
@@ -133,7 +131,7 @@ namespace Ln
         Expression* expr; // const decl, enum, meta actuals
 
         Declaration():next(0),link(0),type(0),body(0),id(0),kind(0),mode(0), visi(0),ownstype(false),expr(0),
-            outer(0),access(0),inList(0),validating(0),validated(0){}
+            outer(0),varParam(0),inList(0),validated(0){}
 
         QList<Declaration*> getParams() const;
         int getIndexOf(Declaration*) const;
@@ -189,6 +187,7 @@ namespace Ln
         DeclList getFormals() const;
         bool isLvalue() const; // true if result of expression is usually a ref to type; can be changed with byVal
         void setByVal();
+        bool isCharLiteral();
         static int getNumOfArgs(const Expression*);
         static void appendArg(Expression* exp, Expression* arg);
         static QList<Expression*> getList(Expression* exp);

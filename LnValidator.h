@@ -50,6 +50,7 @@ namespace Ln
         void visitBody(Statement* body);
         void visitExpr(Expression*, Type* hint = 0);
         void visitType(Type*);
+        void visitEnum(Type*);
         void resolve(Type* nameRef);
         void unaryOp(Expression*);
         void binaryOp(Expression*);
