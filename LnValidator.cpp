@@ -826,8 +826,24 @@ void Validator::relOp(Expression* e)
             error(e->pos,"operator not supported for these operands");
             break;
         }
+    }else if( lhsT == rhsT && lhsT->form == Type::ConstEnum )
+    {
+        qint64 l = 0, r = 0;
+        const bool isConst = e->isConst();
+        if( isConst )
+        {
+            Q_ASSERT( e->lhs->kind == Expression::DeclRef && e->rhs->kind == Expression::DeclRef );
+            Declaration* dl = e->lhs->val.value<Declaration*>();
+            Declaration* dr = e->rhs->val.value<Declaration*>();
+            Q_ASSERT(dl->kind == Declaration::ConstDecl && dl->mode == Declaration::Enum );
+            Q_ASSERT(dr->kind == Declaration::ConstDecl && dr->mode == Declaration::Enum );
+            l = dl->data.toLongLong();
+            r = dr->data.toLongLong();
+        }
+        if( !intRelOp(e, l, r, isConst) )
+            error(e->pos,"operator not supported for enumeration operands");
     }else if( (lhsT->form == BasicType::CHAR || e->lhs->isCharLiteral()) &&
-              (rhsT->form == BasicType::CHAR || e->rhs->isCharLiteral() ) )
+              (rhsT->form == BasicType::CHAR || e->rhs->isCharLiteral()) )
     {
         quint8 l = 0;
         quint8 r = 0;
@@ -846,22 +862,55 @@ void Validator::relOp(Expression* e)
 
         if( !intRelOp(e, l, r, isConst) )
             error(e->pos,"operator not supported for char operands");
-    }else if( lhsT == rhsT && lhsT->form == Type::ConstEnum )
+    }else if( (lhsT->form == BasicType::StrLit || lhsT->form == BasicType::CHAR ||
+               lhsT->form == BasicType::STRING || lhsT->isDerefCharArray()) &&
+             (rhsT->form == BasicType::StrLit || rhsT->form == BasicType::CHAR ||
+              rhsT->form == BasicType::STRING || rhsT->isDerefCharArray()) )
     {
-        qint64 l = 0, r = 0;
+        QString l, r;
         const bool isConst = e->isConst();
         if( isConst )
         {
-            Q_ASSERT( e->lhs->kind == Expression::DeclRef && e->rhs->kind == Expression::DeclRef );
-            Declaration* dl = e->lhs->val.value<Declaration*>();
-            Declaration* dr = e->rhs->val.value<Declaration*>();
-            Q_ASSERT(dl->kind == Declaration::ConstDecl && dl->mode == Declaration::Enum );
-            Q_ASSERT(dr->kind == Declaration::ConstDecl && dr->mode == Declaration::Enum );
-            l = dl->data.toLongLong();
-            r = dr->data.toLongLong();
+            if( lhsT->form == BasicType::CHAR )
+                l = QChar::fromLatin1(e->lhs->val.toUInt());
+            else
+                l = QString::fromLatin1(e->lhs->val.toByteArray());
+            if( rhsT->form == BasicType::CHAR )
+                r = QChar::fromLatin1(e->rhs->val.toUInt());
+            else
+                r = QString::fromLatin1(e->rhs->val.toByteArray());
         }
-        if( !intRelOp(e, l, r, isConst) )
-            error(e->pos,"operator not supported for enumeration operands");
+        switch(e->kind)
+        {
+        case Expression::Geq:
+            if( isConst )
+                e->val = l >= r;
+            break;
+        case Expression::Gt:
+            if( isConst )
+                e->val = l > r;
+            break;
+        case Expression::Eq:
+            if( isConst )
+                e->val = l == r;
+            break;
+        case Expression::Leq:
+            if( isConst )
+                e->val = l <= r;
+            break;
+        case Expression::Neq:
+            if( isConst )
+                e->val = l != r;
+            break;
+        case Expression::Lt:
+            if( isConst )
+                e->val = l < r;
+            break;
+        default:
+            error(e->pos,"operator not supported for string operands");
+        }
+        if( isConst )
+            toConstVal(e);
     }else
         error(e->pos, "operands not compatible with operator");
 }
@@ -1142,6 +1191,8 @@ Declaration* Validator::find(const Qualident& q, const RowCol& pos, Declaration*
             error(pos,"identifier doesn't refer to an imported module");
             return 0;
         }
+        if( !import->validated )
+            visitImport(import);
         Declaration* member = mdl->findDecl(import,q.second);
         if( member == 0 )
         {
@@ -1541,7 +1592,7 @@ bool Validator::assigCompat(Type* lhs, Declaration* rhs) const
         return matchFormals(lhs->subs, rhs->getParams()) && matchResultType(lhs->base,rhs->type);
 
     // Tv is an enumeration type and e is a valid element of the enumeration;
-    if( lhs->form == Type::ConstEnum )
+    if( lhs->form == Type::ConstEnum && rhs->kind == Declaration::ConstDecl && rhs->mode == Declaration::Enum )
         return lhs->subs.contains(rhs);
 
     return assigCompat(lhs, rhs->type);
@@ -1776,7 +1827,9 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const QList<Expression*>& args,
         expectingNArgs(args,1);
         break;
     case Builtin::ORD:
-        expectingNArgs(args,1);
+        if( !expectingNArgs(args,1) )
+            break;
+        *ret = mdl->getType(BasicType::INTEGER);
         break;
     case Builtin::SIZE:
         expectingNArgs(args,1);

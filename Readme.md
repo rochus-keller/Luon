@@ -23,7 +23,7 @@ NOTE that this project is in an early stage and work-in-progress.
 
 - [x] Implement lexer with directive support
 - [x] Implement parser and AST
-- [ ] Implement semantic validator 
+- [x] Implement semantic validator 
 - [ ] Implement a LuaJIT backend based on LjTools
 - [ ] Implement an IDE similar to the Oberon+ IDE
 - [ ] Migrate the Smalltalk-80 VM to Luon as a proof-of-concept and to optimize the language
@@ -41,6 +41,10 @@ Implemented a recursive descent parser (modified the one generated  by [EbnfStud
 #### Status on October 16, 2024
 
 Improved language: constructors generate object, extended for arrays and hashmaps; extra set constructor no longer needed. Can generate AST for ongoing AWFY with no memory leaks.
+
+#### Status on October 25, 2024
+
+The semantic validator is complete and tested. I developed it in parallel with [the Luon version of the Are-we-fast-yet benchmark suite](https://github.com/rochus-keller/Are-we-fast-yet/tree/main/Luon). Some refactorings and language changes were necessary. As in Oberon-07, there is now only one INTEGER and REAL type, the former with 53 bits of precission. The validator was feature complete on October 22, so development took six, and testing and debugging three calendar days.
 
 #### Precompiled versions
 

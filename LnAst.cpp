@@ -284,6 +284,8 @@ bool Type::isSubtype(Type* super, Type* sub)
     while( sub && super != sub )
     {
         sub = sub->base;
+        if( sub )
+            sub = sub->deref();
     }
     return super == sub;
 }
@@ -318,8 +320,8 @@ Declaration*Type::find(const QByteArray& name, bool recursive) const
         if(d->name.constData() == name.constData())
             return d;
     }
-    if( form == Record && base )
-        return base->find(name);
+    if( recursive && form == Record && base )
+        return base->deref()->find(name);
     return 0;
 }
 
@@ -327,7 +329,7 @@ QList<Declaration*> Type::fieldList() const
 {
     QList<Declaration*> res;
     if( form == Record && base)
-        res = base->fieldList();
+        res = base->deref()->fieldList();
     foreach( Declaration* d, subs)
     {
         if( d->kind == Declaration::Field )
