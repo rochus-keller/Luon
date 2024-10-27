@@ -21,26 +21,43 @@
 #include <QtDebug>
 using namespace Ln;
 
-Validator::Validator(AstModel* mdl, Importer* imp):mdl(mdl),imp(imp)
+Validator::Validator(AstModel* mdl, Importer* imp, bool xref):mdl(mdl),imp(imp),first(0),last(0)
 {
     Q_ASSERT(mdl);
     Q_ASSERT(imp);
+    if( xref )
+        first = last = new Symbol();
+}
+
+Validator::~Validator()
+{
+    if( first )
+        Symbol::deleteAll(first);
 }
 
 bool Validator::validate(Declaration* module, const Import& import)
 {
     Q_ASSERT(module);
     this->module = module;
+    if( first )
+    {
+        first->decl = module;
+        first->kind = Symbol::Module;
+        first->pos = module->pos;
+        first->len = module->name.size();
+    }
 
     Ln::ModuleData md = module->data.value<Ln::ModuleData>();
 
     md.metaActuals = import.metaActuals;
+    md.path = import.path;
     md.suffix = imp->moduleSuffix(import.metaActuals);
     if( !md.suffix.isEmpty() )
     {
-        md.fullName = Ln::Token::getSymbol(md.fullName + md.suffix);
+        md.fullName = Ln::Token::getSymbol(md.path.join('/') + md.suffix);
         module->name = Ln::Token::getSymbol(module->name + md.suffix);
-    }
+    }else
+        md.fullName = Ln::Token::getSymbol(md.path.join('/'));
     module->data = QVariant::fromValue(md);
 
     // TEST import.importedAt.d_row == 470 && import.importer.contains("Havlak"))
@@ -51,11 +68,14 @@ bool Validator::validate(Declaration* module, const Import& import)
     scopeStack.pop_back();
     if( !import.metaActuals.isEmpty() )
     {
+        QString importer;
+        if( import.importer )
+            importer = import.importer->data.value<ModuleData>().source;
         // trying to instantiate
         if( md.metaParams.size() != md.metaActuals.size() )
         {
             errors << Error("number of formal and actual meta parameters doesn't match",
-                            import.importedAt, import.importer);
+                            import.importedAt, importer);
             return false;
         }
         for( int i = 0; i < md.metaParams.size(); i++ )
@@ -77,7 +97,7 @@ bool Validator::validate(Declaration* module, const Import& import)
             }else
             {
                 if( !ma->isConst() )
-                    errors << Error("expecting a const expression", ma->pos, import.importer);
+                    errors << Error("expecting a const expression", ma->pos, importer);
                 if( md.metaParams[i]->type && md.metaParams[i]->ownstype )
                     delete md.metaParams[i]->type;
                 md.metaParams[i]->type = ma->type;
@@ -91,7 +111,21 @@ bool Validator::validate(Declaration* module, const Import& import)
         visitScope(module);
     }catch(...){ }
 
+    if( first )
+        last->next = first; // close the circle
     return errors.isEmpty();
+}
+
+Xref Validator::takeXref()
+{
+    Xref res;
+    if( first == 0 )
+        return res;
+    res.uses = xref;
+    res.syms = first;
+    xref.clear();
+    first = last = new Symbol();
+    return res;
 }
 
 void Validator::error(const RowCol& pos, const QString& msg)
@@ -131,6 +165,7 @@ void Validator::visitDecl(Declaration* d)
     if( d->validated )
         return;
     d->validated = true;
+    markDecl(d);
     switch( d->kind )
     {
     case Declaration::TypeDecl:
@@ -179,6 +214,8 @@ void Validator::visitImport(Declaration* import)
     {
         // loadModule returns the module decl; we just need the list of module elements:
         import->link = mod->link;
+        i.resolved = mod;
+        import->data = QVariant::fromValue(i);
     }else
     {
         error(import->pos,"cannot import module");
@@ -414,6 +451,7 @@ void Validator::resolve(Type* nameRef)
     Declaration* d = find(q, nameRef->decl->pos);
     if(d == 0)
         return;
+    markRef(d, nameRef->decl->pos);
     nameRef->validated = true;
     nameRef->base = d->type;
     if( d->kind != Declaration::TypeDecl )
@@ -1153,6 +1191,7 @@ QByteArray Validator::resolve(Expression* nameRef)
     if( d == 0 )
         return QByteArray();
 
+    markRef(d, nameRef->pos);
     resolve(d->type);
 #if 0
     visitDecl(d); // RISK: we need that so that procedures are resolved when passing as meta actuals
@@ -1228,6 +1267,7 @@ void Validator::selectOp(Expression* e)
             error(e->pos,QString("the record doesn't have a field named '%1'"). arg(e->val.toString()) );
         else
         {
+            markRef(field, e->pos);
             e->val = QVariant::fromValue(field); // Field or bound proc
             e->type = field->type;
         }
@@ -1276,7 +1316,7 @@ void Validator::callOp(Expression* e)
         else
             e->type = lhsT->base;
 
-        QList<Expression*> actuals = Expression::getList(e->rhs);
+        MetaActualList actuals = Expression::getList(e->rhs);
 
         if( proc && proc->kind == Declaration::Builtin )
         {
@@ -1695,7 +1735,7 @@ bool Validator::equalTypes(Type* lhs, Type* rhs) const
     return false;
 }
 
-static inline bool expectingNArgs(const QList<Expression*>& args,int n)
+static inline bool expectingNArgs(const ExpList& args,int n)
 {
     if( args.size() != n )
         throw QString("expecting %1 arguments").arg(n);
@@ -1705,7 +1745,7 @@ static inline bool expectingNArgs(const QList<Expression*>& args,int n)
     return true;
 }
 
-static inline bool expectingNMArgs(const QList<Expression*>& args,int n, int m)
+static inline bool expectingNMArgs(const ExpList& args,int n, int m)
 {
     if( args.size() < n || args.size() > m)
         throw QString("expecting %1 to %2 arguments").arg(n).arg(m);
@@ -1715,7 +1755,7 @@ static inline bool expectingNMArgs(const QList<Expression*>& args,int n, int m)
     return true;
 }
 
-static void checkBitArith(const QList<Expression*>& args, Type** ret)
+static void checkBitArith(const ExpList& args, Type** ret)
 {
     if( !expectingNArgs(args,2) )
         return;
@@ -1726,7 +1766,7 @@ static void checkBitArith(const QList<Expression*>& args, Type** ret)
     *ret = args[0]->type;
 }
 
-bool Validator::checkBuiltinArgs(quint8 builtin, const QList<Expression*>& args, Type** ret, const RowCol& pos)
+bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret, const RowCol& pos)
 {
     Q_ASSERT(ret);
 
@@ -1787,11 +1827,6 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const QList<Expression*>& args,
             break;
         *ret = args[0]->type;
         break;    
-    case Builtin::EQUALS:
-        if( !expectingNArgs(args,2) )
-            break;
-        *ret = mdl->getType(BasicType::BOOLEAN);
-        break;
     case Builtin::FLOOR:
         if( !expectingNArgs(args,1) )
             break;
@@ -1895,4 +1930,32 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const QList<Expression*>& args,
     }
 
     return true;
+}
+
+void Validator::markDecl(Declaration* d)
+{
+    if( first == 0 )
+        return;
+    Symbol* s = new Symbol();
+    s->kind = Symbol::Decl;
+    s->decl = d;
+    s->pos = d->pos;
+    s->len = d->name.size();
+    xref[d].append(s);
+    last->next = s;
+    last = last->next;
+}
+
+void Validator::markRef(Declaration* d, const RowCol& pos)
+{
+    if( first == 0 )
+        return;
+    Symbol* s = new Symbol();
+    s->kind = Symbol::DeclRef;
+    s->decl = d;
+    s->pos = pos;
+    s->len = d->name.size();
+    xref[d].append(s);
+    last->next = s;
+    last = last->next;
 }

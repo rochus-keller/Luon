@@ -136,7 +136,10 @@ Token Lexer::nextTokenImp()
         {
             Token t = token( Tok_Eof, 0 );
             if( d_in->parent() == this )
+            {
                 d_in->deleteLater();
+                d_in = 0;
+            }
             return t;
         }
         nextLine();

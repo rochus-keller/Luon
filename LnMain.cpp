@@ -201,15 +201,14 @@ public:
             if( QFile::exists(tmp) )
                 return tmp;
         }
-        if( !modules.isEmpty() )
+        if( imp.importer )
         {
             // if the file is not in the search path, look in the directory of the caller assuming
             // that the required module path is relative to the including module
-            QFileInfo info( modules.back().file );
+            QFileInfo info( imp.importer->data.value<Ln::ModuleData>().source );
             const QString tmp = info.absoluteDir().absoluteFilePath(path);
             if( QFile::exists(tmp) )
                 return tmp;
-            // TODO: in this case we have to adjust the local path of the imported module to the full path
         }
         return QString();
     }

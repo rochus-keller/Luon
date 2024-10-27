@@ -16,6 +16,10 @@ In particular, Luon solves the following shortcomings recognized during the afor
 - locals can no longer be used before declaration
 - switch/case control statement to avoid writing the relation expressionall over again
 
+Here is a screenshot of the IDE (work in progress):
+
+![IDE Screenshot](http://software.rochus-keller.ch/luon-ide-screenshot-1.png)
+
 
 NOTE that this project is in an early stage and work-in-progress.
 
@@ -25,7 +29,7 @@ NOTE that this project is in an early stage and work-in-progress.
 - [x] Implement parser and AST
 - [x] Implement semantic validator 
 - [ ] Implement a LuaJIT backend based on LjTools
-- [ ] Implement an IDE similar to the Oberon+ IDE
+- [x] Implement an IDE similar to the Oberon+ IDE
 - [ ] Migrate the Smalltalk-80 VM to Luon as a proof-of-concept and to optimize the language
 
 #### Status on October 14, 2024
@@ -45,6 +49,10 @@ Improved language: constructors generate object, extended for arrays and hashmap
 #### Status on October 25, 2024
 
 The semantic validator is complete and tested. I developed it in parallel with [the Luon version of the Are-we-fast-yet benchmark suite](https://github.com/rochus-keller/Are-we-fast-yet/tree/main/Luon). Some refactorings and language changes were necessary. As in Oberon-07, there is now only one INTEGER and REAL type, the former with 53 bits of precission. The validator was feature complete on October 22, so development took six, and testing and debugging three calendar days.
+
+#### Status on October 27, 2024
+
+The IDE is ready for testing and debugging. I derived it from the LuaJIT version of the Oberon IDE, but many changes were necessary because the AST and code model are completely different. This included an optional cross-referencing infrastructure integrated with the validator. Also the import logic had to be extended for compatibility with the project file concept, which required refactoring of AST, parser and validator.
 
 #### Precompiled versions
 

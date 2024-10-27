@@ -48,6 +48,7 @@ namespace Ln
 
         static QVariant getMax(Type);
         static QVariant getMin(Type);
+        static const char* name[];
     };
 
     struct Builtin
@@ -55,17 +56,19 @@ namespace Ln
         enum Type {
             // functions
             ABS, CAP, BITAND, BITASR, BITNOT, BITOR, BITS, BITSHL, BITSHR,
-            BITXOR, CAST, CHR, DEFAULT, EQUALS, FLOOR, FLT, GETENV, LEN, MAX,
+            BITXOR, CAST, CHR, DEFAULT, FLOOR, FLT, GETENV, LEN, MAX,
             MIN, ODD, ORD, SIZE, STRLEN, VARARG, VARARGS,
             // procedures
             ASSERT, COPY, DEC, EXCL, HALT, INC,
             INCL, NEW, PCALL, PRINT, PRINTLN, RAISE, SETENV,
             // end
             Max
+            // NOTE: CAST is only used to convert integers to enums
         };
+        static const char* name[];
     };
 
-    struct Expression;
+    class Expression;
 
     class Type
     {
@@ -78,8 +81,8 @@ namespace Ln
         quint32 len; // array length
         Type* base; // array/pointer base type, return type
         QList<Declaration*> subs; // list of record fields or enum elements, or params for proc type
-        Declaration* decl;
-        Expression* expr; // array len, quali, key
+        Declaration* decl; // if NameRef includes pos and name
+        Expression* expr; // array len, hashmap key
 
         bool isNumber() const { return form == BasicType::INTEGER || form == BasicType::REAL; }
         bool isReal() const { return form == BasicType::REAL; }
@@ -106,11 +109,10 @@ namespace Ln
     class Declaration
     {
     public:
-        enum Kind { Invalid, Scope, Module, TypeDecl, Builtin, ConstDecl, Import, Field,
+        enum Kind { Invalid, Helper, Scope, Module, TypeDecl, Builtin, ConstDecl, Import, Field,
                     VarDecl, LocalDecl,
                     Procedure, ParamDecl,
                     Max };
-        static const char* s_mode[];
         Declaration* link; // member list or imported module decl
         Declaration* outer; // the owning declaration to reconstruct the qualident
         Statement* body; // procs
@@ -140,6 +142,7 @@ namespace Ln
         Declaration* getNext() const { return next; }
         Declaration* getLast() const;
         Declaration* find(const QByteArray& name, bool recursive = true);
+        Declaration* getModule();
         static void deleteAll(Declaration*);
 
     private:
@@ -183,6 +186,7 @@ namespace Ln
         Expression* lhs; // for unary and binary ops
         Expression* rhs; // for binary ops
         Expression* next; // for args, set elems, and caselabellist
+
         bool isConst() const;
         DeclList getFormals() const;
         bool isLvalue() const; // true if result of expression is usually a ref to type; can be changed with byVal
@@ -199,29 +203,17 @@ namespace Ln
         ~Expression();
     };
 
-    struct Value { // TODO: do we need this?
-        enum Mode { None, Val, Const, Builtin, Procedure, VarDecl, LocalDecl, ParamDecl, TypeDecl };
-        quint8 mode;
-        quint8 visi;
-        bool ref; // the value is a reference to the type
-        Type* type;
-        QVariant val;
+    typedef QList<Expression*> ExpList;
 
-        Value():mode(0),type(0),ref(false),visi(Declaration::Private){}
-        Value(Type* t, const QVariant& v, Mode m):type(t),val(v),mode(m){}
-
-        bool isConst() const { return mode == Const; }
-        bool isLvalue() const { return mode == Declaration::VarDecl || mode == Declaration::LocalDecl ||
-                    mode == Declaration::ParamDecl; }
-        bool isCallable() const;
-    };
     typedef QList<Expression*> MetaActualList;
 
     struct Import {
-        QByteArrayList path;
-        MetaActualList metaActuals; // alias of importDecl->expr, deleted there
-        QString importer; // path
+        QByteArrayList path;    // full path incl. name
+        MetaActualList metaActuals; // ref to importDecl->expr, deleted there
+        Declaration* importer;
         RowCol importedAt;
+        Declaration* resolved; // module
+        Import():resolved(0),importer(0){}
     };
 
     class Statement {
@@ -263,6 +255,28 @@ namespace Ln
 
     typedef QPair<QByteArray,QByteArray> Qualident;
 
+    class Symbol
+    {
+    public:
+        enum Kind { Invalid, Module, Decl, DeclRef };
+        quint8 kind;
+        quint8 len;
+        RowCol pos;
+        Declaration* decl;
+        Symbol* next;
+        Symbol():kind(Invalid),len(0),decl(0),next(0){}
+        static void deleteAll(Symbol*);
+    };
+
+    typedef QList<Symbol*> SymList;
+
+    struct Xref {
+        Symbol* syms;
+        QHash<Declaration*,SymList> uses;
+        Xref():syms(0){}
+    };
+
+
     class AstModel
     {
     public:
@@ -301,6 +315,7 @@ namespace Ln
 Q_DECLARE_METATYPE(Ln::Import)
 Q_DECLARE_METATYPE(Ln::Declaration*)
 Q_DECLARE_METATYPE(Ln::Expression*)
+Q_DECLARE_METATYPE(Ln::Symbol*)
 Q_DECLARE_METATYPE(Ln::ModuleData)
 
 

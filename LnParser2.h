@@ -30,7 +30,6 @@ namespace Ln {
 		virtual Token next() = 0;
 		virtual Token peek(int offset) = 0;
         virtual QString source() const = 0;
-        virtual QByteArrayList path() const { return QByteArrayList(); } // prefix without module name
     };
 
 	class Parser2 {

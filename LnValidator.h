@@ -31,9 +31,12 @@ namespace Ln
     class Validator
     {
     public:
-        Validator(AstModel* mdl, Importer* imp);
+        Validator(AstModel* mdl, Importer* imp, bool xref = false);
+        ~Validator();
 
         bool validate(Declaration* module, const Import& import = Import());
+
+        Xref takeXref();
 
         struct Error {
             QString msg;
@@ -72,7 +75,9 @@ namespace Ln
         void isOp(Expression*);
         void constructor(Expression*, Type* hint);
         Type* deref(Type*) const;
-        bool checkBuiltinArgs(quint8 builtin, const QList<Expression*>& args, Type** ret, const RowCol& pos);
+        bool checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret, const RowCol& pos);
+        void markDecl(Declaration*);
+        void markRef(Declaration*, const RowCol&);
 
         bool assigCompat(Type* lhs, Type* rhs) const;
         bool assigCompat(Type* lhs, Declaration* rhs) const;
@@ -86,10 +91,13 @@ namespace Ln
         AstModel* mdl;
         Importer* imp;
         Declaration* module;
-        QList<Expression*> unresolveds;
+        ExpList unresolveds;
         QList<Declaration*> scopeStack;
         QList<Declaration*> boundProcs;
         QList<Statement*> loopStack;
+        Symbol* first;
+        Symbol* last;
+        QHash<Declaration*,SymList> xref;
     };
 }
 

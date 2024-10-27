@@ -1912,10 +1912,8 @@ void Parser2::module() {
     m->name = cur.d_val;
 
     ModuleData md;
-    md.path = scanner->path();
     md.source = scanner->source();
-    md.path += cur.d_val;
-    md.fullName = Token::getSymbol(md.path.join('/'));
+    md.fullName = cur.d_val;
 
     if( FIRST_MetaParams(la.d_type) ) {
         const Token t = la;
@@ -1937,7 +1935,7 @@ void Parser2::module() {
     }
     if( FIRST_block(la.d_type) ) {
         IdentDef id;
-        id.name= la;
+        id.name = la;
         id.name.d_val = "$begin";
         id.visi = IdentDef::Private;
         Declaration* procDecl = addDecl(id, Declaration::Procedure);
@@ -1995,7 +1993,7 @@ void Parser2::import() {
     foreach( const Token& t, tl)
         import.path << t.d_val;
     import.importedAt = importDecl->pos;
-    import.importer = scanner->source();
+    import.importer = thisMod;
 
     if( FIRST_MetaActuals(la.d_type) ) {
         expect(Tok_Lpar, false, "MetaActuals");
@@ -2118,7 +2116,6 @@ Declaration*Parser2::addHelper(Type* t)
 {
     Declaration* decl = mdl->addHelper();
     // we need these syntetic declarations because emitter doesn't support anonymous types
-    decl->kind = Declaration::TypeDecl;
     decl->type = t;
     decl->ownstype = true;
     decl->outer = thisMod;

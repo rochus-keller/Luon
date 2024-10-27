@@ -23,6 +23,28 @@ using namespace Ln;
 Declaration* AstModel::globalScope = 0;
 Type* AstModel::types[BasicType::Max] = {0};
 
+const char* BasicType::name[] = {
+    "Undefined",
+    "NoType",
+    "StrLit",
+    "ByteArrayLit",
+    "Any",
+    "Nil",
+    "BOOLEAN",
+    "CHAR",
+    "INTEGER",
+    "REAL",
+    "SET",
+    "STRING",
+};
+
+const char* Builtin::name[] = {
+    "ABS", "CAP", "BITAND", "BITASR", "BITNOT", "BITOR", "BITS", "BITSHL", "BITSHR",
+    "BITXOR", "CAST", "CHR", "DEFAULT", "FLOOR", "FLT", "GETENV", "LEN", "MAX",
+    "MIN", "ODD", "ORD", "SIZE", "STRLEN", "VARARG", "VARARGS",
+    "ASSERT", "COPY", "DEC", "EXCL", "HALT", "INC",
+    "INCL", "NEW", "PCALL", "PRINT", "PRINTLN", "RAISE", "SETENV"
+};
 
 AstModel::AstModel():helper(0),helperId(0)
 {
@@ -47,44 +69,8 @@ AstModel::AstModel():helper(0),helperId(0)
 
         addTypeAlias("INT", types[BasicType::INTEGER] );
 
-        addBuiltin("ABS", Builtin::ABS);
-        addBuiltin("CAP", Builtin::CAP);
-        addBuiltin("BITAND", Builtin::BITAND);
-        addBuiltin("BITASR", Builtin::BITASR);
-        addBuiltin("BITNOT", Builtin::BITNOT);
-        addBuiltin("BITOR", Builtin::BITOR);
-        addBuiltin("BITS", Builtin::BITS);
-        addBuiltin("BITSHL", Builtin::BITSHL);
-        addBuiltin("BITSHR", Builtin::BITSHR);
-        addBuiltin("BITXOR", Builtin::BITXOR);
-        addBuiltin("CHR", Builtin::CHR);
-        addBuiltin("DEFAULT", Builtin::DEFAULT);
-        addBuiltin("EQUALS", Builtin::EQUALS);
-        addBuiltin("FLOOR", Builtin::FLOOR);
-        addBuiltin("FLT", Builtin::FLT);
-        addBuiltin("GETENV", Builtin::GETENV);
-        addBuiltin("LEN", Builtin::LEN);
-        addBuiltin("MAX", Builtin::MAX);
-        addBuiltin("MIN", Builtin::MIN);
-        addBuiltin("ODD", Builtin::ODD);
-        addBuiltin("ORD", Builtin::ORD);
-        addBuiltin("SIZE", Builtin::SIZE);
-        addBuiltin("STRLEN", Builtin::STRLEN);
-        addBuiltin("VARARG", Builtin::VARARG);
-        addBuiltin("VARARGS", Builtin::VARARGS);
-        addBuiltin("ASSERT", Builtin::ASSERT);
-        addBuiltin("COPY", Builtin::COPY);
-        addBuiltin("DEC", Builtin::DEC);
-        addBuiltin("EXCL", Builtin::EXCL);
-        addBuiltin("HALT", Builtin::HALT);
-        addBuiltin("INC", Builtin::INC);
-        addBuiltin("INCL", Builtin::INCL);
-        addBuiltin("NEW", Builtin::NEW);
-        addBuiltin("PCALL", Builtin::PCALL);
-        addBuiltin("PRINT", Builtin::PRINT);
-        addBuiltin("PRINTLN", Builtin::PRINTLN);
-        addBuiltin("RAISE", Builtin::RAISE);
-        addBuiltin("SETENV", Builtin::SETENV);
+        for( int i = 0; i < Builtin::Max; i++ )
+            addBuiltin(Builtin::name[i], Builtin::Type(i));
     }else
         openScope(globalScope);
 }
@@ -162,6 +148,7 @@ Declaration* AstModel::addDecl(const QByteArray& name)
 Declaration*AstModel::addHelper()
 {
     Declaration* decl = new Declaration();
+    decl->kind = Declaration::Helper;
     decl->next = helper;
     helper = decl;
     decl->name = "$" + QByteArray::number(++helperId);
@@ -389,13 +376,6 @@ QVariant BasicType::getMin(BasicType::Type t)
     return QVariant();
 }
 
-const char* Declaration::s_mode[] = {
-    "NoMode",
-    "Scope", "Module", "TypeDecl", "Builtin", "ConstDecl", "Import", "Field", "Variant",
-    "VarDecl", "LocalDecl",
-    "Procedure", "ForwardDecl", "ParamDecl"
-};
-
 Declaration::~Declaration()
 {
 #if 0
@@ -463,6 +443,16 @@ Declaration*Declaration::find(const QByteArray& name, bool recursive)
     return 0;
 }
 
+Declaration*Declaration::getModule()
+{
+    if( kind == Module )
+        return this;
+    else if( outer )
+        return outer->getModule();
+    else
+        return 0;
+}
+
 void Declaration::deleteAll(Declaration* d)
 {
     if( d )
@@ -472,26 +462,6 @@ void Declaration::deleteAll(Declaration* d)
         Declaration* tmp = d->next;
         delete d;
         d = tmp;
-    }
-}
-
-
-bool Value::isCallable() const
-{
-    switch( mode )
-    {
-    case Declaration::Builtin:
-    case Declaration::Procedure:
-        return true;
-
-    case Declaration::Field:
-    case Declaration::VarDecl:
-    case Declaration::LocalDecl:
-    case Value::Val:
-        return type && type->form == Type::Proc;
-
-    default:
-        return false;
     }
 }
 
@@ -765,4 +735,22 @@ DeclList AstModel::toList(Declaration* d)
         old->next = 0; // the next based list is converted to DeclList, avoid two redundant lists
     }
     return res;
+}
+
+void Symbol::deleteAll(Symbol* first)
+{
+    if( first == 0 )
+        return;
+    Q_ASSERT( first->kind == Module || first->kind == Invalid );
+    Symbol* s = first->next;
+    while( s )
+    {
+        // symbols can build a circle
+        if( s == first )
+            break;
+        Symbol* tmp = s->next;
+        delete s;
+        s = tmp;
+    }
+    delete first;
 }

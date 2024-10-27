@@ -1,0 +1,32 @@
+<RCC>
+    <qresource prefix="/">
+        <file>images/close.png</file>
+        <file>images/exclamation-circle.png</file>
+        <file>images/exclamation-red.png</file>
+        <file>images/class.png</file>
+        <file>images/func_priv.png</file>
+        <file>images/func.png</file>
+        <file>images/struct.png</file>
+        <file>images/var_priv.png</file>
+        <file>images/var_prot.png</file>
+        <file>images/var.png</file>
+        <file>images/folder.png</file>
+        <file>images/module.png</file>
+        <file>images/class_priv.png</file>
+        <file>images/struct_priv.png</file>
+        <file>images/definition.png</file>
+        <file>images/break-marker.png</file>
+        <file>images/breakpoint.png</file>
+        <file>images/marker.png</file>
+        <file>images/alias_priv.png</file>
+        <file>images/alias.png</file>
+        <file>fonts/DejaVuSansMono.ttf</file>
+        <file>oakwood/Files.luon</file>
+        <file>oakwood/In.luon</file>
+        <file>oakwood/Input.luon</file>
+        <file>oakwood/Math.luon</file>
+        <file>oakwood/Out.luon</file>
+        <file>oakwood/Strings.luon</file>
+        <file>oakwood/XYplane.luon</file>
+    </qresource>
+</RCC>
