@@ -32,8 +32,8 @@ QHash<QByteArray,QByteArray> d_symbols;
 
 Lexer::Lexer(QObject *parent) : QObject(parent),
     d_lastToken(Tok_Invalid),d_lineNr(0),d_colNr(0),d_in(0),
-    d_ignoreComments(true), d_packComments(true),d_enableExt(true), d_sensExt(true),
-    d_sensed(false), d_sloc(0), d_lineCounted(false)
+    d_ignoreComments(true), d_packComments(true),d_enableExt(true),
+    d_sloc(0), d_lineCounted(false)
 {
 
 }
@@ -251,20 +251,7 @@ Token Lexer::ident()
     Q_ASSERT( !str.isEmpty() );
     int pos = 0;
     QByteArray keyword = str;
-    if( d_sensExt && !d_sensed )
-    {
-        d_sensed = true;
-        if( isAllLowerCase(keyword) )
-        {
-            keyword = keyword.toUpper();
-            TokenType t = tokenTypeFromString( keyword, &pos );
-            if( t != Tok_Invalid && pos == keyword.size() )
-            {
-                d_enableExt = true;
-                return token( t, off );
-            }
-        }
-    }else if( d_enableExt && isAllLowerCase(keyword) )
+    if( isAllLowerCase(keyword) )
         keyword = keyword.toUpper();
     TokenType t = tokenTypeFromString( keyword, &pos );
     if( t != Tok_Invalid && pos != keyword.size() )

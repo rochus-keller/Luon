@@ -239,11 +239,11 @@ const Project::FileGroup* Project::findFileGroup(const QByteArrayList& package) 
 
 Symbol* Project::findSymbolBySourcePos(const QString& file, quint32 line, quint16 col, Declaration** scopePtr) const
 {
-    FileMod f = findFile(file);
-    if( f.first == 0 )
+    File* f = findFile(file);
+    if( f == 0 || f->d_mod == 0 )
         return 0;
 
-    return findSymbolBySourcePos(f.second,line,col, scopePtr);
+    return findSymbolBySourcePos(f->d_mod,line,col, scopePtr);
 }
 
 Symbol* Project::findSymbolBySourcePos(Declaration* m, quint32 line, quint16 col, Declaration** scopePtr) const
@@ -262,10 +262,9 @@ Symbol* Project::findSymbolBySourcePos(Declaration* m, quint32 line, quint16 col
     return 0;
 }
 
-Project::FileMod Project::findFile(const QString& file) const
+Project::File* Project::findFile(const QString& file) const
 {
-    FileRef f = d_files.value(file);
-    return qMakePair( f.data(), f->d_mod );
+    return d_files.value(file).data();
 }
 
 void Project::addPreload(const QByteArray& name, const QByteArray& code)
@@ -285,15 +284,32 @@ void Project::addPreload(const QByteArray& name, const QByteArray& code)
     preloads.append(FileRef(f));
 }
 
-SymList Project::getUsage(Declaration* n) const
+Project::UsageByMod Project::getUsage(Declaration* n) const
 {
-    SymList res;
+    UsageByMod res;
     for( int i = 0; i < modules.size(); i++ )
     {
-        res << modules[i].xref.uses.value(n);
+        const SymList& syms = modules[i].xref.uses.value(n);
+        if( !syms.isEmpty() )
+            res << qMakePair(modules[i].decl, syms);
     }
 
     return res;
+}
+
+Symbol*Project::getSymbolsOfModule(Declaration* module) const
+{
+    for( int i = 0; i < modules.size(); i++ )
+    {
+        if( modules[i].decl == module )
+            return modules[i].xref.syms;
+    }
+    return 0;
+}
+
+DeclList Project::getSubs(Declaration* d) const
+{
+    return subs.value(d);
 }
 
 QString Project::getWorkingDir(bool resolved) const
@@ -640,8 +656,12 @@ Declaration*Project::loadModule(const Import& imp)
             qDebug() << "### validator failed" << failWhen(imp).constData();
         }else
         {
-            file->d_mod = module;
+            if( imp.metaActuals.isEmpty() )
+                file->d_mod = module;
             ms->xref = v.takeXref();
+            QHash<Declaration*,DeclList>::const_iterator i;
+            for( i = ms->xref.subs.begin(); i != ms->xref.subs.end(); ++i )
+                subs[i.key()] += i.value();
         }
     }
 
@@ -726,6 +746,7 @@ void Project::clearModules()
         Declaration::deleteAll((*i).decl);
     }
     modules.clear();
+    subs.clear();
 }
 
 const Project::ModuleSlot*Project::findModule(Declaration* m) const

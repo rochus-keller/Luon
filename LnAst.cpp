@@ -394,13 +394,14 @@ Declaration::~Declaration()
         delete expr;
 }
 
-QList<Declaration*> Declaration::getParams() const
+QList<Declaration*> Declaration::getParams(bool skipReceiver) const
 {
     Declaration* d = link;
     QList<Declaration*> res;
     while( d && d->kind == Declaration::ParamDecl )
     {
-        res << d;
+        if( !skipReceiver || !d->mode == Declaration::Receiver )
+            res << d;
         d = d->next;
     }
     return res;

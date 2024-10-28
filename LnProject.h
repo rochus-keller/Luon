@@ -66,7 +66,6 @@ namespace Ln
 
         typedef QList<FileGroup> FileGroups;
         typedef QHash<QString,FileRef> FileHash; // FilePath -> File
-        typedef QPair<File*,Declaration*> FileMod;
         typedef QList<FileRef> FileList;
         typedef QPair<QByteArray,QByteArray> ModProc; // module.procedure or just module
 
@@ -110,12 +109,15 @@ namespace Ln
         const FileGroups& getFileGroups() const { return d_groups; }
         const FileGroup* getRootFileGroup() const;
         const FileGroup* findFileGroup(const QByteArrayList& package ) const;
-        FileMod findFile( const QString& file ) const;
+        File* findFile( const QString& file ) const;
         void addPreload( const QByteArray& name, const QByteArray& code );
 
         Symbol* findSymbolBySourcePos(const QString& file, quint32 line, quint16 col, Declaration** = 0 ) const;
         Symbol* findSymbolBySourcePos(Declaration*, quint32 line, quint16 col, Declaration** scopePtr) const;
-        SymList getUsage( Declaration* ) const;
+        typedef QList<QPair<Declaration*, SymList> > UsageByMod;
+        UsageByMod getUsage( Declaration* ) const;
+        Symbol* getSymbolsOfModule(Declaration*) const;
+        DeclList getSubs(Declaration*) const;
 
         bool printTreeShaken( const QString& module, const QString& fileName );
         bool printImportDependencies(const QString& fileName , bool pruned);
@@ -151,6 +153,7 @@ namespace Ln
     private:
         typedef QList<ModuleSlot> Modules;
         Modules modules;
+        QHash<Declaration*, DeclList> subs;
         FileList preloads;
         QList<Error> errors;
         FileHash d_files;

@@ -115,6 +115,7 @@ namespace Ln
                     Max };
         Declaration* link; // member list or imported module decl
         Declaration* outer; // the owning declaration to reconstruct the qualident
+        Declaration* super; // super class or overridden method
         Statement* body; // procs
         Type* type;
         QByteArray name;
@@ -127,15 +128,16 @@ namespace Ln
         uint ownstype : 1;
         uint inList : 1; // private
         uint validated : 1;
+        uint hasSubs : 1;
         uint kind : 4;
         uint id : 16; // used for built-in code and local/param number
         QVariant data; // value for Const and Enum, path for Import, name for Extern
         Expression* expr; // const decl, enum, meta actuals
 
         Declaration():next(0),link(0),type(0),body(0),id(0),kind(0),mode(0), visi(0),ownstype(false),expr(0),
-            outer(0),varParam(0),inList(0),validated(0){}
+            outer(0),varParam(0),inList(0),validated(0), super(0), hasSubs(0){}
 
-        QList<Declaration*> getParams() const;
+        QList<Declaration*> getParams(bool skipReceiver = false) const;
         int getIndexOf(Declaration*) const;
         bool isLvalue() const { return kind == VarDecl || kind == LocalDecl || kind == ParamDecl; }
         bool isPublic() const { return visi >= ReadOnly; }
@@ -258,7 +260,7 @@ namespace Ln
     class Symbol
     {
     public:
-        enum Kind { Invalid, Module, Decl, DeclRef };
+        enum Kind { Invalid, Module, Decl, DeclRef, Lval };
         quint8 kind;
         quint8 len;
         RowCol pos;
@@ -273,6 +275,7 @@ namespace Ln
     struct Xref {
         Symbol* syms;
         QHash<Declaration*,SymList> uses;
+        QHash<Declaration*,DeclList> subs;
         Xref():syms(0){}
     };
 

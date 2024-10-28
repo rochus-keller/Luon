@@ -22,10 +22,11 @@
 #include "LnHighlighter.h"
 #include "LnLexer.h"
 #include <QBuffer>
+#include <QtDebug>
 using namespace Ln;
 
 Highlighter::Highlighter(QTextDocument* parent) :
-    QSyntaxHighlighter(parent),d_enableExt(false)
+    QSyntaxHighlighter(parent)
 {
     for( int i = 0; i < C_Max; i++ )
     {
@@ -50,22 +51,10 @@ Highlighter::Highlighter(QTextDocument* parent) :
     //d_builtins = createBuiltins();
 }
 
-void Highlighter::setEnableExt(bool b)
-{
-    const bool old = d_enableExt;
-    d_enableExt = b;
-    if( old != b )
-    {
-        //d_builtins = createBuiltins(d_enableExt);
-        rehighlight();
-    }
-}
-
 void Highlighter::addBuiltIn(const QByteArray& bi)
 {
     d_builtins << bi;
-    if( d_enableExt )
-        d_builtins << bi.toLower();
+    d_builtins << bi.toLower();
 }
 
 QTextCharFormat Highlighter::formatForCategory(int c) const
@@ -166,11 +155,9 @@ void Highlighter::highlightBlock(const QString& text)
         }
     }
 
-
     Lexer lex;
     lex.setIgnoreComments(false);
     lex.setPackComments(false);
-    lex.setEnableExt(d_enableExt);
 
     int startPp;
     QList<Token> tokens = lex.tokens(text.mid(start));

@@ -753,11 +753,12 @@ Type* Parser2::type(bool deanonymize) {
 }
 
 Type* Parser2::NamedType() {
+    const Token t = la;
     Qualident q = qualident();
     Type* res = new Type();
     res->form = Type::NameRef;
     Declaration* helper = addHelper(res);
-    helper->pos = la.toRowCol();
+    helper->pos = t.toRowCol();
     helper->data = QVariant::fromValue(q);
     return res;
 }
@@ -922,9 +923,9 @@ void Parser2::VariableDeclaration() {
 
 // designator results in an lvalue if possible, unless needsLvalue is false
 Expression* Parser2::designator(bool needsLvalue) {
-
+    const Token t = la;
     Qualident q = qualident();
-    Expression* res = new Expression(Expression::NameRef, cur.toRowCol());
+    Expression* res = new Expression(Expression::NameRef, t.toRowCol());
     // we don't know here whether quali is real, or whether it is a select of a local
     res->val = QVariant::fromValue(q);
 
@@ -1644,12 +1645,12 @@ Type* Parser2::ProcedureType() {
 void Parser2::ProcedureDeclaration() {
     procedure();
 
-    Qualident receiver;
+    QPair<Token, Token> receiver;
     const Token t = la;
     Declaration* record = 0;
     if( FIRST_Receiver(la.d_type) ) {
         receiver = Receiver();
-        record = mdl->findDecl(receiver.second);
+        record = mdl->findDecl(receiver.second.d_val);
         if( record == 0 || record->kind != Declaration::TypeDecl ||
                 record->type == 0 || record->type->form != Type::Record )
         {
@@ -1673,11 +1674,18 @@ void Parser2::ProcedureDeclaration() {
 
     if( record )
     {
-        Declaration* d = mdl->addDecl(receiver.first);
+        Declaration* d = mdl->addDecl(receiver.first.d_val);
         d->kind = Declaration::ParamDecl;
-        d->pos = t.toRowCol();
+        d->pos = receiver.first.toRowCol();
         d->mode = Declaration::Receiver;
-        d->type = record->type;
+        Type* t = new Type();
+        t->form = Type::NameRef;
+        t->base = record->type;
+        //t->validated = true; // don't set this here otherwise the type is not included in crossref
+        Declaration* helper = addHelper(t);
+        helper->pos = receiver.second.toRowCol();
+        helper->data = QVariant::fromValue(Qualident(QByteArray(),receiver.second.d_val));
+        d->type = t;
         procDecl->mode = Declaration::Receiver;
     }
 
@@ -1749,14 +1757,14 @@ void Parser2::ProcedureDeclaration() {
     }
 }
 
-Qualident Parser2::Receiver() {
-    Qualident res;
+QPair<Token, Token> Parser2::Receiver() {
+    QPair<Token, Token> res;
 	expect(Tok_Lpar, false, "Receiver");
 	expect(Tok_ident, false, "Receiver");
-    res.first = cur.d_val;
+    res.first = cur;
 	expect(Tok_Colon, false, "Receiver");
 	expect(Tok_ident, false, "Receiver");
-    res.second = cur.d_val;
+    res.second = cur;
 	expect(Tok_Rpar, false, "Receiver");
     return res;
 }
@@ -1910,6 +1918,7 @@ void Parser2::module() {
     expect(Tok_MODULE, true, "module");
     expect(Tok_ident, false, "module");
     m->name = cur.d_val;
+    m->pos = cur.toRowCol();
 
     ModuleData md;
     md.source = scanner->source();
@@ -1992,7 +2001,7 @@ void Parser2::import() {
     Import import;
     foreach( const Token& t, tl)
         import.path << t.d_val;
-    import.importedAt = importDecl->pos;
+    import.importedAt = tl.last().toRowCol();
     import.importer = thisMod;
 
     if( FIRST_MetaActuals(la.d_type) ) {

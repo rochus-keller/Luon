@@ -41,7 +41,6 @@ namespace Ln
         void setPackComments( bool b ) { d_packComments = b; }
         void setEnableExt( bool b ) { d_enableExt = b; }
         bool isEnabledExt() const { return d_enableExt; }
-        void setSensExt( bool b ) { d_sensExt = b; }
         const QDateTime& getTimeStamp() const { return d_when; }
 
         Token nextToken();
@@ -85,8 +84,6 @@ namespace Ln
         bool d_ignoreComments;  // don't deliver comment tokens
         bool d_packComments;    // Only deliver one Tok_Comment for (*...*) instead of Tok_Latt and Tok_Ratt
         bool d_enableExt; // Allow for both uppercase and lowercase keywords and for idents with underscores as in C
-        bool d_sensExt; // Autosense language extension (first keyword MODULE, module, DEFINITION, definition)
-        bool d_sensed;
         bool d_lineCounted;
     };
 }

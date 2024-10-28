@@ -32,7 +32,6 @@ namespace Ln
     public:
         enum { TokenProp = QTextFormat::UserProperty };
         explicit Highlighter(QTextDocument *parent = 0);
-        void setEnableExt( bool b );
         void addBuiltIn(const QByteArray& bi);
 
     protected:
@@ -46,7 +45,6 @@ namespace Ln
         enum Category { C_Num, C_Str, C_Kw, C_Type, C_Ident, C_Op, C_Pp, C_Cmt, C_Section, C_Brack, C_Max };
         QTextCharFormat d_format[C_Max];
         QSet<QByteArray> d_builtins;
-        bool d_enableExt; // Allow for both uppercase and lowercase keywords and for idents with underscores as in C
     };
 
     class LogPainter : public QSyntaxHighlighter

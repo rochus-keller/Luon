@@ -24,7 +24,6 @@ using namespace Ln;
 Validator::Validator(AstModel* mdl, Importer* imp, bool xref):mdl(mdl),imp(imp),first(0),last(0)
 {
     Q_ASSERT(mdl);
-    Q_ASSERT(imp);
     if( xref )
         first = last = new Symbol();
 }
@@ -47,11 +46,14 @@ bool Validator::validate(Declaration* module, const Import& import)
         first->len = module->name.size();
     }
 
+    markDecl(module);
+
     Ln::ModuleData md = module->data.value<Ln::ModuleData>();
 
     md.metaActuals = import.metaActuals;
     md.path = import.path;
-    md.suffix = imp->moduleSuffix(import.metaActuals);
+    if( imp )
+        md.suffix = imp->moduleSuffix(import.metaActuals);
     if( !md.suffix.isEmpty() )
     {
         md.fullName = Ln::Token::getSymbol(md.path.join('/') + md.suffix);
@@ -123,7 +125,9 @@ Xref Validator::takeXref()
         return res;
     res.uses = xref;
     res.syms = first;
+    res.subs = subs;
     xref.clear();
+    subs.clear();
     first = last = new Symbol();
     return res;
 }
@@ -148,7 +152,24 @@ void Validator::visitScope(Declaration* scope)
     QList<Declaration*> bounds_ = boundProcs;
     boundProcs.clear();
     foreach(Declaration* p, bounds_)
+    {
+        Q_ASSERT(p->link && p->link->kind == Declaration::ParamDecl &&
+                 p->link->mode == Declaration::Receiver && p->link->type );
+        if( p->link->type->deref()->base )
+        {
+            Declaration* super = p->link->type->deref()->base->deref()->find(p->name);
+            if( super )
+            {
+                super->hasSubs = true;
+                p->super = super;
+                if( !matchFormals(super->getParams(true), p->getParams(true)) || !matchResultType(super->type,p->type) )
+                    error(p->pos, "formal parameters do not match with the overridden procedure");
+                if( first )
+                    subs[super].append(p);
+            }
+        }
         visitScope(p);
+    }
     cur = scope->link;
     while( cur )
     {
@@ -169,6 +190,18 @@ void Validator::visitDecl(Declaration* d)
     switch( d->kind )
     {
     case Declaration::TypeDecl:
+        visitType(d->type);
+        if( first && d->type && d->type->form == Type::Record && d->type->base )
+        {
+            Q_ASSERT( d->type->base->form == Type::NameRef );
+            if( !d->type->base->validated )
+                break;
+            Declaration* super = d->type->base->base->decl;
+            super->hasSubs = true;
+            d->super = super;
+            subs[super].append(d);
+        }
+        break;
     case Declaration::VarDecl:
     case Declaration::LocalDecl:
     case Declaration::ParamDecl:
@@ -209,13 +242,14 @@ void Validator::visitImport(Declaration* import)
     foreach( Expression* e, i.metaActuals )
         visitExpr(e);
 
-    Declaration* mod = imp->loadModule(i);
+    Declaration* mod = imp ? imp->loadModule(i) : 0;
     if( mod )
     {
         // loadModule returns the module decl; we just need the list of module elements:
         import->link = mod->link;
         i.resolved = mod;
         import->data = QVariant::fromValue(i);
+        markRef(mod, i.importedAt);
     }else
     {
         error(import->pos,"cannot import module");
@@ -315,15 +349,16 @@ void Validator::visitExpr(Expression* e, Type* hint)
         resolve(e->type);
         break;
     case Expression::NameRef: {
-        const QByteArray select = resolve(e);
-        if( !select.isEmpty() )
+        const Qualident q = resolve(e);
+        if( !q.second.isEmpty() )
         {
             // the nameref was not a true qualident, but a select
             Expression* nameRef = new Expression();
             *nameRef = *e; // repurpose the new expr as the validated nameref
             e->kind = Expression::Select;
-            e->val = select;
+            e->val = q.second;
             e->lhs = nameRef;
+            e->pos.d_col += q.first.size() + 1; // first.second
             nameRef->next = 0;
             selectOp(e);
         }
@@ -378,6 +413,11 @@ void Validator::visitType(Type* type)
             visitDecl(d);
         }
         visitType(type->base);
+        if( type->form == Type::Record && type->base )
+        {
+            if( type->base->base == 0 || type->base->deref()->form != Type::Record )
+                error(type->base->decl->pos,"invalid base record");
+        }
         break;
     case Type::Array:
     case Type::HashMap:
@@ -448,16 +488,22 @@ void Validator::resolve(Type* nameRef)
     Q_ASSERT(nameRef->decl);
     Q_ASSERT(nameRef->expr == 0);
     Qualident q = nameRef->decl->data.value<Qualident>();
-    Declaration* d = find(q, nameRef->decl->pos);
-    if(d == 0)
+    ResolvedQ r = find(q, nameRef->decl->pos);
+    if(r.second == 0)
         return;
-    markRef(d, nameRef->decl->pos);
+    RowCol pos = nameRef->decl->pos;
+    if( r.first != 0 )
+    {
+        markRef(r.first, pos);
+        pos.d_col += q.first.size() + 1;
+    }
+    markRef(r.second, pos);
     nameRef->validated = true;
-    nameRef->base = d->type;
-    if( d->kind != Declaration::TypeDecl )
+    nameRef->base = r.second->type;
+    if( r.second->kind != Declaration::TypeDecl )
         return error(nameRef->expr->pos,"identifier doesn't refer to a type declaration");
-    resolve(d->type);
-    if( d->type )
+    resolve(r.second->type);
+    if( r.second->type )
     {
 #if 0
         if( d->type->form == Type::Proc )
@@ -465,7 +511,7 @@ void Validator::resolve(Type* nameRef)
             // does not work yet because it triggers circular dependencies
         else
 #endif
-            resolve(d->type->base);
+            resolve(r.second->type->base);
     }
 }
 
@@ -1160,67 +1206,83 @@ void Validator::returnOp(Statement* s)
         error(s->rhs->pos,"the returned value is not compatible with the function return type");
 }
 
-QByteArray Validator::resolve(Expression* nameRef)
+Qualident Validator::resolve(Expression* nameRef)
 {
     Q_ASSERT( !scopeStack.isEmpty() );
 
     Qualident q = nameRef->val.value<Qualident>();
 
-    Declaration* d = 0;
+    ResolvedQ r;
     QByteArray select;
     if( !q.first.isEmpty() )
     {
         // check whether this is a local name or an import
-        d = scopeStack.back()->find(q.first);
+        Declaration* d = scopeStack.back()->find(q.first);
         if( d == 0 )
         {
             error(nameRef->pos,QString("declaration '%1' not found").arg(q.first.constData()));
-            return QByteArray();
+            return Qualident();
         }else if( d->kind == Declaration::Import )
-            d = find(q,nameRef->pos, d);
-        else
+        {
+            r = find(q,nameRef->pos, d);
+        }else
         {
             // this is a local select, not an import
             select = q.second;
             q.second = q.first;
             q.first.clear();
+            r.second = d;
             nameRef->val = QVariant::fromValue(q);
         }
     }else
-        d = find(q,nameRef->pos);
-    if( d == 0 )
-        return QByteArray();
+        r = find(q,nameRef->pos);
+    if( r.second == 0 )
+        return Qualident();
 
-    markRef(d, nameRef->pos);
-    resolve(d->type);
+    RowCol pos = nameRef->pos;
+    if( r.first != 0 )
+    {
+        markRef(r.first, pos);
+        pos.d_col += q.first.size() + 1;
+    }
+    Symbol* s = markRef(r.second, pos);
+    if( nameRef->needsLval )
+        s->kind = Symbol::Lval;
+    resolve(r.second->type);
 #if 0
     visitDecl(d); // RISK: we need that so that procedures are resolved when passing as meta actuals
     // does not work yet because it triggers circular dependencies
 #endif
 
     // repurpose the expression
-    if( d->kind == Declaration::ConstDecl && d->mode != Declaration::Enum )
+    if( r.second->kind == Declaration::ConstDecl && r.second->mode != Declaration::Enum )
     {
-        nameRef->val = d->data;
-        nameRef->type = d->type;
+        nameRef->val = r.second->data;
+        nameRef->type = r.second->type;
         toConstVal(nameRef);
     }else
     {
         // Enum ConstDecls are handled here because they are used as symbols in the first place
         toConstVal(nameRef);
         nameRef->kind = Expression::DeclRef;
-        nameRef->val = QVariant::fromValue(d);
-        nameRef->type = d->type;
+        nameRef->val = QVariant::fromValue(r.second);
+        nameRef->type = r.second->type;
+        if( r.second->kind == Declaration::LocalDecl || r.second->kind == Declaration::ParamDecl )
+        {
+            if( r.second->outer != scopeStack.back() )
+                error(nameRef->pos,"cannot access parameters and local variables of outer procedures");
+            // Luon - in contrast to Oberon+ - doesn't support non-local variable access
+        }
     }
-    return select;
+    return Qualident(!select.isEmpty() ? q.second : QByteArray(),select);
 }
 
-Declaration* Validator::find(const Qualident& q, const RowCol& pos, Declaration* import)
+Validator::ResolvedQ Validator::find(const Qualident& q, const RowCol& pos, Declaration* import)
 {
     if( scopeStack.isEmpty() )
-        return 0;
+        return ResolvedQ();
 
-    Declaration* d = 0;
+    ResolvedQ res;
     if( !q.first.isEmpty() )
     {
         if( import == 0 )
@@ -1228,10 +1290,11 @@ Declaration* Validator::find(const Qualident& q, const RowCol& pos, Declaration*
         if( import == 0 || import->kind != Declaration::Import )
         {
             error(pos,"identifier doesn't refer to an imported module");
-            return 0;
+            return ResolvedQ();
         }
         if( !import->validated )
             visitImport(import);
+        res.first = import;
         Declaration* member = mdl->findDecl(import,q.second);
         if( member == 0 )
         {
@@ -1242,17 +1305,18 @@ Declaration* Validator::find(const Qualident& q, const RowCol& pos, Declaration*
             if( member->visi == Declaration::Private )
                 error(pos,QString("cannot access private declaration '%1' from module '%2'").
                       arg(q.second.constData()).arg(q.first.constData()) );
-            d = member;
+            res.second = member;
         }
     }else
     {
-        d = scopeStack.back()->find(q.second);
+        Declaration* d = scopeStack.back()->find(q.second);
         if( d == 0 )
             d = mdl->findDecl(q.second);
         if( d == 0 )
             error(pos,QString("declaration '%1' not found").arg(q.second.constData()));
+        res.second = d;
     }
-    return d;
+    return res;
 }
 
 void Validator::selectOp(Expression* e)
@@ -1267,7 +1331,9 @@ void Validator::selectOp(Expression* e)
             error(e->pos,QString("the record doesn't have a field named '%1'"). arg(e->val.toString()) );
         else
         {
-            markRef(field, e->pos);
+            Symbol* s = markRef(field, e->pos);
+            if( e->needsLval )
+                s->kind = Symbol::Lval;
             e->val = QVariant::fromValue(field); // Field or bound proc
             e->type = field->type;
         }
@@ -1946,10 +2012,10 @@ void Validator::markDecl(Declaration* d)
     last = last->next;
 }
 
-void Validator::markRef(Declaration* d, const RowCol& pos)
+Symbol* Validator::markRef(Declaration* d, const RowCol& pos)
 {
     if( first == 0 )
-        return;
+        return 0;
     Symbol* s = new Symbol();
     s->kind = Symbol::DeclRef;
     s->decl = d;
@@ -1958,4 +2024,5 @@ void Validator::markRef(Declaration* d, const RowCol& pos)
     xref[d].append(s);
     last->next = s;
     last = last->next;
+    return s;
 }

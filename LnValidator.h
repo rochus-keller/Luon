@@ -31,7 +31,7 @@ namespace Ln
     class Validator
     {
     public:
-        Validator(AstModel* mdl, Importer* imp, bool xref = false);
+        Validator(AstModel* mdl, Importer* imp = 0, bool xref = false);
         ~Validator();
 
         bool validate(Declaration* module, const Import& import = Import());
@@ -65,8 +65,9 @@ namespace Ln
         Statement* forStat(Statement*);
         void loopStat(Statement*);
         void returnOp(Statement*);
-        QByteArray resolve(Expression* nameRef);
-        Declaration* find(const Qualident& q, const RowCol& pos, Declaration* import = 0);
+        Qualident resolve(Expression* nameRef);
+        typedef QPair<Declaration*,Declaration*> ResolvedQ;
+        ResolvedQ find(const Qualident& q, const RowCol& pos, Declaration* import = 0);
         void selectOp(Expression*);
         void callOp(Expression*);
         void callOp(Statement*);
@@ -77,7 +78,7 @@ namespace Ln
         Type* deref(Type*) const;
         bool checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret, const RowCol& pos);
         void markDecl(Declaration*);
-        void markRef(Declaration*, const RowCol&);
+        Symbol* markRef(Declaration*, const RowCol&);
 
         bool assigCompat(Type* lhs, Type* rhs) const;
         bool assigCompat(Type* lhs, Declaration* rhs) const;
@@ -98,6 +99,7 @@ namespace Ln
         Symbol* first;
         Symbol* last;
         QHash<Declaration*,SymList> xref;
+        QHash<Declaration*,DeclList> subs;
     };
 }
 

@@ -41,8 +41,9 @@ class AutoMenu;
 
 namespace Ln
 {
-    struct Declaration;
-    struct Type;
+    class Declaration;
+    class Type;
+    class Symbol;
     class LjRuntime;
 
     class Ide : public QMainWindow
@@ -93,7 +94,11 @@ namespace Ln
         void addDebugMenu(Gui::AutoMenu * pop);
         bool luaRuntimeMessage(const QByteArray&, const QString& file);
         void fillXref();
-        void fillXref(Declaration*);
+        void fillXrefForSym(Symbol*, Declaration* module);
+        void fillXrefForMod(Declaration*);
+        void syncModView(Declaration*);
+        void syncEditorMarks(Declaration*selected, Declaration* module);
+        Declaration* moduleOfCurrentEditor();
         void fillStack();
         void fillLocals();
         void printLocalVal( QTreeWidgetItem* item, Type* type, int depth );
@@ -190,6 +195,7 @@ namespace Ln
         QAction* d_dbgStepOver;
         QAction* d_dbgStepOut;
         QByteArray d_curBc;
+        Declaration* d_curModule;
         bool d_lock, d_lock2, d_lock3, d_lock4;
         bool d_filesDirty;
         bool d_pushBackLock;

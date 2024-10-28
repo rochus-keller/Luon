@@ -37,7 +37,6 @@ namespace Ln {
         Parser2(AstModel* m, Scanner2* s):scanner(s),mdl(m),thisMod(0) {}
         ~Parser2();
         void RunParser();
-        typedef QPair<Declaration*, QList<Type*> > Result; // module + list of temporary types
         Declaration* takeResult(); // get module declaration and take ownership (otherwise deleted by parser)
         struct Error {
 		    QString msg;
@@ -104,7 +103,7 @@ namespace Ln {
 		void procedure();
         Type* ProcedureType();
 		void ProcedureDeclaration();
-        Qualident Receiver();
+        QPair<Token,Token> Receiver();
         Statement* block();
         void DeclarationSequence();
         Statement* ReturnStatement();

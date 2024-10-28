@@ -118,7 +118,6 @@ public:
 
     void setExt( bool on )
     {
-        d_hl->setEnableExt(on);
         for( int i = Builtin::ABS; i < Builtin::Max; i++ )
             d_hl->addBuiltIn(Builtin::name[i]);
         for( int i = BasicType::Any; i <= BasicType::Max; i++ )
@@ -231,29 +230,23 @@ public:
                         getPath(),cur.blockNumber() + 1,cur.positionInBlock() + 1);
             if( e )
             {
-                Declaration* sym = e->decl;
+                Declaration* decl = e->decl;
                 d_ide->pushLocation( Ide::Location( getPath(), cur.blockNumber(), cur.positionInBlock(), verticalScrollBar()->value() ) );
-                if( sym->kind == Declaration::Import && e->pos == sym->pos )
+                if( decl->kind == Declaration::Import && e->pos == decl->pos )
                 {
-                    Import imp = sym->data.value<Import>();
-                    sym = imp.resolved;
-                }else if( sym->kind == Declaration::Procedure )
+                    Import imp = decl->data.value<Import>();
+                    decl = imp.resolved;
+                }else if( decl->kind == Declaration::Procedure )
                 {
-                    if( sym->mode == Declaration::Receiver )
-                    {
-                        // find the same method in the superclass
-                        Q_ASSERT( sym->link && sym->link->kind == Declaration::ParamDecl &&
-                                  sym->link->mode == Declaration::Receiver );
-                        Type* base = (sym->link->type) ? sym->link->type->base : 0;
-                        sym = base->find(sym->name,true);
-                    }
+                    if( decl->mode == Declaration::Receiver )
+                        decl = decl->super;
                 }
 #if 0
                 if( sym->kind == Symbol::Module && sym->decl->d_synthetic )
                     d_ide->fillXref(sym);
                 else
 #endif
-                    d_ide->showEditor( sym, false, true );
+                    d_ide->showEditor( decl, false, true );
                 //setCursorPosition( sym->pos.d_row - 1, sym->pos.d_col - 1, true );
             }
             updateExtraSelections();
@@ -404,7 +397,7 @@ static void log( const QString& msg )
 
 Ide::Ide(QWidget *parent)
     : QMainWindow(parent),d_lock(false),d_filesDirty(false),d_pushBackLock(false),
-      d_lock2(false),d_lock3(false),d_lock4(false)
+      d_lock2(false),d_lock3(false),d_lock4(false),d_curModule(0)
 {
     s_this = this;
     // TODO LibFfi::setSendToLog(log);
@@ -962,8 +955,9 @@ void Ide::onSaveFile()
     ENABLED_IF( edit && edit->isModified() );
 
     edit->saveToFile( edit->getPath() );
-    Project::FileMod f = d_rt->getPro()->findFile( edit->getPath() );
-    f.first->d_cache.clear();
+    Project::File* f = d_rt->getPro()->findFile( edit->getPath() );
+    if( f )
+        f->d_cache.clear();
 }
 
 void Ide::onSaveAs()
@@ -1098,6 +1092,7 @@ void Ide::onModDblClicked(QTreeWidgetItem* item, int)
     if( s == 0 )
         return;
 
+    d_curModule = s->getModule();
     d_lock2 = true;
     const QString path = d_tab->getCurrentDoc().toString();
     item->setExpanded(true);
@@ -1159,11 +1154,11 @@ void Ide::onTabChanged()
 
     if( !path.isEmpty() )
     {
-        Project::FileMod f = d_rt->getPro()->findFile(path);
-        if( f.first )
+        Project::File* f = d_rt->getPro()->findFile(path);
+        if( f )
         {
-            fillModule(f.first->d_mod);
-            showBc(d_rt->findByteCode(f.second));
+            fillModule(f->d_mod);
+            showBc(d_rt->findByteCode(f->d_mod)); // TODO: what about instances
             onCursor();
             return;
         }
@@ -1175,7 +1170,7 @@ void Ide::onTabChanged()
 
 void Ide::onTabClosing(int i)
 {
-    d_rt->getPro()->findFile(d_tab->getDoc(i).toString()).first->d_cache.clear();
+    d_rt->getPro()->findFile(d_tab->getDoc(i).toString())->d_cache.clear();
 }
 
 void Ide::onEditorChanged()
@@ -1189,10 +1184,10 @@ void Ide::onEditorChanged()
         if( e->isModified() )
             d_filesDirty = true;
         const QString path = d_tab->getDoc(i).toString();
-        Project::FileMod f = d_rt->getPro()->findFile(path);
+        Project::File* f = d_rt->getPro()->findFile(path);
         QString name;
-        if( f.first && f.first->d_mod )
-            name = f.first->d_mod->name;
+        if( f && f->d_mod )
+            name = f->d_mod->name;
         else
             name = QFileInfo( path ).fileName();
         d_tab->setTabText(i, name + ( e->isModified() ? "*" : "" ) );
@@ -1224,9 +1219,9 @@ void Ide::onErrors()
         else
             item->setIcon(0, QPixmap(":/images/exclamation-circle.png") );
 #endif
-        Project::FileMod f = d_rt->getPro()->findFile(errs[i].path);
-        if( f.second )
-            item->setText(0, f.second->name );
+        Project::File* f = d_rt->getPro()->findFile(errs[i].path);
+        if( f && f->d_mod )
+            item->setText(0, f->d_mod->name );
         else
             item->setText(0, QFileInfo(errs[i].path).completeBaseName() );
         item->setToolTip(0, errs[i].path );
@@ -1329,12 +1324,12 @@ void Ide::onNewModule()
         }
     }
 
-    QString filePath = QFileDialog::getSaveFileName(this,tr("New Module"), dir.absoluteFilePath(name + ".obx"),"*.obx");
+    QString filePath = QFileDialog::getSaveFileName(this,tr("New Module"), dir.absoluteFilePath(name + ".luon"),"*.luon");
     if( filePath.isEmpty() )
         return;
 
-    if( !filePath.toLower().endsWith(".obx") )
-        filePath += ".obx";
+    if( !filePath.toLower().endsWith(".luon") )
+        filePath += ".luon";
 
     QFile f(filePath);
     if( !f.open(QIODevice::WriteOnly) )
@@ -1491,11 +1486,11 @@ bool Ide::compile(bool doGenerate )
     for( int i = 0; i < d_tab->count(); i++ )
     {
         Editor* e = static_cast<Editor*>( d_tab->widget(i) );
-        Project::FileMod f = d_rt->getPro()->findFile( e->getPath() );
+        Project::File* f = d_rt->getPro()->findFile( e->getPath() );
         if( e->isModified() )
-            f.first->d_cache = e->toPlainText().toUtf8();
+            f->d_cache = e->toPlainText().toUtf8();
         else
-            f.first->d_cache.clear();
+            f->d_cache.clear();
     }
     const bool res = d_rt->compile(doGenerate);
     onErrors();
@@ -1606,9 +1601,9 @@ void Ide::addTopCommands(Gui::AutoMenu* pop)
 Ide::Editor* Ide::showEditor(const QString& path, int row, int col, bool setMarker, bool center )
 {
     QString filePath = path;
-    Project::FileMod f = d_rt->getPro()->findFile(path);
-    if( f.first != 0 )
-        filePath = f.first->d_filePath;
+    Project::File* f = d_rt->getPro()->findFile(path);
+    if( f == 0 )
+        return 0;
 
     const int i = d_tab->findDoc(filePath);
     Editor* edit = 0;
@@ -1625,18 +1620,12 @@ Ide::Editor* Ide::showEditor(const QString& path, int row, int col, bool setMark
         connect(edit,SIGNAL(cursorPositionChanged()),this,SLOT(onCursor()));
         connect(edit,SIGNAL(sigUpdateLocation(int,int)),this,SLOT(onUpdateLocation(int,int)));
 
-#if 0
-        // ?
-        if( f.second == 0 )
-            edit->setExt(true);
-        else
-            edit->setExt(f.second->d_isExt);
-#endif
+        edit->setExt(true);
         edit->loadFromFile(filePath);
 
-        if( f.first && f.first->d_mod )
+        if( f && f->d_mod )
         {
-            const Lua::Engine2::Breaks& br = d_rt->getLua()->getBreaks( f.first->d_mod->name );
+            const Lua::Engine2::Breaks& br = d_rt->getLua()->getBreaks( f->d_mod->name );
             Lua::Engine2::Breaks::const_iterator j;
             for( j = br.begin(); j != br.end(); ++j )
                 edit->addBreakPoint((*j) - 1);
@@ -1645,7 +1634,8 @@ Ide::Editor* Ide::showEditor(const QString& path, int row, int col, bool setMark
         d_tab->addDoc(edit,filePath);
         onEditorChanged();
     }
-    showBc( d_rt->findByteCode(f.second) );
+    if( f && f->d_mod )
+        showBc( d_rt->findByteCode(f->d_mod) ); // TODO: instances
     if( row > 0 && col > 0 )
     {
         edit->setCursorPosition( row-1, col-1, center );
@@ -1661,6 +1651,7 @@ void Ide::showEditor(Declaration* n, bool setMarker, bool center)
     Declaration* mod = n->getModule();
     if( mod )
     {
+        d_curModule = mod;
         ModuleData md = mod->data.value<ModuleData>();
         showEditor( md.source, n->pos.d_row, n->pos.d_col, setMarker, center );
     }
@@ -1774,24 +1765,26 @@ static const char* roleName( Symbol* e )
     {
     case Symbol::Decl:
     case Symbol::Module:
-        return "Decl";
+        return "decl";
+    case Symbol::Lval:
+        return "lhs";
     default:
         break;
     }
     return "";
 }
 
-static Declaration* adjustForModIdx( Declaration* sym )
+static Declaration* adjustForModIdx( Declaration* decl )
 {
-    while( sym )
+    while( decl )
     {
-        switch( sym->kind )
+        switch( decl->kind )
         {
         case Declaration::Procedure:
         case Declaration::Module:
-            return sym;
+            return decl;
         }
-        sym = sym->outer;
+        decl = decl->outer;
     }
     return 0;
 }
@@ -1810,122 +1803,101 @@ void Ide::fillXref()
     line += 1;
     col += 1;
     Declaration* scope = 0;
-    Symbol* hitEx = d_rt->getPro()->findSymbolBySourcePos(edit->getPath(), line, col, &scope);
-    if( hitEx )
+    Symbol* hit = d_rt->getPro()->findSymbolBySourcePos(edit->getPath(), line, col, &scope);
+    if( hit && hit->decl )
     {
-        Declaration* hitSym = hitEx->decl;
-        Q_ASSERT( hitSym != 0 );
-
-        QTreeWidgetItem* mi = d_modIdx.value(hitSym);
-        if( mi == 0 )
-            mi = d_modIdx.value(adjustForModIdx(scope));
-        if( mi && !d_lock2 )
-        {
-            d_mod->scrollToItem(mi,QAbstractItemView::PositionAtCenter);
-            mi->setExpanded(true);
-            d_mod->setCurrentItem(mi);
-        }
-        fillHier(hitSym);
-
-        SymList exp = d_rt->getPro()->getUsage(hitSym);
-
-        SymList l1, l2;
-        foreach( Symbol* e, exp )
-        {
-            l2 << e;
-            Declaration* mod = e->decl;
-            if( mod )
-            {
-                mod = mod->getModule();
-                if( mod == 0 )
-                    continue;
-                ModuleData md = mod->data.value<ModuleData>();
-                if( md.source == edit->getPath() )
-                    l1 << e;
-            }
-        }
-
-        edit->markNonTerms(l1);
-
-        std::sort( l2.begin(), l2.end(), sortExList );
-
-        QFont f = d_xref->font();
-        f.setBold(true);
-
-        QString type;
-        QString name = hitSym->name;
-        switch( hitSym->kind )
-        {
-        case Declaration::Field:
-            type = "Field";
-            break;
-        case Declaration::VarDecl:
-        case Declaration::LocalDecl:
-            type = "Variable";
-            break;
-        case Declaration::ParamDecl:
-            type = "Parameter";
-            break;
-        case Declaration::TypeDecl:
-            type = "Type";
-            break;
-        case Declaration::ConstDecl:
-            if( hitSym->mode == Declaration::Enum )
-                type = "Enumeration";
-            else
-                type = "Const";
-            break;
-        case Declaration::Import:
-            type = "Import";
-            break;
-        case Declaration::Builtin:
-            type = "BuiltIn";
-            break;
-        case Declaration::Procedure:
-            type = "Procedure";
-            break;
-        case Declaration::Module:
-            type = "Module";
-            break;
-        }
-
-        d_xrefTitle->setText(QString("%1 '%2'").arg(type).arg(name));
-
-        d_xref->clear();
-        QTreeWidgetItem* black = 0;
-        foreach( Symbol* e, l2 )
-        {
-            Declaration* ident = e->decl;
-            Declaration* mod = ident ? ident->getModule() : 0;
-            if( mod == 0 )
-                continue;
-            Q_ASSERT( ident != 0 && mod != 0 );
-            QTreeWidgetItem* i = new QTreeWidgetItem(d_xref);
-            i->setText( 0, QString("%1 (%2:%3 %4)")
-                        .arg(mod->name.constData())
-                        .arg(e->pos.d_row).arg(e->pos.d_col)
-                        .arg( roleName(e) ));
-            if( e == hitEx )
-            {
-                i->setFont(0,f);
-                black = i;
-            }
-            i->setToolTip( 0, i->text(0) );
-            i->setData( 0, Qt::UserRole, QVariant::fromValue( e ) );
-            ModuleData md = mod->data.value<ModuleData>();
-            if( md.source != edit->getPath() )
-                i->setForeground( 0, Qt::gray );
-        }
-        if( black && !d_lock3 )
-        {
-            d_xref->scrollToItem(black, QAbstractItemView::PositionAtCenter);
-            d_xref->setCurrentItem(black);
-        }
+        Declaration* module = moduleOfCurrentEditor();
+        fillXrefForSym(hit, module);
+        syncModView(hit->decl);
+        syncEditorMarks(hit->decl, module);
+        fillHier(hit->decl);
     }else
         edit->markNonTerms(SymList());
 }
 
-void Ide::fillXref(Declaration* sym)
+static inline QString declKindName(Declaration* decl)
+{
+    switch( decl->kind )
+    {
+    case Declaration::Field:
+        return "Field";
+    case Declaration::VarDecl:
+    case Declaration::LocalDecl:
+        return "Variable";
+    case Declaration::ParamDecl:
+        return "Parameter";
+    case Declaration::TypeDecl:
+        return "Type";
+    case Declaration::ConstDecl:
+        if( decl->mode == Declaration::Enum )
+            return "Enumeration";
+        else
+            return "Const";
+    case Declaration::Import:
+        return "Import";
+    case Declaration::Builtin:
+        return "BuiltIn";
+    case Declaration::Procedure:
+        return "Procedure";
+    case Declaration::Module:
+        return "Module";
+    }
+    return "???";
+}
+
+void Ide::fillXrefForSym(Symbol* sym, Declaration* module)
+{
+    d_xref->clear();
+
+    Declaration* decl = sym->decl;
+    Q_ASSERT( decl != 0 );
+
+    Project::UsageByMod usage = d_rt->getPro()->getUsage(decl);
+
+    QFont f = d_xref->font();
+    f.setBold(true);
+
+    const QString type = declKindName(decl);
+
+    d_xrefTitle->setText(QString("%1 '%2'").arg(type).arg(decl->name.constData()));
+
+    QTreeWidgetItem* black = 0;
+    for( int i = 0; i < usage.size(); i++ )
+    {
+        SymList syms = usage[i].second;
+        std::sort( syms.begin(), syms.end(), sortExList );
+        QString modName;
+        if( usage[i].first )
+            modName = usage[i].first->name;
+        else
+            modName = "<global>";
+        foreach( Symbol* s, syms )
+        {
+            QTreeWidgetItem* item = new QTreeWidgetItem(d_xref);
+            item->setText( 0, QString("%1 (%2:%3 %4)")
+                        .arg(modName)
+                        .arg(s->pos.d_row).arg(s->pos.d_col)
+                        .arg( roleName(s) ));
+            if( s == sym )
+            {
+                item->setFont(0,f);
+                black = item;
+            }
+            item->setToolTip( 0, item->text(0) );
+            item->setData( 0, Qt::UserRole, QVariant::fromValue( s ) ); // symbol in module
+            item->setData( 1, Qt::UserRole, QVariant::fromValue( usage[i].first ) ); // module where the sym was found
+            if( usage[i].first != module )
+                item->setForeground( 0, Qt::gray );
+        }
+    }
+    if( black && !d_lock3 )
+    {
+        d_xref->scrollToItem(black, QAbstractItemView::PositionAtCenter);
+        d_xref->setCurrentItem(black);
+    }
+}
+
+void Ide::fillXrefForMod(Declaration* sym)
 {
     d_xref->clear();
     d_xrefTitle->clear();
@@ -1933,6 +1905,8 @@ void Ide::fillXref(Declaration* sym)
     if( sym == 0 )
         return;
 
+#if 0
+    // TODO
     SymList exp = d_rt->getPro()->getUsage(sym);
 
     std::sort( exp.begin(), exp.end(), sortExList );
@@ -1951,6 +1925,57 @@ void Ide::fillXref(Declaration* sym)
         i->setToolTip( 0, i->text(0) );
         i->setData( 0, Qt::UserRole, QVariant::fromValue( e ) );
     }
+#endif
+}
+
+void Ide::syncModView(Declaration* decl)
+{
+    QTreeWidgetItem* mi = d_modIdx.value(decl);
+    if( mi == 0 )
+        mi = d_modIdx.value(adjustForModIdx(decl));
+    if( mi && !d_lock2 )
+    {
+        d_mod->scrollToItem(mi,QAbstractItemView::PositionAtCenter);
+        mi->setExpanded(true);
+        d_mod->setCurrentItem(mi);
+    }
+}
+
+void Ide::syncEditorMarks(Declaration* selected, Declaration* module)
+{
+    Editor* edit = static_cast<Editor*>( d_tab->getCurrentTab() );
+    if( edit == 0 )
+        return;
+    Symbol* syms = d_rt->getPro()->getSymbolsOfModule(module);
+    if( syms == 0 )
+    {
+        edit->markNonTerms(SymList());
+        return;
+    }
+
+    Symbol* s = syms;
+    SymList marks;
+    while( s )
+    {
+        if( s->decl == selected )
+            marks << s;
+        s = s->next;
+        if( s == syms )
+            break;
+    }
+
+    edit->markNonTerms(marks);
+}
+
+Declaration*Ide::moduleOfCurrentEditor()
+{
+    Editor* edit = static_cast<Editor*>( d_tab->getCurrentTab() );
+    if( edit == 0 )
+        return 0;
+    Project::File* f = d_rt->getPro()->findFile(edit->getPath());
+    if( f == 0 )
+        return 0;
+    return f->d_mod;
 }
 
 void Ide::fillStack()
@@ -1978,7 +2003,7 @@ void Ide::fillStack()
             const int col = RowCol::unpackCol(l.d_line);
             const int row2 = RowCol::unpackRow(l.d_lineDefined);
             const int col2 = RowCol::unpackCol(l.d_lineDefined);
-            Project::FileMod fm = d_rt->getPro()->findFile( l.d_source );
+            Project::File* f = d_rt->getPro()->findFile( l.d_source );
             Symbol* e = d_rt->getPro()->findSymbolBySourcePos(l.d_source,row2,col2);
             Declaration* ident = e ? e->decl : 0;
             if( ident )
@@ -1992,8 +2017,8 @@ void Ide::fillStack()
             //qDebug() << "level" << level << ( d_scopes[level] ? d_scopes[level]->getModule()->name : QByteArray("???") );
             item->setText(2,QString("%1:%2").arg(row).arg(col));
             item->setData(2, Qt::UserRole, l.d_line );
-            if( fm.first )
-                item->setText(3, fm.second->name );
+            if( f && f->d_mod )
+                item->setText(3, f->d_mod->name );
             else
                 item->setText(3, QString("<unknown> %1").arg(l.d_source.constData()) );
             item->setData(3, Qt::UserRole, l.d_source );
@@ -2471,25 +2496,25 @@ void Ide::printLocalVal(QTreeWidgetItem* item, Type* type, int depth)
 }
 
 static void fillModItems(QTreeWidgetItem* item, Declaration* n, Declaration* p, Type* r,
-                         bool sort, QHash<Declaration*,QTreeWidgetItem*>& idx );
+                         bool sort, QHash<Declaration*,QTreeWidgetItem*>& idx , Project* pro);
 
 static void fillRecord(QTreeWidgetItem* item, Declaration* n, Type* r, bool sort,
-                       QHash<Declaration*,QTreeWidgetItem*>& idx )
+                       QHash<Declaration*,QTreeWidgetItem*>& idx, Project* pro )
 {
-    fillModItems(item,n, 0, r, sort, idx);
+    fillModItems(item,n, 0, r, sort, idx, pro);
     if( r->base )
         item->setText(0, item->text(0) + " ⇑");
-#if 0
-    // TODO
-    if( !r->d_subRecs.isEmpty() )
-        item->setText(0, item->text(0) + QString(" ⇓%1").arg(r->d_subRecs.size()));
-#endif
+    if( n->hasSubs )
+    {
+        DeclList subs = pro->getSubs(n);
+        item->setText(0, item->text(0) + QString(" ⇓%1").arg(subs.size()));
+    }
     item->setToolTip( 0, item->text(0) );
 }
 
 template<class T>
 static void createModItem(T* parent, Declaration* n, Type* t, bool nonbound, bool sort,
-                          QHash<Declaration*,QTreeWidgetItem*>& idx )
+                          QHash<Declaration*,QTreeWidgetItem*>& idx, Project* pro )
 {
     bool isAlias = false;
     if( t == 0 )
@@ -2512,14 +2537,14 @@ static void createModItem(T* parent, Declaration* n, Type* t, bool nonbound, boo
             {
                 QTreeWidgetItem* item = new QTreeWidgetItem(parent);
                 if( !isAlias  )
-                    fillRecord(item,n,t,sort,idx);
+                    fillRecord(item,n,t,sort,idx, pro);
                 else
-                    fillModItems(item,n, 0, 0, sort, idx);
+                    fillModItems(item,n, 0, 0, sort, idx, pro);
             }
             break;
         case Type::NameRef:
             if( t->deref()->form == Type::Record )
-                createModItem(parent,n,t->deref(),nonbound, sort, idx);
+                createModItem(parent,n,t->deref(),nonbound, sort, idx, pro);
             break;
         }
         break;
@@ -2527,14 +2552,14 @@ static void createModItem(T* parent, Declaration* n, Type* t, bool nonbound, boo
         if( !nonbound || n->mode != Declaration::Receiver )
         {
             QTreeWidgetItem* item = new QTreeWidgetItem(parent);
-            fillModItems(item,n, n, 0, sort, idx);
-#if 0
-            // TODO
-            if( n->d_super )
+            fillModItems(item,n, n, 0, sort, idx, pro);
+            if( n->super )
                 item->setText(0, item->text(0) + " ⇑");
-            if( !n->d_subs.isEmpty() )
-                item->setText(0, item->text(0) + QString(" ⇓%1").arg(n->d_subs.size()));
-#endif
+            if( n->hasSubs )
+            {
+                DeclList subs = pro->getSubs(n);
+                item->setText(0, item->text(0) + QString(" ⇓%1").arg(subs.size()));
+            }
             item->setToolTip( 0, item->text(0) );
         }
         break;
@@ -2542,7 +2567,8 @@ static void createModItem(T* parent, Declaration* n, Type* t, bool nonbound, boo
 }
 
 template <class T>
-static void walkModItems(T* parent, Declaration* p, Type* r, bool sort, QHash<Declaration*,QTreeWidgetItem*>& idx)
+static void walkModItems(T* parent, Declaration* p, Type* r, bool sort,
+                         QHash<Declaration*,QTreeWidgetItem*>& idx, Project* pro)
 {
     typedef QMultiMap<QByteArray,Declaration*> Sort;
     if( p && sort)
@@ -2556,13 +2582,13 @@ static void walkModItems(T* parent, Declaration* p, Type* r, bool sort, QHash<De
         }
         Sort::const_iterator i;
         for( i = tmp.begin(); i != tmp.end(); ++i )
-            createModItem(parent,i.value(),0,true, sort, idx);
+            createModItem(parent,i.value(),0,true, sort, idx, pro);
     }else if( p )
     {
         Declaration* n = p->link;
         while( n )
         {
-            createModItem(parent,n,0,true, sort, idx);
+            createModItem(parent,n,0,true, sort, idx, pro);
             n = n->getNext();
         }
     }
@@ -2576,19 +2602,19 @@ static void walkModItems(T* parent, Declaration* p, Type* r, bool sort, QHash<De
         }
         Sort::const_iterator i;
         for( i = tmp.begin(); i != tmp.end(); ++i )
-            createModItem(parent,i.value(),0,false, sort, idx);
+            createModItem(parent,i.value(),0,false, sort, idx, pro);
     }else if( r )
     {
         foreach( Declaration* n, r->subs )
         {
             if( n->kind == Declaration::Procedure )
-                createModItem(parent,n,0,false, sort, idx);
+                createModItem(parent,n,0,false, sort, idx, pro);
         }
     }
 }
 
 static void fillModItems( QTreeWidgetItem* item, Declaration* n, Declaration* p, Type* r,
-                          bool sort, QHash<Declaration*,QTreeWidgetItem*>& idx )
+                          bool sort, QHash<Declaration*,QTreeWidgetItem*>& idx, Project* pro )
 {
     const bool pub = n->visi >= Declaration::Private;
     item->setText(0,n->name);
@@ -2608,7 +2634,7 @@ static void fillModItems( QTreeWidgetItem* item, Declaration* n, Declaration* p,
         item->setIcon(0, QPixmap( pub ? ":/images/func.png" : ":/images/func_priv.png" ) );
         break;
     }
-    walkModItems(item,p,r,sort, idx);
+    walkModItems(item,p,r,sort, idx, pro);
 }
 
 void Ide::fillModule(Declaration* m)
@@ -2619,45 +2645,36 @@ void Ide::fillModule(Declaration* m)
     if( m == 0 )
         return;
     d_modTitle->setText( QString("'%1'").arg(m->name.constData()) );
-    walkModItems(d_mod, m, 0, true, d_modIdx );
+    walkModItems(d_mod, m, 0, true, d_modIdx, d_rt->getPro() );
 }
 
 template<class T>
-static QTreeWidgetItem* fillHierProc( T* parent, Declaration* p, Declaration* ref )
+static QTreeWidgetItem* fillHierProc( T* parent, Declaration* p, Declaration* ref, Project* pro )
 {
     QTreeWidgetItem* item = new QTreeWidgetItem(parent);
     Q_ASSERT( p->mode == Declaration::Receiver && p->link && p->link->mode == Declaration::Receiver && p->link->type );
-#if 0
-    // TODO
-    Q_ASSERT( p->d_receiver->type->kind == Thing::T_QualiType );
-    QualiType* rqt = cast<QualiType*>(p->d_receiver->type);
-    Declaration* rid = rqt->d_quali->getIdent();
-    if( rid )
-        item->setText(0, rid->getQualifiedName().join('.'));
-    else
-        item->setText(0, QString("%1.%2").arg(p->getModule()->name.constData())
-                      .arg(rqt->getQualiString().join('.').constData()));
-    item->setData(0, Qt::UserRole, QVariant::fromValue( Declaration*(p) ) );
-    item->setIcon(0, QPixmap( p->d_visibility >= Declaration::ReadWrite ? ":/images/func.png" : ":/images/func_priv.png" ) );
+
+    Qualident record = p->link->type->decl->data.value<Qualident>();
+    item->setText(0, record.second);
+    item->setData(0, Qt::UserRole, QVariant::fromValue(p) );
+    item->setIcon(0, QPixmap( p->visi >= Declaration::ReadWrite ? ":/images/func.png" : ":/images/func_priv.png" ) );
     item->setToolTip(0,item->text(0));
 
     QTreeWidgetItem* ret = 0;
-    foreach( Declaration* sub, p->d_subs )
+    DeclList subs = pro->getSubs(p);
+    foreach( Declaration* sub, subs )
     {
-        QTreeWidgetItem* tmp = fillHierProc(item, sub, ref);
+        QTreeWidgetItem* tmp = fillHierProc(item, sub, ref, pro);
         if( tmp )
             ret = tmp;
     }
     if( ret == 0 && p == ref )
             ret = item;
     return ret;
-#else
-    return item;
-#endif
 }
 
 template<class T>
-static QTreeWidgetItem* fillHierClass( T* parent, Type* p, Type* ref )
+static QTreeWidgetItem* fillHierClass( T* parent, Declaration* n, Type* p, Type* ref, Project* pro )
 {
     QTreeWidgetItem* item = new QTreeWidgetItem(parent);
     Declaration* name = p->decl;
@@ -2672,18 +2689,14 @@ static QTreeWidgetItem* fillHierClass( T* parent, Type* p, Type* ref )
     item->setIcon(0, QPixmap( name->visi >= Declaration::ReadWrite ? ":/images/class.png" : ":/images/class_priv.png" ) );
     item->setToolTip(0,item->text(0));
     QTreeWidgetItem* ret = 0;
-#if 0
-    // TODO
-    foreach( Type* sub, p->d_subRecs )
+    DeclList subs = pro->getSubs(n);
+    foreach( Declaration* sub, subs )
     {
-        QTreeWidgetItem* tmp = fillHierClass(item, sub, ref);
+        QTreeWidgetItem* tmp = fillHierClass(item, sub, sub->type, ref, pro);
         if( tmp )
             ret = tmp;
     }
-#else
-    ret = item;
-#endif
-    if( ret == 0 && p == ref )
+    if( ret == 0 )
             ret = item;
     return ret;
 }
@@ -2710,7 +2723,7 @@ void Ide::fillHier(Declaration* n)
                 d_hierTitle->setText( QString("Inheritance of class '%1'").arg( n->name.constData() ) );
                 while( r->base )
                     r = r->base;
-                ref = fillHierClass( d_hier, r, r0 );
+                ref = fillHierClass( d_hier, n, r, r0, d_rt->getPro() );
                 Q_ASSERT( ref );
             }
             break;
@@ -2722,13 +2735,10 @@ void Ide::fillHier(Declaration* n)
             if( p->mode != Declaration::Receiver )
                 return;
             d_hierTitle->setText( QString("Overrides of procedure '%1'").arg( n->name.constData() ) );
-#if 0
-            // TODO procedure of the super class with the same name
             while( p->super )
                 p = p->super;
-            ref = fillHierProc( d_hier, p, n );
+            ref = fillHierProc( d_hier, p, n, d_rt->getPro() );
             Q_ASSERT( ref );
-#endif
         }
         break;
     }
@@ -2795,15 +2805,15 @@ void Ide::onXrefDblClicked()
     QTreeWidgetItem* item = d_xref->currentItem();
     if( item )
     {
-        Symbol* e = item->data(0,Qt::UserRole).value<Symbol*>();
-        Q_ASSERT( e != 0 );
+        Symbol* sym = item->data(0,Qt::UserRole).value<Symbol*>();
+        Declaration* module = item->data(1,Qt::UserRole).value<Declaration*>();
+        Q_ASSERT( sym != 0 );
         d_lock3 = true;
-        Declaration* d = e->decl;
-        d = d ? d->getModule() : 0;
-        if( d )
+        if( module )
         {
-            ModuleData md = d->data.value<ModuleData>();
-            showEditor( md.source, e->pos.d_row, e->pos.d_col, false, true );
+            d_curModule = module;
+            ModuleData md = module->data.value<ModuleData>();
+            showEditor( md.source, sym->pos.d_row, sym->pos.d_col, false, true );
         }
         d_lock3 = false;
     }
@@ -2816,12 +2826,12 @@ void Ide::onToggleBreakPt()
 
     quint32 line;
     const bool on = edit->toggleBreakPoint(&line);
-    Project::FileMod fm = d_rt->getPro()->findFile(edit->getPath());
-    Q_ASSERT( fm.first && fm.first->d_mod );
+    Project::File* f = d_rt->getPro()->findFile(edit->getPath());
+    Q_ASSERT( f && f->d_mod );
     if( on )
-        d_rt->getLua()->addBreak( fm.first->d_mod->name, line + 1 );
+        d_rt->getLua()->addBreak( f->d_mod->name, line + 1 );
     else
-        d_rt->getLua()->removeBreak( fm.first->d_mod->name, line + 1 );
+        d_rt->getLua()->removeBreak( f->d_mod->name, line + 1 );
 }
 
 void Ide::onSingleStep()
@@ -2960,7 +2970,7 @@ void Ide::onExpMod()
     if( m == 0 || m->kind != Declaration::Module )
         return;
 
-    const QString path = QFileDialog::getSaveFileName( this, tr("Export Module"), m->name + ".obx" );
+    const QString path = QFileDialog::getSaveFileName( this, tr("Export Module"), m->name + ".luon" );
 
     if( path.isEmpty() )
         return;
@@ -3048,7 +3058,7 @@ int main(int argc, char *argv[])
     a.setOrganizationName("me@rochus-keller.ch");
     a.setOrganizationDomain("github.com/rochus-keller/Luon");
     a.setApplicationName("Luon IDE (LuaJIT)");
-    a.setApplicationVersion("0.1.0");
+    a.setApplicationVersion("0.2.0");
     a.setStyle("Fusion");    
     QFontDatabase::addApplicationFont(":/font/DejaVuSansMono.ttf"); // "DejaVu Sans Mono"
 

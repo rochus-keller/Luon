@@ -163,7 +163,7 @@ static void checkParser2(const QStringList& files)
         AstModel mdl;
         Parser2 p(&mdl,&lex);
         qDebug() << "**** parsing" << file.mid(root.size()+1);
-        p.RunParser(MetaActualList());
+        p.RunParser();
         if( !p.errors.isEmpty() )
         {
             foreach( const Parser2::Error& e, p.errors )
@@ -172,14 +172,12 @@ static void checkParser2(const QStringList& files)
         }else
         {
             Validator v(&mdl);
-            Parser2::Result r = p.takeResult();
-            if( !v.validate(r.first) )
+            Declaration* m = p.takeResult();
+            if( !v.validate(m) )
             {
                 foreach( const Validator::Error& e, v.errors )
                     qCritical() << e.path.mid(root.size()+1) << e.pos.d_row << e.pos.d_col << e.msg;
             }
-            foreach(Type* t, r.second)
-                delete t;
 
             ok++;
             qDebug() << "ok";
@@ -203,7 +201,7 @@ int main(int argc, char *argv[])
         root = info.filePath();
     }else
         files.append(info.filePath());
-#if 0
+#if 1
     foreach( const QString& f, files )
     {
         Lex lex;
@@ -211,7 +209,7 @@ int main(int argc, char *argv[])
         Token t = lex.lex.nextToken();
         while( !t.isEof() )
         {
-            qDebug() << t.getString() << t.d_val.constData();
+            qDebug() << t.getString() << t.d_val.constData() << t.d_lineNr << t.d_colNr;
             t = lex.lex.nextToken();
         }
     }
