@@ -238,7 +238,7 @@ public:
                     decl = imp.resolved;
                 }else if( decl->kind == Declaration::Procedure )
                 {
-                    if( decl->mode == Declaration::Receiver )
+                    if( decl->mode == Declaration::Receiver && decl->super )
                         decl = decl->super;
                 }
 #if 0
@@ -1648,6 +1648,8 @@ Ide::Editor* Ide::showEditor(const QString& path, int row, int col, bool setMark
 
 void Ide::showEditor(Declaration* n, bool setMarker, bool center)
 {
+    if( n == 0 )
+        return;
     Declaration* mod = n->getModule();
     if( mod )
     {

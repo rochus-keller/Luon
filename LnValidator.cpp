@@ -995,6 +995,16 @@ void Validator::relOp(Expression* e)
         }
         if( isConst )
             toConstVal(e);
+    }else if( lhsT->form == Type::Generic && rhsT->form == Type::Generic && lhsT == rhsT )
+    {
+        switch(e->kind)
+        {
+        case Expression::Eq:
+        case Expression::Neq:
+            break;
+        default:
+            error(e->pos,"operator not supported for generic operands");
+        }
     }else
         error(e->pos, "operands not compatible with operator");
 }
@@ -1164,6 +1174,7 @@ Statement*Validator::forStat(Statement* s)
         error(s->lhs->pos, "expecting an integer variable");
     if( !deref(s->rhs->type)->isInteger() )
         error(s->rhs->pos, "expecting an integer expression");
+    visitBody(s->body);
     if( s->getNext() && s->getNext()->kind == Statement::ForToBy )
     {
         s = s->getNext();
@@ -1178,7 +1189,6 @@ Statement*Validator::forStat(Statement* s)
             if( !s->rhs->isConst() || !deref(s->rhs->type)->isInteger() )
                 error(s->lhs->pos, "expecting a constant integer expression");
         }
-        visitBody(s->body);
     }
     return s;
 }
@@ -1350,7 +1360,7 @@ void Validator::callOp(Expression* e)
     if( e->lhs->kind == Expression::DeclRef || e->lhs->kind == Expression::Select )
     {
         proc = e->lhs->val.value<Declaration*>();
-        if( proc && proc->kind == Declaration::Field )
+        if( proc && (proc->kind == Declaration::Field || proc->isLvalue()) )
             proc = 0; // this must be a proc type field
     }else if( e->lhs->kind == Expression::ConstVal && e->lhs->val.canConvert<Declaration*>() )
         proc = e->lhs->val.value<Declaration*>(); // happens if a procedure is passed in via meta actual

@@ -825,6 +825,9 @@ Type* Parser2::RecordType() {
 		}
 	}
     rec->subs = AstModel::toList(mdl->closeScope(true));
+    Declaration* outer = mdl->getTopScope();
+    for( int i = 0; i < rec->subs.size(); i++ )
+        rec->subs[i]->outer = outer;
     expect(Tok_END, true, "RecordType");
     return rec;
 }
