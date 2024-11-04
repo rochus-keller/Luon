@@ -23,6 +23,7 @@
 #include <LjTools/Engine2.h>
 #include "LnRowCol.h"
 #include "LnProject.h"
+#include "LnLjbcGen.h"
 #include <QFile>
 #include <QDir>
 #include <QBuffer>
@@ -128,7 +129,7 @@ bool LjRuntime::loadLibraries()
 
     if( d_pro->useBuiltInObSysInner() )
     {
-#ifdef QT_GUI_LIB
+#ifdef QT_GUI_LIB_
         loadLuaLib(d_lua,"Obs/Input", "Input");
         loadLuaLib(d_lua,"Obs/Kernel", "Kernel");
         loadLuaLib(d_lua,"Obs/Display", "Display");
@@ -241,22 +242,7 @@ bool LjRuntime::saveBytecode(const QString& outPath, const QString& suffix) cons
     }
     for( int i = 0; i < d_byteCode.size(); i++ )
     {
-#if 0
-        if( d_byteCode[i].first->d_fullName.size() > 1 )
-        {
-            // there is a virtual path
-            const QString subDir = d_byteCode[i].first->d_fullName.mid(0, d_byteCode[i].first->d_fullName.size() - 1 ).join('/');
-            if( !dir.mkpath( subDir ) )
-            {
-                qCritical() << "cannot create subdirectory for writing bytecode files" << dir.absoluteFilePath(subDir);
-                return false;
-            }
-        }
-        QString path = d_byteCode[i].first->d_fullName.join('/') + d_byteCode[i].first->formatMetaActuals();
-        path = dir.absoluteFilePath(path + suffix);
-#else
         QString path = dir.absoluteFilePath(d_byteCode[i].first->name + suffix);
-#endif
         QFile out(path);
         if( !out.open(QIODevice::WriteOnly) )
         {
@@ -276,107 +262,36 @@ void LjRuntime::setJitEnabled(bool on)
 
 void LjRuntime::generate()
 {
-#if 0
-    // TODO
     QList<Declaration*> mods = d_pro->getModulesToGenerate();
     d_byteCode.clear();
     d_buildErrors = false;
 
     const quint32 errCount = d_pro->getErrors().size();
-    QSet<Declaration*> generated;
     foreach( Declaration* m, mods )
-    {
-        //if( m->d_synthetic )
-        //    ; // NOP
-        else if( m->d_hasErrors )
-        {
-            qDebug() << "terminating because of errors in" << m->name;
-            d_buildErrors = true;
-            return;
-        }else if( m->d_isDef )
-        {
-            qDebug() << "allocating" << m->name;
-            if( m->d_externC )
-            {
-                LjbcGen::allocateSlots(m);
-                qDebug() << "generating binding for" << m->name;
-                QBuffer buf;
-                buf.open(QIODevice::WriteOnly);
-                CGen::generateLjFfiBinding(m, &buf, d_pro->getErrs() );
-                buf.close();
-#if 0
-                //qDebug() << buf.buffer(); // TEST
-                QFile f(QDir::current().absoluteFilePath(m->getName() + ".lua"));
-                if( f.open(QIODevice::WriteOnly) )
-                {
-                    qDebug() << "writing generated binding for" << m->getName() << "to" << f.fileName();
-                    f.write(buf.buffer());
-                }else
-                    qCritical() << "could not open for writing" << f.fileName();
-#endif
-                d_byteCode << qMakePair(m,buf.buffer());
-            }else
-            {
-#ifdef _DEBUG_
-                QBuffer buf;
-                buf.open(QIODevice::WriteOnly);
-                LjbcGen::allocateSlots(m, &buf);
-                buf.close();
-                qDebug() << "********** Definition of" << m->d_name;
-                qDebug() << buf.buffer();
-#else
-                LjbcGen::allocateSlots(m);
-#endif
-            }
-        }else
-        {
-            if( m->d_metaParams.isEmpty() )
-            {
-                LjbcGen::allocateSlots(m);
-                // module slots are allocated before generic instances are generated because records of
-                // the module could be used in the generic instance
+        LjbcGen::allocateModuleSlots(m);
+    foreach( Declaration* m, mods )
+        generate(m);
 
-                QList<Declaration*> result;
-                m->findAllInstances(result);
-                foreach( Declaration* inst, result )
-                {
-                    // instances must be generated after the modules using them, otherwise we get !slotValid assertions
-                    if( !generated.contains(inst) )
-                    {
-                        generated.insert(inst);
-                        LjbcGen::allocateSlots(inst);
-                        generate(inst);
-                    }
-                }
-                // module is generated after the generic instances it depends on because there are required slots
-                generate(m);
-            }
-        }
-    }
-
-    d_buildErrors = d_pro->getErrs()->getErrCount() != errCount;
-#endif
+    d_buildErrors = d_pro->getErrors().size() != errCount;
 }
 
 void LjRuntime::generate(Declaration* m)
 {
-#if 0
-    // TODO
-    Q_ASSERT( m && m->isFullyInstantiated() );
+    //Q_ASSERT( m && m->isFullyInstantiated() );
     //qDebug() << "generating" << m->getName();
     QBuffer buf;
     buf.open(QIODevice::WriteOnly);
-    LjbcGen::translate(m, &buf, false, d_pro->getErrs() );
+    LjbcGen gen;
+    gen.translate(m, &buf, false );
     buf.close();
     d_byteCode << qMakePair(m,buf.buffer());
-#endif
 }
 
 void LjRuntime::prepareEngine()
 {
     // TODO LibFfi::install(d_lua->getCtx());
-#ifdef QT_GUI_LIB
-    // TODO Obs::Display::install(d_lua->getCtx());
+#ifdef QT_GUI_LIB_
+    Obs::Display::install(d_lua->getCtx());
 #endif
     d_lua->addStdLibs();
     d_lua->addLibrary(Lua::Engine2::PACKAGE);
@@ -386,6 +301,6 @@ void LjRuntime::prepareEngine()
     d_lua->addLibrary(Lua::Engine2::FFI);
     d_lua->addLibrary(Lua::Engine2::OS);
     // d_lua->setJit(false); // must be called after addLibrary! doesn't have any effect otherwise
-    loadLuaLib( d_lua, "obxlj" );
+    loadLuaLib( d_lua, "LUON" );
 }
 

@@ -1369,6 +1369,11 @@ Statement* Parser2::StatementSequence() {
 			expect(Tok_Semi, false, "StatementSequence");
 		}
 	}
+    Statement* end = new Statement(Statement::End, la.toRowCol());
+    if( last )
+        last->append(end);
+    else
+        first = end;
     return first;
 }
 
@@ -1932,8 +1937,6 @@ void Parser2::module() {
         md.metaParams = MetaParams();
     }
 
-    m->data = QVariant::fromValue(md);
-
     if( la.d_type == Tok_Semi ) {
         expect(Tok_Semi, false, "module");
     }
@@ -1953,15 +1956,18 @@ void Parser2::module() {
         Declaration* procDecl = addDecl(id, Declaration::Procedure);
         if( procDecl == 0 )
             return;
+        procDecl->mode = Declaration::Begin;
         mdl->openScope(procDecl);
         procDecl->body = block();
         mdl->closeScope();
     }
     expect(Tok_END, true, "module");
     expect(Tok_ident, false, "module");
+    md.end = cur.toRowCol();
     if( la.d_type == Tok_Dot ) {
         expect(Tok_Dot, false, "module");
     }
+    m->data = QVariant::fromValue(md);
     mdl->closeScope();
 }
 

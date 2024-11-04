@@ -57,7 +57,7 @@ namespace Ln
             // functions
             ABS, CAP, BITAND, BITASR, BITNOT, BITOR, BITS, BITSHL, BITSHR,
             BITXOR, CAST, CHR, DEFAULT, FLOOR, FLT, GETENV, LEN, MAX,
-            MIN, ODD, ORD, SIZE, STRLEN, VARARG, VARARGS,
+            MIN, ODD, ORD, STRLEN, VARARG, VARARGS,
             // procedures
             ASSERT, COPY, DEC, EXCL, HALT, INC,
             INCL, NEW, PCALL, PRINT, PRINTLN, RAISE, SETENV,
@@ -74,10 +74,12 @@ namespace Ln
     {
     public:
         enum Form { Record = BasicType::Max, Array, HashMap, Proc, ConstEnum, NameRef, Generic };
-        quint8 form;
-        bool deferred;
-        bool anonymous;
-        bool validated;
+        uint form : 8;
+        uint deferred : 1;
+        uint anonymous : 1;
+        uint validated : 1;
+        uint allocated : 1;
+        uint generated : 1;
         quint32 len; // array length
         Type* base; // array/pointer base type, return type
         QList<Declaration*> subs; // list of record fields or enum elements, or params for proc type
@@ -92,6 +94,7 @@ namespace Ln
         bool isSimple() const { return form >= BasicType::StrLit && form < BasicType::Max; }
         bool isReference() const {return form >= Record && form <= Proc; }
         bool isStructured() const { return form == Array || form == Record || form == HashMap; }
+        QPair<int,int> countAllocRecordMembers(bool recursive = false);
         static bool isSubtype(Type* super, Type* sub);
 
         bool isDerefCharArray() const;
@@ -100,7 +103,8 @@ namespace Ln
         Declaration* find(const QByteArray& name, bool recursive = true) const;
         QList<Declaration*> fieldList() const;
 
-        Type():form(0),len(0),base(0),decl(0),deferred(false),anonymous(false),expr(0),validated(false){}
+        Type():form(0),len(0),base(0),decl(0),deferred(false),anonymous(false),
+            expr(0),validated(false),allocated(false),generated(false){}
         ~Type();
     };
 
@@ -123,7 +127,7 @@ namespace Ln
         enum Visi { NA, Private, ReadOnly, ReadWrite };
         uint visi : 2;
         uint varParam : 1; // var param
-        enum Mode { Normal, Receiver, Inline, Invar, Extern, Meta, Enum };
+        enum Mode { Normal, Begin, Receiver, Inline, Invar, Extern, Meta, Enum };
         uint mode : 3;
         uint ownstype : 1;
         uint inList : 1; // private
@@ -145,6 +149,8 @@ namespace Ln
         Declaration* getLast() const;
         Declaration* find(const QByteArray& name, bool recursive = true);
         Declaration* getModule();
+        void appendMember(Declaration*);
+        RowCol getEndPos() const;
         static void deleteAll(Declaration*);
 
     private:
@@ -194,6 +200,7 @@ namespace Ln
         bool isLvalue() const; // true if result of expression is usually a ref to type; can be changed with byVal
         void setByVal();
         bool isCharLiteral();
+        qint64 getCaseValue(bool* ok = 0) const;
         static int getNumOfArgs(const Expression*);
         static void appendArg(Expression* exp, Expression* arg);
         static QList<Expression*> getList(Expression* exp);
@@ -221,8 +228,8 @@ namespace Ln
     class Statement {
     public:
         enum Kind { Invalid,
-            Assig, Call, If, Elsif, Else, Case, CaseLabel,
-            Loop, While, Repeat, Exit, Return, ForAssig, ForToBy
+            Assig, Call, If, Elsif, Else, Case, TypeCase, CaseLabel,
+            Loop, While, Repeat, Exit, Return, ForAssig, ForToBy, End
         };
         quint8 kind;
 
@@ -253,6 +260,7 @@ namespace Ln
         MetaActualList metaActuals;
         QByteArray suffix;
         QByteArray fullName; // path.join('/') + suffix as symbol
+        RowCol end;
     };
 
     typedef QPair<QByteArray,QByteArray> Qualident;

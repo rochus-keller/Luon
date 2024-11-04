@@ -48,7 +48,7 @@ Improved language: constructors generate object, extended for arrays and hashmap
 
 #### Status on October 25, 2024
 
-The semantic validator is complete and tested. I developed it in parallel with [the Luon version of the Are-we-fast-yet benchmark suite](https://github.com/rochus-keller/Are-we-fast-yet/tree/main/Luon). Some refactorings and language changes were necessary. As in Oberon-07, there is now only one INTEGER and REAL type, the former with 53 bits of precission. The validator was feature complete on October 22, so development took six, and testing and debugging three calendar days.
+The semantic validator is complete and tested. I developed it in parallel with [the Luon version of the Are-we-fast-yet benchmark suite](https://github.com/rochus-keller/Are-we-fast-yet/tree/main/Luon). Some refactorings and language changes were necessary. As in Oberon-07, there is now only one INTEGER and REAL type, the former with 53 bits of precision. The validator was feature complete on October 22, so development took six, and testing and debugging three calendar days.
 
 #### Status on October 27, 2024
 
@@ -60,4 +60,4 @@ Not available at this time.
 
 #### How to build
 
-Qt Creator 3.x is currently used for development. There are *.pro files which are compatible with qmake, but there is no Qt dependency otherwise.
+Qt Creator 3.x is currently used for development. There are *.pro files which are compatible with qmake.

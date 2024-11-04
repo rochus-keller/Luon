@@ -39,7 +39,9 @@ SOURCES += LnIde.cpp \
     ../LjTools/BcViewer.cpp \
     ../LjTools/LjDisasm.cpp \ 
     LnLjRuntime.cpp \
-    LnProject.cpp
+    LnProject.cpp \
+    LnLjbcGen.cpp \
+    LuonFfi.c
 
 HEADERS  += LnIde.h \
     LnHighlighter.h \
@@ -55,7 +57,8 @@ HEADERS  += LnIde.h \
     ../LjTools/BcViewer.h \
     ../LjTools/LjDisasm.h \ 
     LnLjRuntime.h \
-    LnProject.h
+    LnProject.h \
+    LnLjbcGen.h
 
 win32 {
     LIBS += -L../LuaJIT/src -llua51

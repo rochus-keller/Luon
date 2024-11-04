@@ -312,6 +312,30 @@ DeclList Project::getSubs(Declaration* d) const
     return subs.value(d);
 }
 
+static inline bool nonGeneric( const MetaActualList& args )
+{
+    for( int i = 0; i < args.size(); i++ )
+        if( args[i]->type && args[i]->type->deref()->form == Type::Generic )
+            return false;
+    return true;
+}
+
+DeclList Project::getModulesToGenerate() const
+{
+    DeclList res;
+    for( int i = 0; i < modules.size(); i++ )
+    {
+        Declaration* m = modules[i].decl;
+        if( m == 0 )
+            continue;
+        ModuleData md = m->data.value<ModuleData>();
+        if( md.metaParams.isEmpty() ||
+                (md.metaParams.size() == md.metaActuals.size() && nonGeneric(md.metaActuals) ) )
+            res << m;
+    }
+    return res;
+}
+
 QString Project::getWorkingDir(bool resolved) const
 {
     if( d_workingDir.isEmpty() )

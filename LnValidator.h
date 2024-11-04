@@ -51,7 +51,7 @@ namespace Ln
         void visitDecl( Declaration* );
         void visitImport(Declaration* import);
         void visitBody(Statement* body);
-        void visitExpr(Expression*, Type* hint = 0);
+        void visitExpr(Expression*, Type* hint = 0, bool doNext = true);
         void visitType(Type*);
         void visitEnum(Type*);
         void resolve(Type* nameRef);
@@ -79,6 +79,7 @@ namespace Ln
         bool checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret, const RowCol& pos);
         void markDecl(Declaration*);
         Symbol* markRef(Declaration*, const RowCol&);
+        Declaration* addHelper(Type*);
 
         bool assigCompat(Type* lhs, Type* rhs) const;
         bool assigCompat(Type* lhs, Declaration* rhs) const;

@@ -4,13 +4,13 @@ module Arrays
 	   S = record c: array 4 of T end
 	   R = record(S) a,b: integer end
 	   T = record s: array 10 of char end
-	var a : array 20 of shortint
+	var a : array 20 of integer
 		c : array 10 of char
 		d : array 3 of R
-		e : array 10 of byte
+		e : array 10 of integer
 		
 	proc sub
-		var b : array 10 of byte
+		var b : array 10 of integer
 	begin
 	 	new(b)
 		b[1] := 30

@@ -118,6 +118,7 @@ namespace Ln
         UsageByMod getUsage( Declaration* ) const;
         Symbol* getSymbolsOfModule(Declaration*) const;
         DeclList getSubs(Declaration*) const;
+        DeclList getModulesToGenerate() const;
 
         bool printTreeShaken( const QString& module, const QString& fileName );
         bool printImportDependencies(const QString& fileName , bool pruned);

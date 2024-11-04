@@ -1,0 +1,5 @@
+module Hello
+
+begin
+	println("Hello!")
+end Hello

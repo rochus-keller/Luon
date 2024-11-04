@@ -2362,12 +2362,12 @@ void Ide::printLocalVal(QTreeWidgetItem* item, Type* type, int depth)
                     item->setText(1,QString("\"%1\"").arg(str));
                 }else
                 {
-                    lua_getglobal(L, "obxlj");
+                    lua_getglobal(L, "LUON");
                     lua_rawgeti(L, -1, 26 ); // bytesize
                     lua_pushvalue( L, arr );
                     lua_pcall( L, 1, 1, 0 );
                     const int bytesize = lua_tointeger( L, -1 );
-                    lua_pop( L, 2 ); // obxlj, count
+                    lua_pop( L, 2 ); // LUON, count
                     switch( at->form )
                     {
                     case BasicType::BOOLEAN:

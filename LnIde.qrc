@@ -28,5 +28,6 @@
         <file>oakwood/Out.luon</file>
         <file>oakwood/Strings.luon</file>
         <file>oakwood/XYplane.luon</file>
+        <file>runtime/LUON.lua</file>
     </qresource>
 </RCC>

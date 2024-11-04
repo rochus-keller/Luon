@@ -41,7 +41,7 @@ const char* BasicType::name[] = {
 const char* Builtin::name[] = {
     "ABS", "CAP", "BITAND", "BITASR", "BITNOT", "BITOR", "BITS", "BITSHL", "BITSHR",
     "BITXOR", "CAST", "CHR", "DEFAULT", "FLOOR", "FLT", "GETENV", "LEN", "MAX",
-    "MIN", "ODD", "ORD", "SIZE", "STRLEN", "VARARG", "VARARGS",
+    "MIN", "ODD", "ORD", "STRLEN", "VARARG", "VARARGS",
     "ASSERT", "COPY", "DEC", "EXCL", "HALT", "INC",
     "INCL", "NEW", "PCALL", "PRINT", "PRINTLN", "RAISE", "SETENV"
 };
@@ -110,6 +110,8 @@ Declaration* AstModel::closeScope(bool takeMembers)
         Q_ASSERT(scopes.back()->next == 0);
         scopes.back()->next = helper;
         helper = 0;
+        scopes.back()->id = helperId;
+        helperId = 0;
     }
     scopes.pop_back();
     return res;
@@ -262,6 +264,43 @@ void AstModel::addBuiltin(const QByteArray& name, Builtin::Type t)
     d->type = types[BasicType::NoType];
     d->id = t;
     d->validated = true;
+}
+
+QPair<int, int> Type::countAllocRecordMembers(bool recursive)
+{
+    QPair<int, int> counts;
+    if( form != Record )
+        return counts;
+    if( recursive && base )
+        counts = base->deref()->countAllocRecordMembers(true);
+
+    if( !allocated )
+        foreach( Declaration* sub, subs )
+        {
+            if( sub->kind == Declaration::Field )
+                counts.first++;
+            else if( sub->kind == Declaration::Procedure )
+            {
+                if( sub->super == 0 )
+                    counts.second++;
+            }
+        }
+    else
+        foreach( Declaration* sub, subs )
+        {
+            if( sub->kind == Declaration::Field )
+                sub->id = counts.first++;
+            else if( sub->kind == Declaration::Procedure )
+            {
+                if( sub->super == 0 )
+                    sub->id = counts.second++;
+                else
+                    sub->id = sub->super->id;
+            }
+        }
+    allocated = true;
+
+    return counts;
 }
 
 bool Type::isSubtype(Type* super, Type* sub)
@@ -454,6 +493,34 @@ Declaration*Declaration::getModule()
         return 0;
 }
 
+void Declaration::appendMember(Declaration* decl)
+{
+    if( link == 0 )
+        link = decl;
+    else
+    {
+        Declaration* d = link;
+        while( d && d->next )
+        {
+            d = d->next;
+        }
+        Q_ASSERT( d && d->next == 0 );
+        d->next = decl;
+        decl->inList = true;
+    }
+}
+
+RowCol Declaration::getEndPos() const
+{
+    Statement* s = body;
+    while(s && s->kind != Statement::End )
+        s = s->getNext();
+    if( s )
+        return s->pos;
+    else
+        return pos;
+}
+
 void Declaration::deleteAll(Declaration* d)
 {
     if( d )
@@ -518,7 +585,6 @@ bool Expression::isConst() const
                 return getNumOfArgs(args) == 1 || allConst(args);
             case Builtin::GETENV:
             case Builtin::DEFAULT:
-            case Builtin::SIZE:
                 return true;
             case Builtin::CAST:
                 return getNumOfArgs(args) == 2 && args->next->isConst();
@@ -556,9 +622,6 @@ DeclList Expression::getFormals() const
 
 bool Expression::isLvalue() const
 {
-    // no, we need this function as a barrier for byVal propagation
-    //if( byVal )
-    //    return false;
     if( kind == DeclRef )
     {
         Declaration* d = val.value<Declaration*>();
@@ -594,6 +657,31 @@ bool Expression::isCharLiteral()
         }
     }
     return false;
+}
+
+qint64 Expression::getCaseValue(bool* ok) const
+{
+    if(ok)
+        *ok = true;
+    if( type->isInteger() || type->form == Type::ConstEnum || type->form == BasicType::CHAR )
+        return val.toLongLong();
+    else if( type->form == BasicType::StrLit )
+    {
+        const QByteArray str = val.toByteArray();
+        // str ends with an explicit zero, thus str.size is 2
+        if( strlen(str.constData()) != 1 )
+        {
+            if(ok)
+                *ok = false;
+            return 0;
+        }else
+            return (quint8)str[0];
+    }else
+    {
+        if(ok)
+            *ok = false;
+        return 0;
+    }
 }
 
 int Expression::getNumOfArgs(const Expression* e)
