@@ -87,6 +87,7 @@ bool LjRuntime::compile(bool doGenerate)
         preloadLib(d_pro,"Input");
         preloadLib(d_pro,"Math");
         preloadLib(d_pro,"Strings");
+        preloadLib(d_pro,"XYPlane");
     }
     const quint32 errCount = d_pro->getErrors().size();
     const QTime start = QTime::currentTime();
@@ -121,9 +122,7 @@ bool LjRuntime::loadLibraries()
         loadLuaLib(d_lua,"Files");
         loadLuaLib(d_lua,"Input");
         loadLuaLib(d_lua,"Math");
-        loadLuaLib(d_lua,"MathL");
         loadLuaLib(d_lua,"Strings");
-        loadLuaLib(d_lua,"Coroutines");
         loadLuaLib(d_lua,"XYPlane");
     }
 

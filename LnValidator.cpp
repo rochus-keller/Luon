@@ -1844,7 +1844,7 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
 
     *ret = mdl->getType(BasicType::NoType);
 
-    // TODO:
+    Type* t;
     try
     {
     switch(builtin)
@@ -1856,9 +1856,6 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
         if( !deref(args.first()->type)->isNumber() )
             throw "expecting numeric argument";
         *ret = args.first()->type;
-        break;
-    case Builtin::CAP:
-        expectingNArgs(args,1);
         break;
     case Builtin::BITAND:
         checkBitArith(args, ret);
@@ -1889,10 +1886,20 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
         checkBitArith(args, ret);
         break;
     case Builtin::CAST:
-        expectingNArgs(args,2);
-        break;
+        if( !expectingNArgs(args,2) )
+            break;
+        *ret = args[0]->type;
+        if( !deref(args.first()->type)->form != Type::ConstEnum )
+            throw "expecting enumeration type as a first argument";
+        if( !deref(args.last()->type)->isInteger() )
+            throw "expecting integer type as a second argument";
+       break;
     case Builtin::CHR:
-        expectingNArgs(args,1);
+        if( !expectingNArgs(args,1) )
+            break;
+        *ret = mdl->getType(BasicType::CHAR);
+        if( !deref(args.first()->type)->isInteger() )
+            throw "expecting integer argument";
         break;
     case Builtin::DEFAULT:
         if(!expectingNArgs(args,1))
@@ -1913,51 +1920,50 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
             throw "expecting integer argument";
         *ret = mdl->getType(BasicType::REAL);
         break;
-    case Builtin::GETENV:
-        expectingNArgs(args,2);
-        break;
     case Builtin::LEN:
         if( !expectingNArgs(args,1) )
             break;
         *ret = mdl->getType(BasicType::INTEGER);
-        if( deref(args[0]->type)->form != Type::Array)
-            throw "expecing array argument";
+        t = deref(args[0]->type);
+        if( t->form != Type::Array && t->form != BasicType::STRING && t->form != BasicType::StrLit )
+            throw "expecing array or string argument";
         break;
     case Builtin::MAX:
-        if(!expectingNMArgs(args,1,2))
-            break;
-        *ret = args[0]->type;
-        break;
     case Builtin::MIN:
         if(!expectingNMArgs(args,1,2))
             break;
         *ret = args[0]->type;
+        if( deref(args[0]->type)->isNumber())
+            throw "expecing number argument";
         break;
     case Builtin::ODD:
-        expectingNArgs(args,1);
-        break;
+        if( !expectingNArgs(args,1) )
+            break;
+        *ret = mdl->getType(BasicType::BOOLEAN);
+        if( !deref(args.first()->type)->isInteger() )
+            throw "expecting integer argument";
+       break;
     case Builtin::ORD:
         if( !expectingNArgs(args,1) )
             break;
         *ret = mdl->getType(BasicType::INTEGER);
+        t = deref(args.first()->type);
+        if( !t->isSet() && t->form != BasicType::BOOLEAN && t->form != Type::ConstEnum && t->form != BasicType::CHAR)
+            throw "expecting set, boolean, enum or char argument";
         break;
     case Builtin::STRLEN:
-        expectingNArgs(args,1);
+        if( !expectingNArgs(args,1) )
+            break;
+        t = deref(args[0]->type);
+        if( !t->isDerefCharArray() && t->form != BasicType::STRING && t->form != BasicType::StrLit )
+            throw "expecing char array or string argument";
         break;
-    case Builtin::VARARG:
-        expectingNMArgs(args,2,3);
-        break;
-    case Builtin::VARARGS:
-        expectingNArgs(args,0);
-        break;
-
-    // procedures:
     case Builtin::ASSERT:
-        expectingNArgs(args,1);
-        break;
-    case Builtin::COPY:
-        expectingNArgs(args,2);
-        // TODO
+        if( !expectingNArgs(args,3) )
+            break; // bool, line, file
+        if( deref(args[0]->type)->form == BasicType::BOOLEAN )
+            throw "expecting boolean arument";
+        // the other two args are set by the compiler
         break;
     case Builtin::INC:
     case Builtin::DEC:
@@ -1967,15 +1973,19 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
             throw "expecting a variable as the first argument";
         if( !deref(args[0]->type)->isInteger() )
             throw "expecting an integer type first arument";
+        if( args.size() == 2 && !deref(args[1]->type)->isInteger() )
+            throw "expecting an integer type second arument";
         break;
     case Builtin::EXCL:
-        expectingNArgs(args,2);
-        break;
-    case Builtin::HALT:
-        expectingNArgs(args,1);
-        break;
     case Builtin::INCL:
-        expectingNArgs(args,2);
+        if( !expectingNArgs(args,2) )
+            break;
+        if( !args[0]->isLvalue() )
+            throw "expecting a variable as the first argument";
+        if( !deref(args[0]->type)->isSet() )
+            throw "expecting set type first arument";
+        if( !deref(args[1]->type)->isInteger() )
+            throw "expecting an integer type second arument";
         break;
     case Builtin::NEW: {
         if( !expectingNMArgs(args,1,2) )
@@ -1986,23 +1996,42 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
         if( t1->form != Type::Record && t1->form != Type::Array && t1->form != Type::HashMap )
             throw "new() expects a structured type first argument";
         if( args.size() == 2 && (t1->form != Type::Array || t1->len > 0))
-            throw "new() second argument only applicable to open arrays";
+            throw "second argument only applicable to open arrays";
         break;
         }
-    case Builtin::PCALL:
-        // TODO
-        break;
+
+        // TODO: check, fix
     case Builtin::PRINT:
         expectingNArgs(args,1);
         break;
     case Builtin::PRINTLN:
         expectingNArgs(args,1);
        break;
+    case Builtin::HALT:
+        expectingNArgs(args,1);
+        break;
+    case Builtin::COPY:
+        expectingNArgs(args,2);
+        break;
+    case Builtin::CAP:
+        expectingNArgs(args,1);
+        break;
+    case Builtin::GETENV:
+        expectingNArgs(args,2);
+        break;
+    case Builtin::PCALL:
+        break;
     case Builtin::RAISE:
         expectingNArgs(args,1);
         break;
     case Builtin::SETENV:
         expectingNArgs(args,2);
+        break;
+    case Builtin::VARARG:
+        expectingNMArgs(args,2,3);
+        break;
+    case Builtin::VARARGS:
+        expectingNArgs(args,0);
         break;
     }
     }catch( const QString& err )

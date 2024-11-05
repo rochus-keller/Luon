@@ -40,8 +40,7 @@ SOURCES += LnIde.cpp \
     ../LjTools/LjDisasm.cpp \ 
     LnLjRuntime.cpp \
     LnProject.cpp \
-    LnLjbcGen.cpp \
-    LuonFfi.c
+    LnLjbcGen.cpp
 
 HEADERS  += LnIde.h \
     LnHighlighter.h \

@@ -95,7 +95,6 @@ namespace Ln
         bool luaRuntimeMessage(const QByteArray&, const QString& file);
         void fillXref();
         void fillXrefForSym(Symbol*, Declaration* module);
-        void fillXrefForMod(Declaration*);
         void syncModView(Declaration*);
         void syncEditorMarks(Declaration*selected, Declaration* module);
         Declaration* moduleOfCurrentEditor();

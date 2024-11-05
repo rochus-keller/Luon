@@ -241,12 +241,7 @@ public:
                     if( decl->mode == Declaration::Receiver && decl->super )
                         decl = decl->super;
                 }
-#if 0
-                if( sym->kind == Symbol::Module && sym->decl->d_synthetic )
-                    d_ide->fillXref(sym);
-                else
-#endif
-                    d_ide->showEditor( decl, false, true );
+                d_ide->showEditor( decl, false, true );
                 //setCursorPosition( sym->pos.d_row - 1, sym->pos.d_col - 1, true );
             }
             updateExtraSelections();
@@ -1899,37 +1894,6 @@ void Ide::fillXrefForSym(Symbol* sym, Declaration* module)
     }
 }
 
-void Ide::fillXrefForMod(Declaration* sym)
-{
-    d_xref->clear();
-    d_xrefTitle->clear();
-
-    if( sym == 0 )
-        return;
-
-#if 0
-    // TODO
-    SymList exp = d_rt->getPro()->getUsage(sym);
-
-    std::sort( exp.begin(), exp.end(), sortExList );
-
-    d_xrefTitle->setText(sym->name);
-
-    foreach( Symbol* e, exp )
-    {
-        Declaration* ident = e->decl;
-        Declaration* mod = ident ? ident->getModule() : 0;
-        if( mod == 0 )
-            continue;
-        Q_ASSERT( ident != 0 && mod != 0 );
-        QTreeWidgetItem* i = new QTreeWidgetItem(d_xref);
-        i->setText( 0, mod->name );
-        i->setToolTip( 0, i->text(0) );
-        i->setData( 0, Qt::UserRole, QVariant::fromValue( e ) );
-    }
-#endif
-}
-
 void Ide::syncModView(Declaration* decl)
 {
     QTreeWidgetItem* mi = d_modIdx.value(decl);
@@ -2461,24 +2425,23 @@ void Ide::printLocalVal(QTreeWidgetItem* item, Type* type, int depth)
                 // happens when a procedure is entered before initialization code could run
                 break;
             }
-#if 0
-            // TODO
-            if( !r->d_subRecs.isEmpty() )
+
+            // look for the dynamic type
+            if( lua_getmetatable(L,rec) )
             {
-                // look for the dynamic type
-                if( lua_getmetatable(L,rec) )
+                lua_getfield(L, -1, "@cls");
+                if( !lua_isnil( L, -1 ) )
                 {
-                    lua_getfield(L, -1, "@cls");
-                    if( !lua_isnil( L, -1 ) )
-                    {
-                        Record* rd = r->findBySlot( lua_tointeger(L, -1) );
-                        if( rd )
-                            r = rd;
-                    }
-                    lua_pop(L,2); // meta + field
-                }
-            }
+#if 0
+                    // TODO show dynamic instead of static type
+                    Record* rd = r->findBySlot( lua_tointeger(L, -1) );
+                    if( rd )
+                        r = rd;
 #endif
+                }
+                lua_pop(L,2); // meta + field
+            }
+
             item->setText(1,nameOf(r,true));
             foreach( Declaration* f, r->subs ) // TODO: inherited fields?
             {
@@ -3060,7 +3023,7 @@ int main(int argc, char *argv[])
     a.setOrganizationName("me@rochus-keller.ch");
     a.setOrganizationDomain("github.com/rochus-keller/Luon");
     a.setApplicationName("Luon IDE (LuaJIT)");
-    a.setApplicationVersion("0.2.0");
+    a.setApplicationVersion("0.3.0");
     a.setStyle("Fusion");    
     QFontDatabase::addApplicationFont(":/font/DejaVuSansMono.ttf"); // "DejaVu Sans Mono"
 

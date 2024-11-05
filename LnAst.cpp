@@ -379,9 +379,9 @@ Type::~Type()
         // delete base;
 }
 
-QVariant BasicType::getMax(BasicType::Type t)
+QVariant BasicType::getMax(quint8 form)
 {
-    switch( t )
+    switch( form )
     {
     case BOOLEAN:
         return true;
@@ -399,9 +399,9 @@ QVariant BasicType::getMax(BasicType::Type t)
     return QVariant();
 }
 
-QVariant BasicType::getMin(BasicType::Type t)
+QVariant BasicType::getMin(quint8 form)
 {
-    switch( t )
+    switch( form )
     {
     case BOOLEAN:
         return false;

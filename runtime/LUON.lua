@@ -30,13 +30,6 @@ LUON = module -- directly publish the module by global var
 
 ffi.cdef[[
 	typedef uint8_t CharArray[?];
-	int LuonFfi_DIV( int64_t a, int64_t b );
-        int LuonFfi_MOD( int64_t a, int64_t b );
-	int LuonFfi_strRelOp( char* lhs, char* rhs, int op ); 
-	void LuonFfi_DBGTRACE( const char* str );
-	void LuonFfi_CRASH(int);
-	void LuonFfi_TRACE( const char* str );
-	void LuonFfi_NOP();
 ]]
 
 local CharArray = ffi.typeof("CharArray")
@@ -70,13 +63,27 @@ function module.addRangeToSet( set, from, to )
 	return set
 end
 local function strlen( str )
-	local count = bytesize(str)
-	for i=0,count-1 do
-		if str[i] == 0 then
-			return i
-		end
-	end
-	return count
+        if type(str) == "string" then
+            return #str
+        end
+        if not ffi.istype(CharArray,str) then return 0 end
+
+        local i = 0
+        while str[i] ~= 0 do i = i + 1 end
+        return i
+end
+local function arraylen( array )
+    if ffi.istype(CharArray,array) then
+        return bytesize(array)
+    end
+    local t = type(array)
+    if t  == "table" then
+        return array.count
+    elseif t == "string" then
+        return #array + 1
+    else
+        return 0
+    end
 end
 function module.joinStrings( lhs, rhs)
         local lhslen = strlen(lhs)
@@ -100,8 +107,31 @@ function module.charToString(ch)
 	a[1] = 0
 	return a
 end
+local function strcmp(lhs, rhs)
+    local i
+    while lhs[i] ~= 0 and rhs[i] ~= 0 do
+        if lhs[i] ~= rhs[i] then
+            if lhs[i] > rhs[i] then
+                return 1
+            else
+                return -1
+            end
+        end
+        i = i + 1
+        if lhs[i] ~= 0 then return 1 end
+        if rhs[i] ~= 0 then return -1 end
+        return 0
+    end
+end
 function module.stringRelOp( lhs, rhs, op )
-	return C.LuonFfi_strRelOp(lhs,rhs,op) ~= 0
+    local res = strcmp(lhs,rhs)
+    if op == 1 then return res == 0 end -- EQ
+    if op == 2 then return res ~= 0 end -- NEQ
+    if op == 3 then return res < 0 end -- LT
+    if op == 4 then return res <= 0 end -- LEQ
+    if op == 5 then return res > 0 end -- GT
+    if op == 6 then return res >= 0 end -- GEQ
+    return false
 end
 function module.setSub( lhs, rhs )
 	rhs = bit.bnot(rhs)
@@ -123,14 +153,15 @@ function module.is_a( obj, class )
 	return meta == class
 end
 function module.println( val )
-	if ffi.istype(CharArray,val) then
-            print(ffi.string(val))
-	else
-            print(tostring(val))
-	end
+        module.print(val)
+        io.stdout:write("\n")
 end
-function module.isFfiString( val )
-	return ffi.istype(CharArray,val)
+function module.print( val )
+    if ffi.istype(CharArray,val) then
+        io.stdout:write(ffi.string(val))
+    else
+        io.stdout:write(tostring(val));
+    end
 end
 function module.strcpy( lhs, rhs )
 	local i = 0
@@ -176,6 +207,19 @@ function module.ldcmd(mod,cmd)
 	if m then return m[ffi.string(cmd)] end
 	return nil
 end
+function module.DIV(a,b)
+    return math.floor(a/b)
+end
+function module.MOD(a,b)
+    return a % b
+end
+
+if ASSERT == nil then
+    function ASSERT(cond,line,file)
+        if cond then return end
+        error("ASSERT called in "..tostring(file).." on line "..tostring(line))
+    end
+end
 
 -- Magic mumbers used by the compiler
 module[1] = module.charToStringArray
@@ -184,8 +228,8 @@ module[10] = module.addRangeToSet
 module[11] = bit.bnot
 module[12] = bit.bor
 module[13] = module.joinStrings
-module[14] = C.LuonFfi_DIV
-module[15] = C.LuonFfi_MOD
+module[14] = module.DIV
+module[15] = module.MOD
 module[16] = module.charToString
 module[17] = module.stringRelOp
 module[18] = module.setSub
@@ -194,6 +238,7 @@ module[20] = module.setDiv
 module[21] = module.setTest
 module[22] = setmetatable
 module[23] = module.is_a
+module[24] = module.strlen
 module[25] = module.println
 module[26] = ffi.sizeof -- bytesize
 module[27] = module.strcpy
@@ -214,10 +259,6 @@ module[41] = bit.bxor
 module[42] = ADDRESSOF
 module[43] = module.createBoolArray
 module[44] = ABORT
-module[45] = C.LuonFfi_DBGTRACE -- or DBGTRACE
-module[46] = C.LuonFfi_CRASH
-module[47] = C.LuonFfi_TRACE -- or TRACE
-module[48] = C.LuonFfi_NOP
 module[49] = ffi.new
 module[50] = ffi.copy
 module[51] = module.min_size
@@ -225,6 +266,9 @@ module[52] = jit.off
 module[53] = module.ldmod
 module[54] = module.ldcmd
 module[55] = string.char
+module[56] = module.print
+module[57] = bit.rshift
+module[58] = module.arraylen
 
 return module
 

@@ -28,7 +28,7 @@ NOTE that this project is in an early stage and work-in-progress.
 - [x] Implement lexer with directive support
 - [x] Implement parser and AST
 - [x] Implement semantic validator 
-- [ ] Implement a LuaJIT backend based on LjTools
+- [x] Implement a LuaJIT backend based on LjTools
 - [x] Implement an IDE similar to the Oberon+ IDE
 - [ ] Migrate the Smalltalk-80 VM to Luon as a proof-of-concept and to optimize the language
 
@@ -53,6 +53,11 @@ The semantic validator is complete and tested. I developed it in parallel with [
 #### Status on October 27, 2024
 
 The IDE is ready for testing and debugging. I derived it from the LuaJIT version of the Oberon IDE, but many changes were necessary because the AST and code model are completely different. This included an optional cross-referencing infrastructure integrated with the validator. Also the import logic had to be extended for compatibility with the project file concept, which required refactoring of AST, parser and validator.
+
+#### Status on November 05, 2024
+
+The LuaJIT bytecode generator including most built-in procedures is complete and ready for testing and debugging. All functions of the LuonFfi.c file 
+were migrated to LUON.lua to avoid C dependencies. Added Oakwood implementations in Lua (Files is no longer Oakwood compatible).
 
 #### Precompiled versions
 

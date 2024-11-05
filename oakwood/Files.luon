@@ -1,37 +1,17 @@
-(* Source: The Oakwood Guidelines for Oberon-2 Compiler Developers, Revision: 1A First Issue, Oct. 1995 *)
+(* This is not the Oakwood interface! *)
 MODULE Files;
 TYPE
-	Handle = RECORD END;
-	File = Handle;
-	Rider = RECORD
-		eof: BOOLEAN;
-		res: INTEGER;
-	END;
-PROCEDURE Old (name: ARRAY OF CHAR): File EXTERN;
-PROCEDURE New (name: ARRAY OF CHAR): File EXTERN;
-PROCEDURE Register (f: File) EXTERN;
-PROCEDURE Close (f: File) EXTERN;
-PROCEDURE Purge (f: File) EXTERN;
-PROCEDURE Delete (name: ARRAY OF CHAR; res: INTEGER) EXTERN;
-PROCEDURE Rename (old, new: ARRAY OF CHAR;res: INTEGER) EXTERN;
-PROCEDURE Length (f: File): INTEGER EXTERN;
-PROCEDURE GetDate (f: File; t, d: INTEGER) EXTERN;
-PROCEDURE Set (r: Rider; f: File; pos: INTEGER) EXTERN;
-PROCEDURE Pos (r: Rider): INTEGER EXTERN;
-PROCEDURE Base (r: Rider): File EXTERN;
-PROCEDURE ReadInt (R: Rider; VAR x: INTEGER) EXTERN;
-PROCEDURE ReadReal (R: Rider; VAR x: REAL) EXTERN;
-PROCEDURE ReadNum (R: Rider; VAR x: INTEGER) EXTERN;
-PROCEDURE ReadString (R: Rider; VAR x: ARRAY OF CHAR) EXTERN;
-PROCEDURE ReadSet (R: Rider; VAR x: SET) EXTERN;
-PROCEDURE ReadBool (R: Rider; VAR x: BOOLEAN ) EXTERN;
-PROCEDURE ReadBytes (r: Rider; x: ARRAY OF CHAR; n: INTEGER) EXTERN;
-PROCEDURE Write (r: Rider; x: BYTE) EXTERN;
-PROCEDURE WriteInt (R: Rider; x: INTEGER) EXTERN;
-PROCEDURE WriteReal (R: Rider; x: REAL) EXTERN;
-PROCEDURE WriteNum (R: Rider; x: INTEGER) EXTERN;
-PROCEDURE WriteString (R: Rider; x: ARRAY OF CHAR) EXTERN;
-PROCEDURE WriteSet (R: Rider; x: SET) EXTERN;
-PROCEDURE WriteBool (R: Rider; x: BOOLEAN) EXTERN;
-PROCEDURE WriteBytes (r: Rider; x: ARRAY OF CHAR;n: INTEGER) EXTERN;
+	File = RECORD END;
+
+	PROCEDURE Open (name: ARRAY OF CHAR): File EXTERN;
+	PROCEDURE Close (f: File) EXTERN;
+	PROCEDURE Delete (name: ARRAY OF CHAR):BOOLEAN EXTERN;
+	PROCEDURE Rename (old, new: ARRAY OF CHAR):BOOLEAN EXTERN;
+	PROCEDURE Length (f: File): INTEGER EXTERN;
+	PROCEDURE Seek (f: File; pos: INTEGER):BOOLEAN EXTERN;
+	PROCEDURE Pos (f: File): INTEGER EXTERN;
+	PROCEDURE Read (f: File; VAR x: CHAR) EXTERN;
+	PROCEDURE ReadBytes (f: File; x: ARRAY OF CHAR; n: INTEGER):INTEGER EXTERN;
+	PROCEDURE Write (f: File; x: CHAR) EXTERN;
+	PROCEDURE WriteBytes (f: File; x: ARRAY OF CHAR) EXTERN;
 END Files.

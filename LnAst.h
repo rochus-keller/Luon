@@ -46,8 +46,8 @@ namespace Ln
                Max
              };
 
-        static QVariant getMax(Type);
-        static QVariant getMin(Type);
+        static QVariant getMax(quint8 form);
+        static QVariant getMin(quint8 form);
         static const char* name[];
     };
 

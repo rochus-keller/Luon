@@ -1,5 +1,7 @@
 module Hello
 
 begin
-	println("Hello!")
+	print("Hello")
+	print(" ")
+	println("World!")
 end Hello

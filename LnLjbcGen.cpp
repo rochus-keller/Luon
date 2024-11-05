@@ -590,61 +590,232 @@ public:
         }
     }
 
-    void emitPrintln(Expression* call)
+    static int builtinToMagic(int bi)
     {
-        Q_ASSERT( call->rhs );
-        emitExpression(call->rhs);
-        const int tmp = ctx.back().buySlots(2,true);
-        fetchLnlibMember(tmp,25,call->pos); // module.println
-        bc.MOV(tmp+1,slotStack.back(),call->pos.packed() );
-        bc.CALL(tmp,0,1,call->pos.packed());
-        releaseSlot();
-        ctx.back().sellSlots(tmp,2);
+        switch(bi)
+        {
+        case Builtin::BITAND:
+            return 19; // bit.band
+        case Builtin::BITASR:
+            return 36; // bit.arshift
+        case Builtin::BITOR:
+            return 12; // bit.bor
+        case Builtin::BITSHL:
+            return 35; // bit.lshift
+        case Builtin::BITSHR:
+            return 57; // bit.rshift
+        case Builtin::BITXOR:
+            return 41; // bit.bxor
+        case Builtin::BITNOT:
+            return 11; // bit.bnot
+        case Builtin::ABS:
+            return 34; // module.abs
+        case Builtin::FLOOR:
+            return 38; // module.floor
+        case Builtin::ODD:
+            return 33; // module.ODD
+        case Builtin::STRLEN:
+            return 24; // module.strlen
+        case Builtin::ASSERT:
+            return 29;
+        case Builtin::EXCL:
+            return 30; // module.removeElemFromSet
+        case Builtin::INCL:
+            return 9; // addElemToSet
+        case Builtin::PRINT:
+            return 56; // module.print
+        case Builtin::PRINTLN:
+            return 25; // module.println
+        case Builtin::LEN:
+            return 58; // module.arraylen
+        case Builtin::CAP:
+        case Builtin::BITS:
+        case Builtin::CAST:
+        case Builtin::CHR:
+        case Builtin::DEFAULT:
+        case Builtin::FLT:
+        case Builtin::GETENV:
+        case Builtin::MAX:
+        case Builtin::MIN:
+        case Builtin::ORD:
+        case Builtin::VARARG:
+        case Builtin::VARARGS:
+            break;
+        case Builtin::COPY:
+        case Builtin::DEC:
+        case Builtin::HALT:
+        case Builtin::INC:
+        case Builtin::NEW:
+        case Builtin::PCALL:
+        case Builtin::RAISE:
+        case Builtin::SETENV:
+            break;
+        }
+        return 0;
+    }
+
+    void emitBuiltinN(int op, Expression* call, int count, int res = -1)
+    {
+        ExpList args = Expression::getList(call->rhs);
+        Q_ASSERT(args.size() == count);
+        const quint8 tmp = ctx.back().buySlots(1+count, true);
+        fetchLnlibMember(tmp,builtinToMagic(op),call->pos);
+
+        for( int i = 0; i < args.size(); i++ )
+        {
+            emitExpression(args[i]);
+            bc.MOV(tmp+i+1, slotStack.back(), call->pos.packed() );
+            releaseSlot();
+        }
+
+        bc.CALL(tmp,1,count, call->pos.packed());
+        if( res >= 0 )
+            bc.MOV(res,tmp, call->pos.packed());
+        ctx.back().sellSlots(tmp,1+count);
     }
 
     void emitBuiltin(Declaration* proc, Expression* call, quint8 res)
     {
         switch( proc->id )
         {
-        case Builtin::ABS:
-        case Builtin::CAP:
         case Builtin::BITAND:
         case Builtin::BITASR:
-        case Builtin::BITNOT:
         case Builtin::BITOR:
-        case Builtin::BITS:
         case Builtin::BITSHL:
         case Builtin::BITSHR:
         case Builtin::BITXOR:
-        case Builtin::CAST:
-        case Builtin::CHR:
-        case Builtin::DEFAULT:
-        case Builtin::FLOOR:
-        case Builtin::FLT:
-        case Builtin::GETENV:
-        case Builtin::LEN:
-        case Builtin::MAX:
-        case Builtin::MIN:
+            emitBuiltinN(proc->id, call, 2, res);
+            break;
         case Builtin::ODD:
-        case Builtin::ORD:
+        case Builtin::ABS:
+        case Builtin::FLOOR:
+        case Builtin::BITNOT:
         case Builtin::STRLEN:
+            emitBuiltinN(proc->id, call, 1, res);
+            break;
+        case Builtin::ORD:
+        case Builtin::FLT:
+        case Builtin::BITS:
+        case Builtin::CHR:
+            emitExpression(call->rhs);
+            bc.MOV(res,slotStack.back(),call->pos.packed() );
+            releaseSlot();
+            break;
+        case Builtin::DEFAULT:
+            emitInitializer(res, call->rhs->type, call->pos);
+            break;
+        case Builtin::ASSERT:
+            emitBuiltinN(proc->id, call, 3);
+            break;
+        case Builtin::PRINT:
+        case Builtin::PRINTLN:
+            emitBuiltinN(proc->id, call, 1);
+            break;
+        case Builtin::MAX:
+            bc.KSET(res, BasicType::getMax(deref(call->rhs->type)->form), call->pos.packed());
+            break;
+        case Builtin::MIN:
+            bc.KSET(res, BasicType::getMin(deref(call->rhs->type)->form), call->pos.packed());
+            break;
+        case Builtin::EXCL:
+        case Builtin::INCL:  {
+                // EXCL(v, x) v: SET; x: integer type v := v - {x}
+                // INCL(v, x) v: SET; x: integer type v := v + {x}
+                emitBuiltinN(proc->id,call, 2, res);
+                Lvalue v = lvalue(call->rhs);
+                emitSlotToLvalue(v,res,call->pos);
+                releaseLvalue(v);
+                break;
+            }
+        case Builtin::CAST:
+            // CAST(T,x) T:enumeration type x:ordinal number enumeration type
+            emitExpression(call->rhs->next);
+            bc.MOV(res,slotStack.back(),call->pos.packed());
+            releaseSlot();
+            break;
+        case Builtin::DEC:
+        case Builtin::INC: {
+                // INC(v) integer type v := v + 1
+                // INC(v, n) v, n: integer type v := v + n
+                Lvalue v = lvalue(call->rhs);
+                emitLvalueToSlot(res, v, call->pos);
+                quint8 off;
+                if( call->rhs->next )
+                {
+                    emitExpression(call->rhs->next);
+                    off = slotStack.back();
+                }else
+                {
+                    off = ctx.back().buySlots(1);
+                    bc.KSET(off, 1, call->pos.packed());
+                    slotStack.push_back(off);
+                }
+                if( proc->id == Builtin::INC )
+                    bc.ADD(res, res, off, call->pos.packed());
+                else
+                    bc.SUB(res, res, off, call->pos.packed());
+                releaseSlot();
+                emitSlotToLvalue(v,res,call->pos);
+                releaseLvalue(v);
+                break;
+            }
+        case Builtin::NEW: {
+                Type* t = deref(call->rhs->type);
+                switch( t->form )
+                {
+                case Type::Record:
+                    emitCreateRecord(res, t, call->pos);
+                    break;
+                case Type::Array:
+                    if( t->len )
+                        emitCreateArray(res, t, -1, call->pos );
+                    else
+                    {
+                        Q_ASSERT( call->rhs->next );
+                        emitExpression(call->rhs->next);
+                        emitCreateArray(res, t, slotStack.back(), call->pos );
+                        releaseSlot();
+                    }
+                    break;
+                case Type::HashMap:
+                    bc.TNEW(res, 0, 0, call->pos.packed());
+                    break;
+                }
+                Lvalue v = lvalue(call->rhs);
+                emitSlotToLvalue(v,res,call->pos);
+                releaseLvalue(v);
+                break;
+            }
+        case Builtin::LEN: {
+                // LEN(v) v: array
+                //        v: string length of string (including the terminating 0X)
+                Type* t = deref(call->rhs->type);
+                switch( t->form )
+                {
+                case BasicType::STRING:
+                case BasicType::StrLit:
+                    emitBuiltinN(proc->id, call, 1, res);
+                    break;
+                case Type::Array:
+                    if( t->len )
+                        bc.KSET(res, t->len, call->pos.packed() );
+                    else
+                        emitBuiltinN(proc->id, call, 1, res);
+                    break;
+                }
+                break;
+            }
+
+            // TODO:
+        case Builtin::CAP:
+        case Builtin::GETENV:
+            break;
         case Builtin::VARARG:
         case Builtin::VARARGS:
             break;
-        case Builtin::ASSERT:
         case Builtin::COPY:
-        case Builtin::DEC:
-        case Builtin::EXCL:
         case Builtin::HALT:
-        case Builtin::INC:
-        case Builtin::INCL:
-        case Builtin::NEW:
         case Builtin::PCALL:
-        case Builtin::PRINT:
-            break;
-        case Builtin::PRINTLN:
-            emitPrintln(call);
-            break;
         case Builtin::RAISE:
         case Builtin::SETENV:
             break;
@@ -796,8 +967,8 @@ public:
     void emitArrayConstructor(Expression* e)
     {
         quint8 res = ctx.back().buySlots(1);
-        // TODO: who initializes array with len == 0?
-        emitCreateArray(res,e->type, 0,e->pos);
+        // NOTE: the validator changes open to fix array types for constructors
+        emitCreateArray(res,e->type, -1,e->pos);
         Q_ASSERT(deref(e->type)->len); // the validator converted all dynamic arrays to fix len
         int index = 0;
         Expression* c = e->rhs;
