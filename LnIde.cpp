@@ -1385,21 +1385,27 @@ void Ide::onRemoveFile()
 {
     ENABLED_IF( d_mods->currentItem() && d_mods->currentItem()->type() == 0 );
 
-    Declaration* s = d_mods->currentItem()->data(0,Qt::UserRole).value<Declaration*>();
-    if( s == 0 )
-        return;
-
-    Declaration* m = s->getModule();
-    if( m == 0 )
+    Project::File* f = d_mods->currentItem()->data(0,Qt::UserRole).value<Project::File*>();
+    if( f == 0 )
         return;
 
     if( QMessageBox::warning( this, tr("Remove Module"),
-                              tr("Do you really want to remove module '%1' from project?").arg(m->name.constData()),
+                              tr("Do you really want to remove module '%1' from project?").arg(f->d_name.constData()),
                            QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Yes ) != QMessageBox::Yes )
         return;
-    ModuleData md = m->data.value<ModuleData>();
-    if( !d_rt->getPro()->removeFile( md.source ) )
-        qWarning() << "cannot remove module" << m->name;
+
+    for( int i = 0; i < d_tab->count(); i++ )
+    {
+        Editor* e = static_cast<Editor*>( d_tab->widget(i) );
+        if( e->getPath() == f->d_filePath )
+        {
+            d_tab->closeTab(i);
+            break;
+        }
+    }
+
+    if( !d_rt->getPro()->removeFile( f->d_filePath ) )
+        qWarning() << "cannot remove module" << f->d_name;
     else
         compile();
 }
@@ -1497,20 +1503,12 @@ bool Ide::compile(bool doGenerate )
     return true;
 }
 
-typedef QPair<QString,Declaration*> ModuleNamePair;
-
-static bool sortNamed( const ModuleNamePair& lhs, const ModuleNamePair& rhs )
+static bool sortNamed( const Project::File* lhs, const Project::File* rhs )
 {
     QByteArray l;
-    if( lhs.second == 0 )
-        l = lhs.first.toUtf8();
-    else
-        l = lhs.second->name;
+    l = lhs->d_name;
     QByteArray r;
-    if( rhs.second == 0 )
-        r = rhs.first.toUtf8();
-    else
-        r = rhs.second->name;
+    r = rhs->d_name;
     return l.toLower() < r.toLower();
 }
 
@@ -1521,19 +1519,19 @@ static bool sortNamed1( const Group& lhs, const Group& rhs )
     return lhs.first.toLower() < rhs.first.toLower();
 }
 
-typedef QList<ModuleNamePair> ModuleSort;
+typedef QList<Project::File*> ModuleSort;
 
 template<class T>
 static void fillModTree( T* parent, const ModuleSort& mods )
 {
-    foreach( const ModuleNamePair& m, mods )
+    foreach( Project::File* m, mods )
     {
         QTreeWidgetItem* item = new QTreeWidgetItem(parent);
-        if( m.second )
-            item->setText(0, m.second->name);
+        if( m->d_mod )
+            item->setText(0,m->d_mod->name);
         else
-            item->setText(0, QFileInfo(m.first).baseName());
-        item->setToolTip(0,m.first);
+            item->setText(0, m->d_name.constData() );
+        item->setToolTip(0,m->d_filePath);
 #if 0
         if( m->d_isDef )
             item->setIcon(0, QPixmap(":/images/definition.png") );
@@ -1569,7 +1567,7 @@ void Ide::fillMods()
         const QList<Project::File*>& files = sort1[j].second;
         ModuleSort sort;
         for( int i = 0; i < files.size(); i++ )
-            sort << qMakePair(files[i]->d_filePath,files[i]->d_mod);
+            sort << files[i];
         std::sort( sort.begin(), sort.end(), sortNamed );
         if( item )
             fillModTree(item,sort);
@@ -2195,7 +2193,7 @@ void Ide::fillLocals()
                 cur = cur->getNext();
             }
         }else
-            parent->setText(1,"<???>");
+            parent->setText(1,"??");
         lua_pop( d_rt->getLua()->getCtx(), 1 ); // module
         Q_ASSERT( before == lua_gettop(d_rt->getLua()->getCtx()) );
 #endif

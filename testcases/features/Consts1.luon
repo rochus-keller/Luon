@@ -1,0 +1,26 @@
+module Consts1
+
+const
+	a = "abcd" + "efgh"
+	b = 061x + 062x
+	c = "cdef " + 0b9x
+	d = 0b9x
+	e = 1234
+	f = 4567
+	g = 0ffh
+	h = -20
+	i = max(integer)+1
+begin
+	println(a)
+	println(b)
+	println(c)
+	println(d)
+	println(max(integer))
+	println(max(integer)+1)
+	println(max(integer)+1)
+	println(i)
+	println(max(integer))
+	println(h)
+	println(-20)
+	println(i)
+end Consts1

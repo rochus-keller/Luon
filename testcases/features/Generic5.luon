@@ -1,0 +1,23 @@
+module Generic5 (T: Super; const l: integer)
+
+const i* = l
+
+type Super* = record end
+ 
+  proc (var this: Super) hello*()
+  begin
+  end hello
+
+type
+	List* = pointer to record 
+            value* : T
+            next*  : List
+        end
+
+  proc (this: List) iterate*()
+  begin
+    this.value.hello()
+    if this.next # nil then this.next.iterate() end
+  end iterate
+
+end Generic5

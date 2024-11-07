@@ -1,0 +1,37 @@
+module Procs5
+
+	type 
+		Superclass = record end
+		Class = record (Superclass) end
+	
+	var inst : Class
+	
+	proc ( this : Superclass ) Hello()
+	begin
+		println("Hello Superclass!")
+	end Hello
+	
+	proc ( this : Superclass ) Hello2( str: array of char)
+	begin
+		println("Hello2 Superclass!")
+		println(str)
+	end Hello2
+
+	proc ( this : Class ) Hello()
+	begin
+		this(Superclass).Hello // TODO: call superclass
+		println("Hello Class!")
+	end Hello
+	
+	proc ( this : Class ) Hello2(str: array of char)
+	begin
+		this(Superclass).Hello2(str) // TODO: call superclass
+		println("Hello2 Class!")
+	end Hello2
+
+begin
+	println("Procs5 start")
+	inst.Hello
+	inst.Hello2("this is a string")
+	println("Procs5 done")
+end Procs5

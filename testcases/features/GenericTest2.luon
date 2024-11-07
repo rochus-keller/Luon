@@ -1,0 +1,19 @@
+module GenericTest2
+
+import 
+	SL := Generic1(String)
+
+
+type
+	String = array 20 of char
+	
+var
+	l1 : SL.List
+
+begin
+	println("GenericTest2 start")
+	new(l1)
+	l1.value := "hello!"
+	println(l1.value)
+	println("GenericTest2 done")
+end GenericTest2

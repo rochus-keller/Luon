@@ -1,0 +1,15 @@
+module Circular1
+
+type
+	A = record b: B  // error if b is B, not pointer to B
+          	d: array 3 of B // error if d is array, not pointer to array
+          	c: integer end 
+	B = record c: C end
+	C = record a: A end
+
+var
+	a: A
+begin
+	a.c := 333
+	println(a.c)
+end Circular1

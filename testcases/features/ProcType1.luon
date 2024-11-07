@@ -1,0 +1,40 @@
+module ProcType1
+
+	var p : proc (str: array of char)
+		m, n : proc^( str: array of char) 
+
+	
+	proc outer()
+		proc inner( str: array of char)
+		begin
+			println("hello from inner:")
+			println(str)
+		end inner
+		type T = record end
+		proc (this: T)sayHello( str: array of char)
+		begin
+			println("hello from method:")
+			println(str)
+		end sayHello
+		var t1: T
+			t2: T
+	begin
+		p := inner
+		t1.sayHello("0000")
+		//m := t1.sayHello // t1 can go out of scope, illegal
+		new(t2)
+		m := t2.sayHello // t2 remains valid even if outer ends, legal
+		// m := inner // illegal
+		// p := t2.sayHello // illegal
+	end outer
+
+begin
+	println("ProcType1 start")
+	outer()
+	p("1234")
+	m("5679")
+	n := m
+	n("abcd")
+
+	println("ProcType1 done")
+end ProcType1

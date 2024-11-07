@@ -1,0 +1,44 @@
+module ProcType3
+
+	type P = proc (str: array of char)
+		  M = proc^(str: array of char)
+
+	proc generate1():P
+		proc sayHello(str: array of char)
+		begin
+			println("hello from proc:")
+			println(str)
+		end sayHello
+	begin
+		return sayHello
+	end generate1
+	
+	proc generate2():M
+		type T = record end
+		proc (this: T)sayHello(str: array of char)
+		begin
+			println("hello from method:")
+			println(str)
+		end sayHello
+		var t: T
+	begin
+		new(t)
+		return t.sayHello
+	end generate2
+		
+	var p: P
+		m: M
+begin
+	println("ProcType3 start")
+	generate1()("1234")
+	
+	generate2()("3456")
+	
+	p := generate1()
+	p("5678")
+	
+	m := generate2()
+	m("7890")
+	
+	println("ProcType3 done")
+end ProcType3

@@ -1,0 +1,8 @@
+module Generic1(T)
+
+type
+	List* = record 
+            value* : T
+            next*  : List
+        end
+end Generic1

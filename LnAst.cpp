@@ -439,7 +439,7 @@ QList<Declaration*> Declaration::getParams(bool skipReceiver) const
     QList<Declaration*> res;
     while( d && d->kind == Declaration::ParamDecl )
     {
-        if( !skipReceiver || !d->mode == Declaration::Receiver )
+        if( !skipReceiver || d->mode != Declaration::Receiver )
             res << d;
         d = d->next;
     }
@@ -663,11 +663,16 @@ qint64 Expression::getCaseValue(bool* ok) const
 {
     if(ok)
         *ok = true;
+    QVariant v;
+    if( kind == DeclRef )
+        v = val.value<Declaration*>()->data;
+    else
+        v = val;
     if( type->isInteger() || type->form == Type::ConstEnum || type->form == BasicType::CHAR )
-        return val.toLongLong();
+        return v.toLongLong();
     else if( type->form == BasicType::StrLit )
     {
-        const QByteArray str = val.toByteArray();
+        const QByteArray str = v.toByteArray();
         // str ends with an explicit zero, thus str.size is 2
         if( strlen(str.constData()) != 1 )
         {
@@ -734,7 +739,9 @@ Expression*Expression::createFromToken(quint16 tt, const RowCol& rc)
         k = Geq;
     } else if( tt == Tok_IN ) {
         k = In;
-    }	else if( tt == Tok_Plus ) {
+    } else if( tt == Tok_IS ) {
+        k = Is;
+    } else if( tt == Tok_Plus ) {
         k = Add;
     } else if( tt == Tok_Minus ) {
         k = Sub;
@@ -754,6 +761,8 @@ Expression*Expression::createFromToken(quint16 tt, const RowCol& rc)
         k = And;
     } else if( tt == Tok_integer || tt == Tok_real )
         k = Literal;
+    else
+        Q_ASSERT(false);
     return new Expression(k,rc);
 }
 

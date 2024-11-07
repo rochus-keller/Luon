@@ -1,0 +1,24 @@
+module GenericTest3
+
+import 
+	SL := Generic1(String),
+	IL := Generic1(integer)
+
+
+type
+	String = array 20 of char
+	
+var
+	l1 : SL.List
+	l2 : IL.List
+
+begin
+	println("GenericTest3 start")
+	new(l1)
+	l1.value := "hello!" // with dotnet generics this fails because value is initialized to null
+	println(l1.value)
+	new(l2)
+	l2.value := 44
+	println(l2.value)
+	println("GenericTest3 done")
+end GenericTest3

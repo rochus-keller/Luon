@@ -1153,7 +1153,7 @@ Expression* Parser2::literal() {
         res->type = mdl->getType(BasicType::CHAR);
         QByteArray tmp = cur.d_val;
         tmp.chop(1); // remove X postfix
-        res->val = QVariant::fromValue((char)(quint8)tmp.toUInt(0,16));
+        res->val = tmp.toUInt(0,16);
     } else if( la.d_type == Tok_NIL ) {
         expect(Tok_NIL, true, "literal");
         res = new Expression(Expression::Literal,cur.toRowCol());
@@ -2000,7 +2000,7 @@ void Parser2::import() {
 		expect(Tok_ident, false, "import");
         tl << cur;
     }
-    if( localName.d_tokenType == 0 )
+    if( localName.d_type == 0 )
         localName = tl.last();
 
     Declaration* importDecl = addDecl(localName, 0, Declaration::Import);

@@ -1,0 +1,48 @@
+module ProcType2
+
+	type T = record end
+	proc (this: T)sayHello( str: array of char)
+	begin
+		println("hello from method:")
+		println(str)
+	end sayHello
+
+	proc sayHello(str: array of char)
+	begin
+		println("hello from proc:")
+		println(str)
+	end sayHello
+	
+	type P = proc (str: array of char)
+		  M = proc^(str: array of char)
+		  K = proc^
+
+	proc test1( p: P )
+	begin
+		p("1234")
+	end test1
+	
+	proc test2( m: M )
+	begin
+		m("5678")
+	end test2
+	
+	proc (this: T)test3()
+	begin
+		println("test3")
+	end test3
+	
+	var t: T
+		k: K
+begin
+	println("ProcType2 start")
+
+	test1(sayHello)
+	new(t)
+	test2(t.sayHello)
+
+	k := t.test3
+	k
+
+	println("ProcType2 done")
+end ProcType2

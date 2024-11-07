@@ -1,0 +1,13 @@
+module Imported1b
+	const
+		C* = 123
+	type T = record end
+		T1* = T
+		Color* = (red, green, blue)
+	proc It*
+	begin
+		println("it")
+	end It
+begin
+	println("Imported1b")
+end Imported1b

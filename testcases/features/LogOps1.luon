@@ -1,0 +1,19 @@
+module LogOps1
+
+var
+		b: integer
+		c: integer
+begin
+	b := bitshl(1234,32)
+	println(b)
+	c := 1234
+	println(bitor(b,c))
+	b := bitshl(0ffh,16)
+	println(b)
+	b := bitshr(b,8)
+	println(b)
+	println(bitasr(1024,4))
+	println(bitasr(-1024,4))
+	println(bitasr(-1024,-4))
+	println(bitshl(100,2))
+end LogOps1

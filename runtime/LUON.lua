@@ -36,10 +36,11 @@ local CharArray = ffi.typeof("CharArray")
 local bytesize = ffi.sizeof
 local frexp = math.frexp
 
-function module.charToStringArray(len, str)
+function module.charToStringArray(str)
+        local len = #str+1
 	local a = ffi.new( CharArray, len ) 
 	if str then
-            ffi.copy(a, str, len+1)
+            ffi.copy(a, str, len)
 	end
 	return a
 end
@@ -146,10 +147,10 @@ function module.setTest( elem, set )
 	return bit.band( set, bit.lshift( 1, elem ) ) ~= 0
 end
 function module.is_a( obj, class )
-	local meta = getmetatable(obj)
+        local meta = getmetatable(obj)
 	while meta and class and meta ~= class do
 		meta = getmetatable(meta)
-	end
+        end
 	return meta == class
 end
 function module.println( val )
@@ -269,6 +270,7 @@ module[55] = string.char
 module[56] = module.print
 module[57] = bit.rshift
 module[58] = module.arraylen
+module[59] = string.byte
 
 return module
 

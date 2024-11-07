@@ -170,4 +170,6 @@ namespace Ln
     };
 }
 
+Q_DECLARE_METATYPE(Ln::Project::File*)
+
 #endif // OBXPROJECT_H

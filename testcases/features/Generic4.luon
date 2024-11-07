@@ -1,0 +1,22 @@
+module Generic4(T)
+
+type
+	Element = record 
+				value* : T 
+		  end
+	
+	List* = record (Element)
+            next*  : List
+        end
+        
+   proc (this: Element) print*()
+   begin
+	   println(this.value)
+   end print
+   
+   proc (this: Element) setValue*( v: T )
+   begin
+	   this.value := v
+	end setValue
+   
+end Generic4

@@ -1,0 +1,28 @@
+module Arrays4
+
+	type A = array 3 of array 4 of integer
+       B = array 5 of integer
+       C = array 5 of B
+	var a : A
+		b: array 10 of record
+				a: array 10 of integer
+				f: proc (): integer
+			end
+		c: C
+
+
+begin
+	println("Arrays4 start")
+	a := { {}, {},{} }
+	a[1][2] := 33
+	println(a[1][2])
+	
+	c[1][3] := 44
+	println(c[1][3])
+
+	new(b[0])
+	b[0].a[0] := 1
+	println(b[0].a[0])
+	assert(b[0].a[0] = 1)
+	println("Arrays4 done")
+end Arrays4

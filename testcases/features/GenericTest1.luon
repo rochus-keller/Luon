@@ -1,0 +1,14 @@
+module GenericTest1
+
+import IL := Generic1(integer)
+
+var
+	IntList : IL.List
+
+begin
+	println("GenericTest1 start")
+	new(IntList)
+	IntList.value := 33
+	println(IntList.value)
+	println("GenericTest1 done")
+end GenericTest1

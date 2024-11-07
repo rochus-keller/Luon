@@ -677,6 +677,7 @@ Declaration*Project::loadModule(const Import& imp)
             Declaration::deleteAll(module);
             module = 0;
             ms->imp = Import();
+            file->d_mod = 0;
             qDebug() << "### validator failed" << failWhen(imp).constData();
         }else
         {
@@ -771,6 +772,9 @@ void Project::clearModules()
     }
     modules.clear();
     subs.clear();
+    FileHash::const_iterator j;
+    for( j = d_files.begin(); j != d_files.end(); ++j )
+        j.value()->d_mod = 0;
 }
 
 const Project::ModuleSlot*Project::findModule(Declaration* m) const
@@ -899,7 +903,8 @@ bool Project::loadFrom(const QString& filePath)
         else
         {
             absPath = dir.absoluteFilePath(relPath);
-            if( QFileInfo(absPath).exists() )
+            QFileInfo info(absPath);
+            if( info.exists() && info.isFile() )
                 addFile(absPath);
             else
                 qCritical() << "Could not open module" << relPath;

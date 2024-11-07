@@ -1020,7 +1020,7 @@ void Validator::assigOp(Statement* s)
     visitExpr(s->lhs);
     visitExpr(s->rhs, s->lhs->type);
     if( !assigCompat(s->lhs->type, s->rhs) ) {
-        //assigCompat(s->lhs->type, s->rhs); // TEST
+        // assigCompat(s->lhs->type, s->rhs); // TEST
         error(s->pos,"left side not assignment compatible with right side");
     }
 }
@@ -1487,8 +1487,9 @@ void Validator::isOp(Expression* e)
         return error(e->rhs->pos,"expecting record type");
     if( e->rhs->kind != Expression::DeclRef || e->rhs->val.value<Declaration*>()->kind != Declaration::TypeDecl )
         return error(e->rhs->pos,"expecting a type declaration");
+    // TODO: ANYREC
     if( !Type::isSubtype(lhsT, rhsT) )
-        return error(e->rhs->pos,"rhs type must be an extension of lhs type"); // TODO: ANYREC
+        return error(e->rhs->pos,"rhs type must be an extension of lhs type");
 }
 
 static inline int find_( const QList<Declaration*>& l, const QByteArray& name )
@@ -1685,12 +1686,14 @@ bool Validator::assigCompat(Type* lhs, Type* rhs) const
           lhs->form == Type::HashMap || lhs->form == Type::Proc ) && rhs->form == BasicType::Nil )
         return true;
 
-    if( lhs->form == Type::Record && rhs->form == Type::Record &&
-            Type::isSubtype(lhs,rhs) )
+    if( lhs->form == Type::Record && rhs->form == Type::Record && Type::isSubtype(lhs,rhs) )
         return true;
 
     if( lhs->form == Type::Proc && rhs->form == Type::Proc )
         return matchFormals(lhs->subs, rhs->subs) && matchResultType(lhs->base,rhs->base);
+
+    if( lhs->isDerefCharArray() && rhs->isDerefCharArray())
+        return true; // check len at runtime
 
     return false;
 }
@@ -1707,7 +1710,7 @@ bool Validator::assigCompat(Type* lhs, Declaration* rhs) const
 
     // Tv is a procedure type and e is the name of a procedure whose formal parameters match those of Tv.
     if( lhs->form == Type::Proc && rhs->kind == Declaration::Procedure )
-        return matchFormals(lhs->subs, rhs->getParams()) && matchResultType(lhs->base,rhs->type);
+        return matchFormals(lhs->subs, rhs->getParams(true)) && matchResultType(lhs->base,rhs->type);
 
     // Tv is an enumeration type and e is a valid element of the enumeration;
     if( lhs->form == Type::ConstEnum && rhs->kind == Declaration::ConstDecl && rhs->mode == Declaration::Enum )
@@ -1723,12 +1726,21 @@ bool Validator::assigCompat(Type* lhs, const Expression* rhs) const
         return false;
 
     Type* rhsT = deref(rhs->type);
-    if( rhs->kind == Expression::DeclRef )
+    if( rhs->kind == Expression::DeclRef || rhs->kind == Expression::Select )
         return assigCompat(lhs, rhs->val.value<Declaration*>() );
 
     // A string of length 1 can be used wherever a character constant is allowed and vice versa.
     if( lhs->form == BasicType::CHAR && rhsT->form == BasicType::StrLit )
         return strlen(rhs->val.toByteArray().constData()) == 1;
+
+    if( lhs->isDerefCharArray() && (rhsT->form == BasicType::StrLit ||
+                                    rhsT->form == BasicType::STRING || rhsT->form == BasicType::ByteArrayLit ))
+    {
+        if( lhs->len && rhsT->form == BasicType::StrLit && rhs->val.toByteArray().size() > lhs->len )
+            return false;
+        else
+            return true; // check len at runtime
+    }
 
     return assigCompat(lhs, rhs->type);
 }
@@ -1741,7 +1753,7 @@ bool Validator::paramCompat(Declaration* lhs, const Expression* rhs) const
     Type* rhsT = deref(rhs->type);
     // a string literal (which is a STRING actually) is compatible with an const array of char formal param
     if( lhs->visi == Declaration::ReadOnly && lhsT->isDerefCharArray() && lhsT->len == 0 &&
-            (rhsT->form == BasicType::StrLit || rhsT->form == BasicType::STRING ) )
+            (rhsT->form == BasicType::StrLit || rhsT->form == BasicType::ByteArrayLit  || rhsT->form == BasicType::STRING ) )
         return true;
 
     if( lhs->varParam && !rhs->isLvalue() )
@@ -1790,7 +1802,7 @@ bool Validator::equalTypes(Type* lhs, Type* rhs) const
 
     // Ta and Tb are open array types with equal element types, or
     // Ta and Tb are non-open array types with same length and equal element types, or
-    if( lhs->form == Type::Array && rhs->form == Type::Array && lhs->len == rhs->len &&
+    if( lhs->form == Type::Array && rhs->form == Type::Array && (lhs->len == 0 || lhs->len == rhs->len) &&
             equalTypes(lhs->base, rhs->base) )
         return true;
 
@@ -1925,7 +1937,8 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
             break;
         *ret = mdl->getType(BasicType::INTEGER);
         t = deref(args[0]->type);
-        if( t->form != Type::Array && t->form != BasicType::STRING && t->form != BasicType::StrLit )
+        if( t->form != Type::Array && t->form != BasicType::STRING
+                && t->form != BasicType::StrLit && t->form != BasicType::ByteArrayLit )
             throw "expecing array or string argument";
         break;
     case Builtin::MAX:
@@ -1933,7 +1946,7 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
         if(!expectingNMArgs(args,1,2))
             break;
         *ret = args[0]->type;
-        if( deref(args[0]->type)->isNumber())
+        if( !deref(args[0]->type)->isNumber())
             throw "expecing number argument";
         break;
     case Builtin::ODD:
@@ -1959,9 +1972,9 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
             throw "expecing char array or string argument";
         break;
     case Builtin::ASSERT:
-        if( !expectingNArgs(args,3) )
+        if( !expectingNArgs(args,1) )
             break; // bool, line, file
-        if( deref(args[0]->type)->form == BasicType::BOOLEAN )
+        if( deref(args[0]->type)->form != BasicType::BOOLEAN )
             throw "expecting boolean arument";
         // the other two args are set by the compiler
         break;

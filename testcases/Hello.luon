@@ -1,7 +1,10 @@
 module Hello
-
+const txt = "Hello"
+var str : array 32 of char
 begin
-	print("Hello")
+   str := txt
+   str[5] := "!"
+	print(str)
 	print(" ")
 	println("World!")
 end Hello
