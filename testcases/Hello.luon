@@ -1,10 +1,24 @@
 module Hello
 const txt = "Hello"
 var str : array 32 of char
+procedure test(a,b,c,d,e: integer)
+   procedure test2( x,y: integer)
+   begin
+      println(x)
+      println(y)
+   end test2
+begin
+   println(a)
+   println(c)
+   println(e)
+   test2(b,d)
+end test
+
 begin
    str := txt
    str[5] := "!"
 	print(str)
 	print(" ")
 	println("World!")
+	test(1,2,3,4,5)
 end Hello

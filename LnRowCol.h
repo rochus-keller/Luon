@@ -27,7 +27,7 @@ namespace Ln
 {
     struct RowCol
     {
-        enum { ROW_BIT_LEN = 19, COL_BIT_LEN = 32 - ROW_BIT_LEN - 1, MSB = 0x80000000 };
+        enum { ROW_BIT_LEN = 19, COL_BIT_LEN = 32 - ROW_BIT_LEN - 1 };
         uint d_row : ROW_BIT_LEN; // supports 524k lines
         uint d_col : COL_BIT_LEN; // supports 4k chars per line
         uint unused : 1; // the sign is used to recognize the packed representation
@@ -38,17 +38,10 @@ namespace Ln
         bool isValid() const { return d_row > 0 && d_col > 0; } // valid lines and cols start with 1; 0 is invalid
         bool operator==( const RowCol& rhs ) const { return d_row == rhs.d_row && d_col == rhs.d_col; }
 
-        quint32 packed() const { return ( d_row << COL_BIT_LEN ) | d_col | MSB; }
-        static bool isPacked( quint32 rowCol ) { return rowCol & MSB; }
+        quint32 packed() const { return ( d_row << COL_BIT_LEN ) | d_col; }
+        static bool isPacked( quint32 rowCol ) { return rowCol; }
         static quint32 unpackCol(quint32 rowCol ) { return rowCol & ( ( 1 << COL_BIT_LEN ) -1 ); }
-        static quint32 unpackRow(quint32 rowCol ) { return ( ( rowCol & ~MSB ) >> COL_BIT_LEN ); }
-    };
-
-    struct Loc : public RowCol
-    {
-        Loc( quint32 row, quint32 col, const QString& f ):RowCol( row, col ),d_file(f) {}
-        Loc( const RowCol& r, const QString& f):RowCol(r),d_file(f) {}
-        QString d_file;
+        static quint32 unpackRow(quint32 rowCol ) { return ( ( rowCol ) >> COL_BIT_LEN ); }
     };
 
     typedef QPair<RowCol,RowCol> Range;

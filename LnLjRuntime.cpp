@@ -87,7 +87,7 @@ bool LjRuntime::compile(bool doGenerate)
         preloadLib(d_pro,"Input");
         preloadLib(d_pro,"Math");
         preloadLib(d_pro,"Strings");
-        preloadLib(d_pro,"XYPlane");
+        // preloadLib(d_pro,"XYPlane");
     }
     const quint32 errCount = d_pro->getErrors().size();
     const QTime start = QTime::currentTime();
@@ -123,7 +123,7 @@ bool LjRuntime::loadLibraries()
         loadLuaLib(d_lua,"Input");
         loadLuaLib(d_lua,"Math");
         loadLuaLib(d_lua,"Strings");
-        loadLuaLib(d_lua,"XYPlane");
+        // loadLuaLib(d_lua,"XYPlane");
     }
 
     if( d_pro->useBuiltInObSysInner() )
@@ -261,7 +261,7 @@ void LjRuntime::setJitEnabled(bool on)
 
 void LjRuntime::generate()
 {
-    QList<Declaration*> mods = d_pro->getModulesToGenerate();
+    QList<Declaration*> mods = d_pro->getDependencyOrder();
     d_byteCode.clear();
     d_buildErrors = false;
 
@@ -281,7 +281,11 @@ void LjRuntime::generate(Declaration* m)
     QBuffer buf;
     buf.open(QIODevice::WriteOnly);
     LjbcGen gen;
-    gen.translate(m, &buf, false );
+    if( !gen.translate(m, &buf, false ) )
+    {
+        foreach( const LjbcGen::Error& e, gen.getErrors() )
+            d_pro->addError(e.path,e.pos,e.msg);
+    }
     buf.close();
     d_byteCode << qMakePair(m,buf.buffer());
 }

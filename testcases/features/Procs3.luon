@@ -27,6 +27,8 @@ begin
 			d[i][j] := i + j + i * j
 		end
 	end
+	new(d)
+	new(d[2])
    println(d[2][3])
 	Q(d)
    println(d[2][3])

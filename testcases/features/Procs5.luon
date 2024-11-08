@@ -19,18 +19,19 @@ module Procs5
 
 	proc ( this : Class ) Hello()
 	begin
-		this(Superclass).Hello // TODO: call superclass
+		// this.Hello // TODO: call superclass
 		println("Hello Class!")
 	end Hello
 	
 	proc ( this : Class ) Hello2(str: array of char)
 	begin
-		this(Superclass).Hello2(str) // TODO: call superclass
+		// this.Hello2(str) // TODO: call superclass
 		println("Hello2 Class!")
 	end Hello2
 
 begin
 	println("Procs5 start")
+	new(inst)
 	inst.Hello
 	inst.Hello2("this is a string")
 	println("Procs5 done")

@@ -2008,6 +2008,8 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
         Type* t1 = deref(args[0]->type);
         if( t1->form != Type::Record && t1->form != Type::Array && t1->form != Type::HashMap )
             throw "new() expects a structured type first argument";
+        if( args.size() == 1 && t1->form == Type::Array && t1->len == 0)
+            throw "open arrays require an explicit size argument";
         if( args.size() == 2 && (t1->form != Type::Array || t1->len > 0))
             throw "second argument only applicable to open arrays";
         break;

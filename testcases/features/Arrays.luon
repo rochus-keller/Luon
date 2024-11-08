@@ -12,20 +12,23 @@ module Arrays
 	proc sub
 		var b : array 10 of char
 	begin
+   	new(b)
 		b[1] := 30x
 		println(b[1])
 		a[4] := 50
 	end sub
 begin
 	println("Arrays start")
+	new(a)
 	a[3] := 42
 	sub
 	println(a[3])
 	println(a[4])
+
 	c := "test"
 	println(c)
 	println(c[3])
-	
+
 	d[1].a := 5
 	println(d[1].a)
 	e := $20616263$

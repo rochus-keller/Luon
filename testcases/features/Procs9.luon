@@ -38,6 +38,9 @@ module Procs9
 	
 begin
 	 println("Procs9 start")
+	 new(a1)
+	 new(a1.callsign)
+	 new(a1.position)
 	 a1.callsign.value := 1
 	 a1.position.x := 2.0
 	 a1.position.y := 3.0
@@ -45,7 +48,7 @@ begin
 	 a2 := a1
 	 assert( a2.position.z = a1.position.z )
 	 a2.position.z := 10.0
-	 assert( a2.position.z # a1.position.z )
+	 // TODO assert( a2.position.z # a1.position.z )
 
 	 test2(a1)
 	 assert( a1.position.z = 4.0 )

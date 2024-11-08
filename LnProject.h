@@ -118,7 +118,7 @@ namespace Ln
         UsageByMod getUsage( Declaration* ) const;
         Symbol* getSymbolsOfModule(Declaration*) const;
         DeclList getSubs(Declaration*) const;
-        DeclList getModulesToGenerate() const;
+        DeclList getDependencyOrder() const { return dependencyOrder; }
 
         bool printTreeShaken( const QString& module, const QString& fileName );
         bool printImportDependencies(const QString& fileName , bool pruned);
@@ -154,6 +154,7 @@ namespace Ln
     private:
         typedef QList<ModuleSlot> Modules;
         Modules modules;
+        DeclList dependencyOrder;
         QHash<Declaration*, DeclList> subs;
         FileList preloads;
         QList<Error> errors;

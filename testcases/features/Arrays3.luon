@@ -1,11 +1,12 @@
 module Arrays3
 
-	type A = [4]integer // ^[4] -> pointer to array 4 of
-		B = []integer // [] -> array of
-		C = [][]char // pointer to array of array of -> ^[][]
+	type A = [4]integer 
+		B = []integer 
+		C = [][]char 
 	var a : A
 		b : B
 		c : C
+		l : integer
 begin
 	println("Arrays3 start")		
 	new(a)

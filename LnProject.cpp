@@ -320,22 +320,6 @@ static inline bool nonGeneric( const MetaActualList& args )
     return true;
 }
 
-DeclList Project::getModulesToGenerate() const
-{
-    DeclList res;
-    for( int i = 0; i < modules.size(); i++ )
-    {
-        Declaration* m = modules[i].decl;
-        if( m == 0 )
-            continue;
-        ModuleData md = m->data.value<ModuleData>();
-        if( md.metaParams.isEmpty() ||
-                (md.metaParams.size() == md.metaActuals.size() && nonGeneric(md.metaActuals) ) )
-            res << m;
-    }
-    return res;
-}
-
 QString Project::getWorkingDir(bool resolved) const
 {
     if( d_workingDir.isEmpty() )
@@ -670,7 +654,19 @@ Declaration*Project::loadModule(const Import& imp)
             imp2.path = file->d_group->d_package;
             imp2.path.append(imp.path.back());
         }
-        if( !v.validate(module, imp2) )
+        if( v.validate(module, imp2) )
+        {
+            if( imp.metaActuals.isEmpty() )
+                file->d_mod = module; // in case of generic modules, file->d_mod points to the non-instantiated version
+            ms->xref = v.takeXref();
+            QHash<Declaration*,DeclList>::const_iterator i;
+            for( i = ms->xref.subs.begin(); i != ms->xref.subs.end(); ++i )
+                subs[i.key()] += i.value();
+            ModuleData md = module->data.value<ModuleData>();
+            if( md.metaParams.isEmpty() ||
+                    (md.metaParams.size() == md.metaActuals.size() && nonGeneric(md.metaActuals) ) )
+                dependencyOrder << module;
+        }else
         {
             foreach( const Validator::Error& e, v.errors )
                 errors << Error(e.msg, e.pos, e.path);
@@ -679,14 +675,6 @@ Declaration*Project::loadModule(const Import& imp)
             ms->imp = Import();
             file->d_mod = 0;
             qDebug() << "### validator failed" << failWhen(imp).constData();
-        }else
-        {
-            if( imp.metaActuals.isEmpty() )
-                file->d_mod = module;
-            ms->xref = v.takeXref();
-            QHash<Declaration*,DeclList>::const_iterator i;
-            for( i = ms->xref.subs.begin(); i != ms->xref.subs.end(); ++i )
-                subs[i.key()] += i.value();
         }
     }
 
@@ -764,6 +752,7 @@ Project::File* Project::toFile(const Import& imp)
 void Project::clearModules()
 {
     errors.clear();
+    dependencyOrder.clear();
     Modules::const_iterator i;
     for( i = modules.begin(); i != modules.end(); ++i )
     {

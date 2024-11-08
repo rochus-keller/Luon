@@ -23,6 +23,7 @@ module Procs2
 
 begin
 	println("Procs2 start")
+	new(a)
 	a[0] := -4
 	a[1] := -3
 	a[2] := -2

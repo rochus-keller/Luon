@@ -19,6 +19,7 @@
 
 #include "LnLjbcGen.h"
 #include <LjTools/LuaJitComposer.h>
+#include <QtDebug>
 using namespace Ln;
 
 class LjbcGen::Imp
@@ -70,7 +71,6 @@ public:
     Declaration* thisMod;
     AstModel mdl;
     QMap<Declaration*, quint32> imports; // module -> slot
-    DeclList deferredImports;
     QList<quint8> slotStack; // for expression evaluation
     QList <quint32> exitJumps; // TODO: must be a separate list for each (nested) LOOP
 
@@ -139,6 +139,7 @@ public:
                 emitImport(d);
                 break;
             case Declaration::Procedure:
+                emitAllProcsAndClasses(d);
                 emitProcedure(d);
                 if( d->mode == Declaration::Begin)
                     begin = d;
@@ -147,13 +148,6 @@ public:
 
             d = d->getNext();
         }
-
-        foreach( Declaration* m, deferredImports )
-        {
-            ModuleData md = m->data.value<ModuleData>();
-            emitImport( md.fullName, imports.value(m), module->pos );
-        }
-        deferredImports.clear();
 
         // make Module table a global variable
         bc.GSET( modSlot, md.fullName, md.end.packed() );
@@ -226,13 +220,46 @@ public:
         }
     }
 
+    void emitAllProcsAndClasses(Declaration* scope)
+    {
+        Declaration* d = scope->link;
+        while( d )
+        {
+            switch( d->kind )
+            {
+            case Declaration::TypeDecl:
+                if( d->type && d->type->form == Type::Record )
+                    emitClassObject(d->type);
+                break;
+            case Declaration::Procedure:
+                emitAllProcsAndClasses(d);
+                emitProcedure(d);
+                break;
+            }
+            d = d->getNext();
+        }
+    }
+
+    static inline QByteArray scopedName(Declaration* d)
+    {
+        QByteArray res;
+        while( d && d->kind != Declaration::Module )
+        {
+            if( !res.isEmpty() )
+                res = '$' + res;
+            res = d->name + res;
+            d = d->outer;
+        }
+        return res;
+    }
+
     void emitProcedure(Declaration* p)
     {
         ctx.push_back( Ctx(p) );
 
         const RowCol end = p->getEndPos();
         DeclList params = p->getParams();
-        const int id = bc.openFunction( params.size(), p->name, p->pos.packed(), end.packed() );
+        const int id = bc.openFunction( params.size(), scopedName(p), p->pos.packed(), end.packed() );
         Q_ASSERT( id >= 0 );
         QHash<quint8,QByteArray> names;
 
@@ -242,25 +269,21 @@ public:
             switch( d->kind )
             {
             case Declaration::TypeDecl:
-                if( d->type && d->type->form == Type::Record )
-                    emitClassObject(d->type);
-                    // no names map here because root level concern
+            case Declaration::Procedure:
+                // done on module level for all nested record decls and procedures
                 break;
             case Declaration::ConstDecl:
                 // we don't need this
                 break;
             case Declaration::LocalDecl:
             case Declaration::ParamDecl: {
-                const quint8 slot = ctx.back().buySlots(1);
-                Q_ASSERT( slot == d->id );
-                emitInitializer(slot,d->type,d->pos);
-                names[d->id] = d->name;
-                break;
+                    const quint8 slot = ctx.back().buySlots(1);
+                    Q_ASSERT( slot == d->id );
+                    if( d->kind == Declaration::LocalDecl )
+                        emitInitializer(slot,d->type,d->pos);
+                    names[d->id] = d->name;
+                    break;
                 }
-            case Declaration::Procedure:
-                emitProcedure(d);
-                names[d->id] = d->name;
-                break;
             }
 
             d = d->getNext();
@@ -367,7 +390,7 @@ public:
         const quint8 rhs = slotStack.back();
         releaseSlot();
         const quint8 res = slotStack.back();
-        if( lt->isNumber() || (lt->form == rt->form && lt->form == BasicType::CHAR) )
+        if( lt->form == rt->form && ( lt->isNumber() || lt->form == BasicType::CHAR || lt->form == Type::ConstEnum ) )
         {
             switch(e->kind)
             {
@@ -1508,7 +1531,7 @@ public:
                 l = l->next;
             }
             // if none of the cases applied, jump to nextCase
-            emitJMP(0, l->pos.packed() );
+            emitJMP(0, s->pos.packed() );
             const int nextCase = bc.getCurPc();
 
             // we get here for the first case which fits exp
@@ -1627,11 +1650,13 @@ public:
             bc.CALL(tmp,1,1,loc.packed());
             bc.MOV(slotStack.back(),tmp, loc.packed());
             ctx.back().sellSlots(tmp,2);
-        }else if( lhsT->isDerefCharArray() && (rhsT->form == BasicType::StrLit || rhsT->form == BasicType::STRING) )
+        }else if( lhsT->isDerefCharArray() &&
+                  (rhsT->form == BasicType::StrLit || rhsT->form == BasicType::ByteArrayLit
+                   || rhsT->form == BasicType::STRING ) )
         {
             // convert string to CharArray
             const int tmp = ctx.back().buySlots(2,true);
-            fetchLnlibMember(tmp, 1, loc ); // charToStringArray
+            fetchLnlibMember(tmp, 7, loc ); // charToStringArray
             bc.MOV(tmp + 1, slotStack.back(), loc.packed() );
             bc.CALL(tmp,1,1,loc.packed());
             bc.MOV(slotStack.back(),tmp, loc.packed());
@@ -1774,10 +1799,12 @@ public:
             base = 0;
         if( base && base->form == Type::Record && !base->generated )
         {
-            if( base->decl->getModule() != thisMod )
+            Declaration* otherMod = base->decl->getModule();
+            if( otherMod != thisMod )
             {
-                errors << LjbcGen::Error("this record depends on a not yet generated base record "
-                                         "of another module", record->decl->pos, thisMod->name );
+                const QString msg = QString("this record depends on a not yet generated base record "
+                            "of module %1").arg(otherMod->name.constData());
+                errors << LjbcGen::Error(msg, record->decl->pos, thisMod->name );
                 throw "";
             }
             emitClassObject(base);
@@ -1848,12 +1875,17 @@ public:
         bc.CALL( tmp, 1, 1, loc.packed() );
         if( toLocal )
             bc.MOV(toSlot,tmp,loc.packed() );
-        Q_ASSERT( thisMod == ctx.back().scope );
-        emitSetTableByIndex(tmp,modSlot,toSlot,loc);
+        if( thisMod == ctx.back().scope )
+            emitSetTableByIndex(tmp,modSlot,toSlot,loc);
+        else
+        {
+            fetchModule(tmp+1,loc);
+            emitSetTableByIndex(tmp,tmp+1,toSlot,loc);
+        }
         ctx.back().sellSlots(tmp,2);
     }
 
-    quint32 emitImportDeferred( Declaration* module )
+    quint32 emitImportImplicit( Declaration* module, const RowCol& loc )
     {
         // this is for modules not explicitly on the import list but still used
         // because of e.g. class objects via alias etc.
@@ -1866,7 +1898,8 @@ public:
         // else
         const quint32 slot = thisMod->id++;
         imports[module] = slot;
-        deferredImports.append(module);
+        ModuleData md = module->data.value<ModuleData>();
+        emitImport( md.fullName, slot, loc );
         return slot;
     }
 
@@ -1909,7 +1942,7 @@ public:
         if( baseType->form == BasicType::CHAR )
         {
             const int tmp = ctx.back().buySlots(2,true);
-            fetchLnlibMember(tmp,8,loc); // module.createByteArray
+            fetchLnlibMember(tmp,8,loc); // module.createCharArray
             if( array->len > 0 )
                 bc.KSET(tmp+1, array->len, loc.packed() );
             else if( lenSlot >= 0 )
@@ -2020,7 +2053,7 @@ public:
         if( module == thisMod )
             return fetchModule(to,loc);
         // else
-        quint32 slot = emitImportDeferred(module);
+        quint32 slot = emitImportImplicit(module, loc);
         fetchModule(to, loc); // get this module where the import slots live
         emitGetTableByIndex(to, to, slot, loc);
     }

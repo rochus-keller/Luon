@@ -48,6 +48,9 @@ function module.createLuaArray(len)
 	local a = { count = len }
 	return a
 end
+function module.createCharArray(len)
+        return ffi.new( CharArray, len )
+end
 local function addElemToSet( set, elem )
 	return bit.bor( set, bit.lshift( 1, elem ) )
 end
@@ -73,9 +76,9 @@ local function strlen( str )
         while str[i] ~= 0 do i = i + 1 end
         return i
 end
-local function arraylen( array )
+function module.arraylen( array )
     if ffi.istype(CharArray,array) then
-        return bytesize(array)
+         return bytesize(array)
     end
     local t = type(array)
     if t  == "table" then
@@ -223,7 +226,8 @@ if ASSERT == nil then
 end
 
 -- Magic mumbers used by the compiler
-module[1] = module.charToStringArray
+module[7] = module.charToStringArray
+module[8] = module.createCharArray
 module[9] = addElemToSet
 module[10] = module.addRangeToSet
 module[11] = bit.bnot
