@@ -1133,7 +1133,7 @@ static QByteArray dequote(const QByteArray& str)
         res = str.mid(1,str.size()-2);
     else
         res = str;
-    res += '\0'; // make terminating zero explicit in value
+    // no longer append an explicit zero; just confuses LuaJIT
     return res;
 }
 
@@ -1601,7 +1601,7 @@ Statement* Parser2::ForStatement() {
 	expect(Tok_TO, true, "ForStatement");
     Statement* forby = new Statement(Statement::ForToBy, cur.toRowCol());
     res->append(forby);
-    forby->lhs = expression();
+    forby->lhs = expression(); // to
     if(forby->lhs == 0 )
     {
         Statement::deleteAll(res);
@@ -1609,7 +1609,7 @@ Statement* Parser2::ForStatement() {
     }
     if( la.d_type == Tok_BY ) {
 		expect(Tok_BY, true, "ForStatement");
-        forby->rhs = ConstExpression();
+        forby->rhs = ConstExpression(); // by
 	}
 	expect(Tok_DO, true, "ForStatement");
     res->body = StatementSequence();

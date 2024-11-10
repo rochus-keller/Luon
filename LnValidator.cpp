@@ -962,11 +962,10 @@ void Validator::relOp(Expression* e)
 
         if( !intRelOp(e, l, r, isConst) )
             error(e->pos,"operator not supported for char operands");
-    }else if( (lhsT->form == BasicType::StrLit ||
-               lhsT->form == BasicType::STRING || lhsT->isDerefCharArray()) &&
-             (rhsT->form == BasicType::StrLit ||
-              rhsT->form == BasicType::STRING || rhsT->isDerefCharArray()) )
+    }else if( (lhsT->form == BasicType::StrLit || lhsT->form == BasicType::STRING) &&
+             (rhsT->form == BasicType::StrLit || rhsT->form == BasicType::STRING) )
     {
+        // comparison of char arrays not supported; TODO: maybe adding a STRCMP builtin for char arrays?
         QString l, r;
         const bool isConst = e->isConst();
         if( isConst )
@@ -1325,7 +1324,8 @@ void Validator::selectOp(Expression* e)
     Type* lhsT = deref(e->lhs->type);
     if( lhsT->form == Type::Record )
     {
-        if( !e->lhs->isLvalue() )
+        Declaration* ld = e->lhs->val.value<Declaration*>();
+        if( ld && ld->kind == Declaration::TypeDecl )
             error(e->lhs->pos,"selector expects a variable on the left side");
         Declaration* field = lhsT->find(e->val.toByteArray());
         if( field == 0 )
@@ -1701,6 +1701,10 @@ bool Validator::assigCompat(Type* lhs, Type* rhs) const
 
     if( lhs->form == Type::Array && rhs->form == Type::Array && (lhs->len == 0 || lhs->len == rhs->len) &&
             equalTypes(lhs->base, rhs->base) )
+        return true;
+
+    if( lhs->form == BasicType::STRING && rhs->isDerefCharArray() )
+        // this is an abbreviation of COPY(lhs,rhs), i.e. an implicit copy operation
         return true;
 
     if( ( lhs->form == Type::Record || lhs->form == Type::Array ||

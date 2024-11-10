@@ -89,6 +89,13 @@ function module.arraylen( array )
         return 0
     end
 end
+function module.charArrayToString(array)
+    if ffi.istype(CharArray,array) then
+        return ffi.string(array)
+    else
+        return tostring(array)
+    end
+end
 function module.joinStrings( lhs, rhs)
         local lhslen = strlen(lhs)
         local rhslen = strlen(rhs)
@@ -111,31 +118,15 @@ function module.charToString(ch)
 	a[1] = 0
 	return a
 end
-local function strcmp(lhs, rhs)
-    local i
-    while lhs[i] ~= 0 and rhs[i] ~= 0 do
-        if lhs[i] ~= rhs[i] then
-            if lhs[i] > rhs[i] then
-                return 1
-            else
-                return -1
-            end
-        end
-        i = i + 1
-        if lhs[i] ~= 0 then return 1 end
-        if rhs[i] ~= 0 then return -1 end
-        return 0
-    end
-end
 function module.stringRelOp( lhs, rhs, op )
-    local res = strcmp(lhs,rhs)
-    if op == 1 then return res == 0 end -- EQ
-    if op == 2 then return res ~= 0 end -- NEQ
-    if op == 3 then return res < 0 end -- LT
-    if op == 4 then return res <= 0 end -- LEQ
-    if op == 5 then return res > 0 end -- GT
-    if op == 6 then return res >= 0 end -- GEQ
-    return false
+    local res = false
+    if op == 1 then return lhs == rhs end -- EQ
+    if op == 2 then return lhs ~= rhs end -- NEQ
+    if op == 3 then return lhs < rhs end -- LT
+    if op == 4 then return lhs <= rhs end -- LEQ
+    if op == 5 then return lhs > rhs end -- GT
+    if op == 6 then return lhs >= rhs end -- GEQ
+    return false;
 end
 function module.setSub( lhs, rhs )
 	rhs = bit.bnot(rhs)
@@ -303,6 +294,7 @@ module[57] = bit.rshift
 module[58] = module.arraylen
 module[59] = string.byte
 module[60] = module.clone
+module[61] = module.charArrayToString
 
 return module
 

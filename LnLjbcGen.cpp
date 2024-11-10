@@ -101,7 +101,7 @@ public:
         ModuleData md = module->data.value<ModuleData>();
 
         ctx.push_back( Imp::Ctx(module) );
-        bc.openFunction(0,module->name,module->pos.packed(), md.end.packed() );
+        bc.openFunction(0,md.fullName,module->pos.packed(), md.end.packed() );
 
         QHash<quint8,QByteArray> names;
         modSlot = ctx.back().buySlots(1);
@@ -199,6 +199,15 @@ public:
 
     void emitConstValue(quint8 to, const QVariant& data, Type* type, const RowCol& pos)
     {
+        Declaration* proc = data.value<Declaration*>();
+        if( proc )
+        {
+            // this happens when a procedure is passed as a meta actual
+            Q_ASSERT(proc->kind == Declaration::Procedure);
+            fetchModule(proc->getModule(),to, pos);
+            emitGetTableByIndex(to, to, proc->id, pos);
+            return;
+        }
         Type* t = deref(type);
         switch( t->form )
         {
@@ -264,6 +273,7 @@ public:
         QHash<quint8,QByteArray> names;
 
         Declaration* d = p->link;
+        int pars = 0, vpars = 0;
         while( d )
         {
             switch( d->kind )
@@ -281,6 +291,12 @@ public:
                     Q_ASSERT( slot == d->id );
                     if( d->kind == Declaration::LocalDecl )
                         emitInitializer(slot,d->type,d->pos);
+                    else
+                    {
+                        if( d->varParam )
+                            vpars++;
+                        pars++;
+                    }
                     names[d->id] = d->name;
                     break;
                 }
@@ -289,21 +305,33 @@ public:
             d = d->getNext();
         }
 
-        Statement* stat = p->body;
-        Statement* prev = 0;
-        while( stat && stat->getNext() )
+        if( p->mode == Declaration::Extern )
         {
-            emitStatement(stat);
-            prev = stat;
-            stat = stat->getNext();
-        }
-        Q_ASSERT(stat == 0 || stat->kind == Statement::End);
+            const int tmp = ctx.back().buySlots(pars+1,true);
+            bc.GGET(tmp, thisMod->name + "_" + p->name, p->pos.packed());
+            // we expec the EXTERN proc to be implemented under the name "<module>_<proc>", e.g Out_String
+            for( int i = 0; i < pars; i++ )
+                bc.MOV(tmp+i+1, i, p->pos.packed());
+            bc.CALL(tmp, 1+vpars,pars,p->pos.packed());
+            bc.RET(tmp, 1+vpars, p->pos.packed());
+            ctx.back().sellSlots(tmp, pars+1);
+        }else
+        {
+            Statement* stat = p->body;
+            Statement* prev = 0;
+            while( stat && stat->getNext() )
+            {
+                emitStatement(stat);
+                prev = stat;
+                stat = stat->getNext();
+            }
+            Q_ASSERT(stat == 0 || stat->kind == Statement::End);
 
-        if( prev == 0 || prev->kind != Statement::Return )
-            emitReturn( 0, end );
+            if( prev == 0 || prev->kind != Statement::Return )
+                emitReturn( 0, end );
             // we need the full emitReturn here instead of only bc.RET(), because there
             // are proper procs with var params
-
+        }
 
         Lua::JitComposer::VarNameList sn(ctx.back().pool.d_frameSize);
         QHash<quint8,QByteArray>::const_iterator vi;
@@ -364,9 +392,10 @@ public:
         if( t->form == BasicType::CHAR )
             ch = e->val.toUInt();
         else
-            ch = (quint8)e->lhs->val.toByteArray()[0];
+            ch = (quint8)e->val.toByteArray()[0];
         const int res = ctx.back().buySlots(1);
         bc.KSET(res, ch, e->pos.packed());
+        slotStack.push_back(res);
     }
 
     void emitRelationOp(Expression* e)
@@ -388,8 +417,7 @@ public:
         Q_ASSERT(slotStack.size() >= 2);
         const quint8 lhs = slotStack[slotStack.size()-2];
         const quint8 rhs = slotStack.back();
-        releaseSlot();
-        const quint8 res = slotStack.back();
+        const quint8 res = lhs;
         if( lt->form == rt->form && ( lt->isNumber() || lt->form == BasicType::CHAR || lt->form == Type::ConstEnum ) )
         {
             switch(e->kind)
@@ -426,7 +454,7 @@ public:
                 break;
             }
             jumpTrueFalse(res, e->pos);
-        }else if( lt->form == BasicType::StrLit || lt->form == BasicType::STRING || lt->isDerefCharArray() )
+        }else if( lt->form == BasicType::StrLit || lt->form == BasicType::STRING )
         {
             // lhs and rhs are either lua strings or lua ffi CharArray
             int op = 0;
@@ -461,6 +489,7 @@ public:
             ctx.back().sellSlots(tmp,4);
         }else
             Q_ASSERT(false);
+        releaseSlot(); // remove rhs, keep lhs as result
     }
 
     void emitLogicOp(Expression* e)
@@ -700,6 +729,33 @@ public:
         ctx.back().sellSlots(tmp,1+count);
     }
 
+    void emitIncDec(quint8 res, Expression* var, Expression* by, bool isInc, const RowCol& pos)
+    {
+        // INC(v) integer type v := v + 1
+        // INC(v, n) v, n: integer type v := v + n
+
+        Lvalue v = lvalue(var);
+        emitLvalueToSlot(res, v, pos);
+        quint8 off;
+        if( by )
+        {
+            emitExpression(by);
+            off = slotStack.back();
+        }else
+        {
+            off = ctx.back().buySlots(1);
+            bc.KSET(off, 1, pos.packed());
+            slotStack.push_back(off);
+        }
+        if( isInc )
+            bc.ADD(res, res, off, pos.packed());
+        else
+            bc.SUB(res, res, off, pos.packed());
+        releaseSlot();
+        emitSlotToLvalue(v,res,pos);
+        releaseLvalue(v);
+    }
+
     void emitBuiltin(Declaration* proc, Expression* call, quint8 res)
     {
         switch( proc->id )
@@ -760,31 +816,9 @@ public:
             releaseSlot();
             break;
         case Builtin::DEC:
-        case Builtin::INC: {
-                // INC(v) integer type v := v + 1
-                // INC(v, n) v, n: integer type v := v + n
-                Lvalue v = lvalue(call->rhs);
-                emitLvalueToSlot(res, v, call->pos);
-                quint8 off;
-                if( call->rhs->next )
-                {
-                    emitExpression(call->rhs->next);
-                    off = slotStack.back();
-                }else
-                {
-                    off = ctx.back().buySlots(1);
-                    bc.KSET(off, 1, call->pos.packed());
-                    slotStack.push_back(off);
-                }
-                if( proc->id == Builtin::INC )
-                    bc.ADD(res, res, off, call->pos.packed());
-                else
-                    bc.SUB(res, res, off, call->pos.packed());
-                releaseSlot();
-                emitSlotToLvalue(v,res,call->pos);
-                releaseLvalue(v);
-                break;
-            }
+        case Builtin::INC:
+            emitIncDec(res, call->rhs, call->rhs->next, proc->id == Builtin::INC, call->pos);
+            break;
         case Builtin::NEW: {
                 Type* t = deref(call->rhs->type);
                 switch( t->form )
@@ -1717,6 +1751,16 @@ public:
             bc.CALL(tmp,1,1,loc.packed());
             bc.MOV(slotStack.back(),tmp, loc.packed());
             ctx.back().sellSlots(tmp,3);
+        }else if( lhsT->form == BasicType::STRING && rhsT->isDerefCharArray() )
+        {
+            // convert CharArray to string
+            const int tmp = ctx.back().buySlots(3,true);
+            fetchLnlibMember(tmp, 61, loc ); // module.charArrayToString
+            bc.MOV(tmp + 1, slotStack.back(), loc.packed() );
+            bc.KSET(tmp+2, lhsT->len, loc.packed() );
+            bc.CALL(tmp,1,1,loc.packed());
+            bc.MOV(slotStack.back(),tmp, loc.packed());
+            ctx.back().sellSlots(tmp,3);
         }else if( lhsT->form == Type::Proc && (rhs->kind == Expression::DeclRef || rhs->kind == Expression::Select) )
         {
             Declaration* d = rhs->val.value<Declaration*>();
@@ -1798,6 +1842,47 @@ public:
         }
     }
 
+    void emitFor(Statement* s)
+    {
+        emitAssig(s);
+
+        Q_ASSERT(s->getNext() && s->getNext()->kind == Statement::ForToBy);
+        Statement* me = s->getNext();
+        const int to = ctx.back().buySlots(1);
+        emitExpression(me->lhs);
+        bc.MOV(to, slotStack.back(), me->lhs->pos.packed());
+        releaseSlot();
+
+        int step = 1;
+        if( me->rhs )
+            step = me->rhs->val.toLongLong();
+
+        bc.LOOP( ctx.back().pool.d_frameSize, 0, me->pos.packed() ); // loop
+        const quint32 loopStart = bc.getCurPc();
+
+        emitExpression(s->lhs); // i
+        if( step > 0 )
+            bc.ISGT(slotStack.back(), to, me->pos.packed() );
+        else
+            bc.ISLT(slotStack.back(), to, me->pos.packed() );
+        releaseSlot();
+
+        emitJMP(0, me->pos.packed() );
+        const quint32 outOfLoop = bc.getCurPc();
+
+        statementSequence(s->body);
+
+        const int tmp = ctx.back().buySlots(1);
+        emitIncDec(tmp, s->lhs, me->rhs, true, me->pos);
+        ctx.back().sellSlots(tmp);
+
+        bc.patch(loopStart);
+        emitJMP(loopStart - bc.getCurPc() - 2, me->pos.packed() ); // jump to loopStart
+
+        bc.patch(outOfLoop);
+        ctx.back().sellSlots(to);
+    }
+
     void emitStatement(Statement* s)
     {
         switch(s->kind)
@@ -1835,7 +1920,7 @@ public:
             emitReturn(s->rhs, s->pos);
             break;
         case Statement::ForAssig:
-            emitAssig(s);
+            emitFor(s);
             break;
         }
     }

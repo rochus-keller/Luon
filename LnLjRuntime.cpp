@@ -160,7 +160,8 @@ bool LjRuntime::loadBytecode()
     {
         for( int i = 0; i < d_byteCode.size(); i++ )
         {
-            const QByteArray name = d_byteCode[i].first->name;
+            ModuleData md = d_byteCode[i].first->data.value<ModuleData>();
+            const QByteArray name = md.fullName;
             qDebug() << "loading" << name;
             if( !d_lua->addSourceLib( d_byteCode[i].second, name ) )
             {

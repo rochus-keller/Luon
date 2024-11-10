@@ -22,7 +22,7 @@ begin
 			exit 
 		end
 	end		
-	
+
 	for 
 		i := 1 
 		to 10 
@@ -30,7 +30,7 @@ begin
 		do
 		println(i)
 	end
-	
+
 	for 
 		i := 10
 		to 0 
