@@ -1597,6 +1597,7 @@ Ide::Editor* Ide::showEditor(const QString& path, int row, int col, bool setMark
     Project::File* f = d_rt->getPro()->findFile(path);
     if( f == 0 )
         return 0;
+    filePath = f->d_filePath;
 
     const int i = d_tab->findDoc(filePath);
     Editor* edit = 0;
@@ -2452,8 +2453,6 @@ void Ide::printLocalVal(QTreeWidgetItem* item, Type* type, int depth)
         }
         break;
     default:
-        qWarning() << "unexpected type" << type->form;
-        Q_ASSERT(false);
         break;
     }
 }
@@ -3021,7 +3020,7 @@ int main(int argc, char *argv[])
     a.setOrganizationName("me@rochus-keller.ch");
     a.setOrganizationDomain("github.com/rochus-keller/Luon");
     a.setApplicationName("Luon IDE (LuaJIT)");
-    a.setApplicationVersion("0.3.0");
+    a.setApplicationVersion("0.4.0");
     a.setStyle("Fusion");    
     QFontDatabase::addApplicationFont(":/font/DejaVuSansMono.ttf"); // "DejaVu Sans Mono"
 

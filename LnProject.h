@@ -68,6 +68,7 @@ namespace Ln
         typedef QHash<QString,FileRef> FileHash; // FilePath -> File
         typedef QList<FileRef> FileList;
         typedef QPair<QByteArray,QByteArray> ModProc; // module.procedure or just module
+        typedef QHash<QByteArray,File*> FileByModuleName; // Module.fullName -> File
 
         explicit Project(QObject *parent = 0);
         ~Project();
@@ -159,6 +160,7 @@ namespace Ln
         FileList preloads;
         QList<Error> errors;
         FileHash d_files;
+        FileByModuleName d_byName;
         FileGroups d_groups;
         QString d_filePath; // path where the project file was loaded from or saved to
         QStringList d_suffixes;

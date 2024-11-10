@@ -2022,6 +2022,12 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
         if( args.size() == 2 && !deref(args[1]->type)->isInteger() )
             throw "expecting an integer type second arument";
         break;
+    case Builtin::TRAPIF:
+        if( !expectingNArgs(args,1) )
+            break;
+        if( deref(args[0]->type)->form != BasicType::BOOLEAN )
+            throw "expecting boolean arument";
+        break;
     case Builtin::EXCL:
     case Builtin::INCL:
         if( !expectingNArgs(args,2) )

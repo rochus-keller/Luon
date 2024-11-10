@@ -29,6 +29,7 @@
 #include <QBuffer>
 #include <QtDebug>
 #include <QTime>
+#include <lua.hpp>
 using namespace Ln;
 
 static void printLoadError(Lua::Engine2* lua, const QByteArray& what)
@@ -293,7 +294,8 @@ void LjRuntime::generate(Declaration* m)
 
 void LjRuntime::prepareEngine()
 {
-    // TODO LibFfi::install(d_lua->getCtx());
+    lua_pushcfunction( d_lua->getCtx(), Lua::Engine2::TRAP );
+    lua_setglobal( d_lua->getCtx(), "TRAP" );
 #ifdef QT_GUI_LIB_
     Obs::Display::install(d_lua->getCtx());
 #endif

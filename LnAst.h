@@ -62,6 +62,7 @@ namespace Ln
             ASSERT, COPY, DEC, EXCL, HALT, INC,
             INCL, NEW, PCALL, PRINT, PRINTLN, RAISE, SETENV,
             // end
+            TRAP, TRAPIF,
             Max
             // NOTE: CAST is only used to convert integers to enums
         };

@@ -104,6 +104,7 @@ void Project::clear()
     d_groups.clear();
     d_filePath.clear();
     d_files.clear();
+    d_byName.clear();
 }
 
 void Project::createNew()
@@ -264,7 +265,10 @@ Symbol* Project::findSymbolBySourcePos(Declaration* m, quint32 line, quint16 col
 
 Project::File* Project::findFile(const QString& file) const
 {
-    return d_files.value(file).data();
+    File* f = d_files.value(file).data();
+    if( f == 0 )
+        f = d_byName.value(file.toUtf8()); // includes also generic instances
+    return f;
 }
 
 void Project::addPreload(const QByteArray& name, const QByteArray& code)
@@ -665,7 +669,10 @@ Declaration*Project::loadModule(const Import& imp)
             ModuleData md = module->data.value<ModuleData>();
             if( md.metaParams.isEmpty() ||
                     (md.metaParams.size() == md.metaActuals.size() && nonGeneric(md.metaActuals) ) )
+            {
                 dependencyOrder << module;
+                d_byName.insert(md.fullName,file);
+            }
         }else
         {
             foreach( const Validator::Error& e, v.errors )
@@ -752,6 +759,7 @@ Project::File* Project::toFile(const Import& imp)
 void Project::clearModules()
 {
     errors.clear();
+    d_byName.clear();
     dependencyOrder.clear();
     Modules::const_iterator i;
     for( i = modules.begin(); i != modules.end(); ++i )

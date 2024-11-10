@@ -908,7 +908,25 @@ public:
                 }
                 break;
             }
+        case Builtin::TRAP: {
+                const quint8 tmp = ctx.back().buySlots(1,true);
+                bc.GGET(tmp, "TRAP", call->pos.packed());
+                bc.CALL(tmp,0,0,call->pos.packed());
+                ctx.back().sellSlots(tmp,1);
+            }
+            break;
+        case Builtin::TRAPIF: {
+                emitExpression(call->rhs);
+                Q_ASSERT( !slotStack.isEmpty() );
 
+                const quint8 tmp = ctx.back().buySlots(2,true);
+                bc.GGET(tmp, "TRAP", call->pos.packed());
+                bc.MOV(tmp+1,slotStack.back(),call->pos.packed());
+                bc.CALL(tmp,0,1,call->pos.packed());
+                ctx.back().sellSlots(tmp,2);
+                releaseSlot();
+            }
+            break;
             // TODO:
         case Builtin::CAP:
         case Builtin::GETENV:

@@ -43,7 +43,8 @@ const char* Builtin::name[] = {
     "BITXOR", "CAST", "CHR", "DEFAULT", "FLOOR", "FLT", "GETENV", "LEN", "MAX",
     "MIN", "ODD", "ORD", "STRLEN", "VARARG", "VARARGS",
     "ASSERT", "COPY", "DEC", "EXCL", "HALT", "INC",
-    "INCL", "NEW", "PCALL", "PRINT", "PRINTLN", "RAISE", "SETENV"
+    "INCL", "NEW", "PCALL", "PRINT", "PRINTLN", "RAISE", "SETENV",
+    "TRAP", "TRAPIF"
 };
 
 AstModel::AstModel():helper(0),helperId(0)
