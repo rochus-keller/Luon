@@ -12,7 +12,7 @@ module ProcType3
 	begin
 		return sayHello
 	end generate1
-	
+
 	proc generate2():M
 		type T = record end
 		proc (this: T)sayHello(str: array of char)

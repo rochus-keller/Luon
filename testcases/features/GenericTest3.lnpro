@@ -13,11 +13,11 @@ WorkingDir=
 size=0
 
 [Modules]
-1\AbsPath=/home/me/Entwicklung/Modules/Oberon/testcases/ObxTests/Generic6.luon
+1\AbsPath=/home/me/Entwicklung/Modules/Luon/testcases/features/Generic6.luon
 1\RelPath=Generic6.luon
-2\AbsPath=/home/me/Entwicklung/Modules/Oberon/testcases/ObxTests/Generic7.luon
+2\AbsPath=/home/me/Entwicklung/Modules/Luon/testcases/features/Generic7.luon
 2\RelPath=Generic7.luon
-3\AbsPath=/home/me/Entwicklung/Modules/Oberon/testcases/ObxTests/GenericTest8.luon
+3\AbsPath=/home/me/Entwicklung/Modules/Luon/testcases/features/GenericTest8.luon
 3\RelPath=GenericTest8.luon
 size=3
 

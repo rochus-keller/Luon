@@ -1,4 +1,4 @@
-module ProcType1
+module ProcType1b
 
 	var p : proc (str: array of char)
 		m, n : proc^( str: array of char) 
@@ -20,6 +20,7 @@ module ProcType1
 			t2: T
 	begin
 		p := inner
+		new(t1)
 		t1.sayHello("0000")
 		//m := t1.sayHello // t1 can go out of scope, illegal
 		new(t2)
@@ -29,12 +30,12 @@ module ProcType1
 	end outer
 
 begin
-	println("ProcType1 start")
+	println("ProcType1b start")
 	outer()
 	p("1234")
 	m("5679")
 	n := m
 	n("abcd")
 
-	println("ProcType1 done")
-end ProcType1
+	println("ProcType1b done")
+end ProcType1b

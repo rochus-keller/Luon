@@ -12,8 +12,8 @@ WorkingDir=
 size=0
 
 [Modules]
-1\AbsPath=/home/me/Entwicklung/Modules/Luon/testcases/features/Arrays4.luon
-1\RelPath=Arrays4.luon
+1\AbsPath=/home/me/Entwicklung/Modules/Luon/testcases/features/ProcType3.luon
+1\RelPath=ProcType3.luon
 size=1
 
 [Packages]

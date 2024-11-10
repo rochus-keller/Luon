@@ -1,5 +1,6 @@
 local tochar = require("string").char
 local ffi = require("ffi")
+local luon = require("LUON")
 local module = {}
 
 -- just a quick first implementation
@@ -38,11 +39,11 @@ function module.Ln()
 end
 
 -- NOTE: these numbers are as allocated by LjbcGen and need to be updated if Out.luon changes!
-module[0] = module.Open
-module[1] = module.Char
-module[2] = module.String
-module[3] = module.Int
-module[4] = module.Real
-module[5] = module.Ln
+module[2] = module.Open
+module[3] = module.Char
+module[4] = module.String
+module[5] = module.Int
+module[6] = module.Real
+module[7] = module.Ln
 
 return module

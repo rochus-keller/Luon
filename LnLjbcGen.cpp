@@ -831,6 +831,49 @@ public:
                 }
                 break;
             }
+        case Builtin::COPY: {
+                Type* rt;
+                Type* lt = 0;
+                if( call->rhs->next )
+                {
+                    emitExpression(call->rhs->next);
+                    rt = deref(call->rhs->next->type);
+                    lt = deref(call->rhs->type);
+                }else
+                {
+                    emitExpression(call->rhs);
+                    rt = deref(call->rhs->type);
+                }
+                const int tmp = ctx.back().buySlots(3,true);
+                if( rt->form < BasicType::Max ) // string, literals
+                {
+                    fetchLnlibMember(tmp, 7, call->pos ); // charToStringArray
+                    bc.MOV(tmp + 1, slotStack.back(), call->pos.packed() );
+                    releaseSlot();
+                    bc.KSET(tmp+2, lt ? lt->len : 0, call->pos.packed() );
+                    bc.CALL(tmp,1,1,call->pos.packed());
+                    bc.MOV(res,tmp, call->pos.packed());
+                }else
+                {
+                    fetchLnlibMember(tmp,60,call->pos); // module.clone
+                    bc.MOV(tmp+1, slotStack.back(), call->pos.packed() );
+                    releaseSlot();
+                    if( rt->form == Type::Record )
+                        bc.KSET(tmp+2, rt->countAllocRecordMembers(true).first, call->pos.packed());
+                    else
+                        bc.KNIL(tmp+2,1,call->pos.packed());
+                    bc.CALL(tmp, 1,2, call->pos.packed());
+                    bc.MOV(res, tmp, call->pos.packed());
+                }
+                ctx.back().sellSlots(tmp,3);
+                if( call->rhs->next )
+                {
+                    Lvalue v = lvalue(call->rhs);
+                    emitSlotToLvalue(v,res,call->pos);
+                    releaseLvalue(v);
+                }
+                break;
+            }
 
             // TODO:
         case Builtin::CAP:
@@ -839,7 +882,6 @@ public:
         case Builtin::VARARG:
         case Builtin::VARARGS:
             break;
-        case Builtin::COPY:
         case Builtin::HALT:
         case Builtin::PCALL:
         case Builtin::RAISE:
@@ -862,12 +904,20 @@ public:
     {
         const int res = ctx.back().buySlots(1); // always allocate a result slot, even for proper procs
 
-        emitExpression(e->lhs);
+        Expression* lhs = e->lhs;
+        bool supercall = false;
+        if( lhs && lhs->kind == Expression::Super )
+        {
+            supercall = true;
+            lhs = lhs->lhs;
+        }
+        emitExpression(lhs);
         const quint8 procSlot = slotStack.back();
 
-        Declaration* proc = e->lhs->val.value<Declaration*>();
+        Declaration* proc = lhs->val.value<Declaration*>();
 
-        Type* returnType = deref(e->lhs->type);
+        Type* returnType = deref(lhs->type);
+        bool isDelegate = false;
         if( proc && proc->kind == Declaration::Builtin )
         {
             releaseSlot(); // we dont use the procSlot
@@ -878,10 +928,17 @@ public:
         {
             proc = 0;
             // so it must be a proc type variable
+            Q_ASSERT(returnType->form == Type::Proc);
+            isDelegate = returnType->receiver;
+            returnType = deref(returnType->base);
+        }else if( proc == 0 )
+        {
+            Q_ASSERT(returnType->form == Type::Proc);
+            isDelegate = returnType->receiver;
             returnType = deref(returnType->base);
         }
 
-        DeclList formals = e->lhs->getFormals();
+        DeclList formals = lhs->getFormals();
         ExpList actuals = Expression::getList(e->rhs);
         Q_ASSERT( actuals.size() >= formals.size() );
 
@@ -897,12 +954,8 @@ public:
         }
 
         bool isBound = false;
-        bool isDelegate = false;
         if( proc && proc->mode == Declaration::Receiver )
             isBound = true;
-        // TODO
-        // }else if( pt->d_typeBound )
-        //     isDelegate = true;
 
         const int funcCount = 1;
         // we always assume a return value if there are vars to be returned even if there isn't one
@@ -922,6 +975,8 @@ public:
         {
             // "this" is on the stack instead of proc, so we first have to fetch proc (via metatable)
             emitGetClassObject(slot, procSlot, e->pos);
+            if( supercall )
+                emitGetClassObject(slot, slot, e->pos);
             emitGetTableByIndex(slot, slot, proc->id, e->pos);
             // then we move "this" to the first parameter slot
             bc.MOV(slot+funcCount, procSlot, e->pos.packed());
@@ -1655,13 +1710,14 @@ public:
                    || rhsT->form == BasicType::STRING ) )
         {
             // convert string to CharArray
-            const int tmp = ctx.back().buySlots(2,true);
+            const int tmp = ctx.back().buySlots(3,true);
             fetchLnlibMember(tmp, 7, loc ); // charToStringArray
             bc.MOV(tmp + 1, slotStack.back(), loc.packed() );
+            bc.KSET(tmp+2, lhsT->len, loc.packed() );
             bc.CALL(tmp,1,1,loc.packed());
             bc.MOV(slotStack.back(),tmp, loc.packed());
-            ctx.back().sellSlots(tmp,2);
-        }else if( lhsT->form == Type::Proc && rhs->kind == Expression::DeclRef )
+            ctx.back().sellSlots(tmp,3);
+        }else if( lhsT->form == Type::Proc && (rhs->kind == Expression::DeclRef || rhs->kind == Expression::Select) )
         {
             Declaration* d = rhs->val.value<Declaration*>();
             if( d->kind != Declaration::Procedure || d->mode != Declaration::Receiver )
@@ -1669,12 +1725,12 @@ public:
             const int tmp = ctx.back().buySlots(1);
             // create a new delegate; slot 0 is this, slot 1 is method
             // "this" is already on the stack
-            bc.TNEW(tmp,2,0,loc.packed());
-            bc.TSETi(slotStack.back(),tmp,0,loc.packed()); // copy "this" to slot 0
-            emitGetClassObject(slotStack.back(), slotStack.back(), loc);
-            emitGetTableByIndex(slotStack.back(), slotStack.back(), d->id, loc); // fetch method
-            bc.TSETi(slotStack.back(),tmp,1,loc.packed()); // copy method to slot 1
-            bc.MOV(slotStack.back(), tmp,loc.packed());
+            bc.TNEW(tmp,2,0,rhs->pos.packed());
+            bc.TSETi(slotStack.back(),tmp,0,rhs->pos.packed()); // copy "this" to slot 0
+            emitGetClassObject(slotStack.back(), slotStack.back(), rhs->pos);
+            emitGetTableByIndex(slotStack.back(), slotStack.back(), d->id, rhs->pos); // fetch method
+            bc.TSETi(slotStack.back(),tmp,1,rhs->pos.packed()); // copy method to slot 1
+            bc.MOV(slotStack.back(), tmp,rhs->pos.packed());
             releaseSlot();
             slotStack.push_back(tmp);
         }
@@ -1864,9 +1920,10 @@ public:
         Q_ASSERT(imp.resolved);
         ModuleData md = imp.resolved->data.value<ModuleData>();
         emitImport(md.fullName, d->id, d->pos);
+        imports[imp.resolved] = d->id;
     }
 
-    void emitImport( const QByteArray& modName, quint16 toSlot, const RowCol& loc, bool toLocal = false )
+    void emitImport( const QByteArray& modName, quint16 toIndex, const RowCol& loc, bool toLocal = false )
     {
         Q_ASSERT( !modName.isEmpty() );
         const int tmp = ctx.back().buySlots(2,true);
@@ -1874,13 +1931,13 @@ public:
         bc.KSET( tmp+1, modName, loc.packed() );
         bc.CALL( tmp, 1, 1, loc.packed() );
         if( toLocal )
-            bc.MOV(toSlot,tmp,loc.packed() );
+            bc.MOV(toIndex,tmp,loc.packed() );
         if( thisMod == ctx.back().scope )
-            emitSetTableByIndex(tmp,modSlot,toSlot,loc);
+            emitSetTableByIndex(tmp,modSlot,toIndex,loc);
         else
         {
             fetchModule(tmp+1,loc);
-            emitSetTableByIndex(tmp,tmp+1,toSlot,loc);
+            emitSetTableByIndex(tmp,tmp+1,toIndex,loc);
         }
         ctx.back().sellSlots(tmp,2);
     }
@@ -1896,11 +1953,11 @@ public:
         if( i != imports.end() )
             return i.value();
         // else
-        const quint32 slot = thisMod->id++;
-        imports[module] = slot;
+        const quint32 index = thisMod->id++;
+        imports[module] = index;
         ModuleData md = module->data.value<ModuleData>();
-        emitImport( md.fullName, slot, loc );
-        return slot;
+        emitImport( md.fullName, index, loc );
+        return index;
     }
 
     void emitCreateRecord( quint8 to, Type* t, const RowCol& loc )
@@ -2053,9 +2110,9 @@ public:
         if( module == thisMod )
             return fetchModule(to,loc);
         // else
-        quint32 slot = emitImportImplicit(module, loc);
+        const quint32 index = emitImportImplicit(module, loc);
         fetchModule(to, loc); // get this module where the import slots live
-        emitGetTableByIndex(to, to, slot, loc);
+        emitGetTableByIndex(to, to, index, loc);
     }
 
     void fetchModule( quint8 to, const RowCol& loc )

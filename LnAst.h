@@ -80,6 +80,7 @@ namespace Ln
         uint validated : 1;
         uint allocated : 1;
         uint generated : 1;
+        uint receiver : 1;
         quint32 len; // array length
         Type* base; // array/pointer base type, return type
         QList<Declaration*> subs; // list of record fields or enum elements, or params for proc type
@@ -104,7 +105,7 @@ namespace Ln
         QList<Declaration*> fieldList() const;
 
         Type():form(0),len(0),base(0),decl(0),deferred(false),anonymous(false),
-            expr(0),validated(false),allocated(false),generated(false){}
+            expr(0),validated(false),allocated(false),generated(false),receiver(false){}
         ~Type();
     };
 
@@ -177,6 +178,7 @@ namespace Ln
             Constructor, Range, KeyValue,
             NameRef, // temporary, will be resolved by validator to DeclRef and ConstVal
             ConstVal,
+            Super,   // ^ supercall
             MAX
         };
 #ifdef _DEBUG
@@ -201,8 +203,9 @@ namespace Ln
         void setByVal();
         bool isCharLiteral();
         qint64 getCaseValue(bool* ok = 0) const;
-        static int getNumOfArgs(const Expression*);
-        static void appendArg(Expression* exp, Expression* arg);
+        void appendRhs(Expression*);
+        static int getCount(const Expression* list);
+        static void append(Expression* list, Expression* elem);
         static QList<Expression*> getList(Expression* exp);
         static Expression* createFromToken(quint16,const RowCol&);
 

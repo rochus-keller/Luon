@@ -36,12 +36,12 @@ local CharArray = ffi.typeof("CharArray")
 local bytesize = ffi.sizeof
 local frexp = math.frexp
 
-function module.charToStringArray(str)
-        local len = #str+1
+function module.charToStringArray(str, len)
+        if str == nil then return nil end
+        local n = #str+1
+        if len == nil or len < n then len = n end
 	local a = ffi.new( CharArray, len ) 
-	if str then
-            ffi.copy(a, str, len)
-	end
+        ffi.copy(a, str, n)
 	return a
 end
 function module.createLuaArray(len)
@@ -217,6 +217,33 @@ end
 function module.MOD(a,b)
     return a % b
 end
+function module.clone(obj, fieldcount)
+    if obj == nil then error("object is nil") end
+    local res
+    if ffi.istype(CharArray,obj) then
+        local n = bytesize(obj)
+        res = ffi.new(CharArray, n)
+        ffi.copy(res,obj,n)
+    elseif fieldcount ~= nil then
+        res = {}
+        setmetatable(res,getmetatable(obj))
+        for i=0,fieldcount do
+            res[i] = obj[i]
+        end
+    elseif obj.count then
+        res = {}
+        res.count = obj.count
+        for i=0,obj.count do
+            res[i] = obj[i]
+        end
+    else
+        res = {}
+        for k,v in pairs(obj) do
+            res[k] = v
+        end
+    end
+    return res
+end
 
 if ASSERT == nil then
     function ASSERT(cond,line,file)
@@ -275,6 +302,7 @@ module[56] = module.print
 module[57] = bit.rshift
 module[58] = module.arraylen
 module[59] = string.byte
+module[60] = module.clone
 
 return module
 

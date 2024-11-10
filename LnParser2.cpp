@@ -666,7 +666,8 @@ Expression* Parser2::number() {
 
 Qualident Parser2::qualident() {
     Qualident res;
-    if( ( peek(1).d_type == Tok_ident && peek(2).d_type == Tok_Dot )  ) {
+    if( ( peek(1).d_type == Tok_ident && peek(2).d_type == Tok_Dot &&
+          peek(3).d_type == Tok_ident && peek(4).d_type != Tok_Hat )  ) {
         expect(Tok_ident, false, "qualident");
         res.first = cur.d_val;
         expect(Tok_Dot, false, "qualident");
@@ -942,6 +943,13 @@ Expression* Parser2::designator(bool needsLvalue) {
             tmp->val = QVariant::fromValue(cur.d_val);
             tmp->lhs = res;
             res = tmp;
+            if( la.d_type == Tok_Hat )
+            {
+                expect(Tok_Hat, false, "selector");
+                tmp = new Expression(Expression::Super, cur.toRowCol() );
+                tmp->lhs = res;
+                res = tmp;
+            }
         } else if( la.d_type == Tok_Lbrack ) {
             expect(Tok_Lbrack, false, "selector");
             Expression* tmp = new Expression(Expression::Index, cur.toRowCol() );
@@ -975,7 +983,7 @@ Expression* Parser2::designator(bool needsLvalue) {
                         delete res;
                         return 0;
                     }
-                    Expression::appendArg(args,arg);
+                    Expression::append(args,arg);
                 }
             }
             expect(Tok_Rpar, false, "selector");
@@ -1187,7 +1195,7 @@ Expression* Parser2::constructor() {
             delete res;
             return 0;
         }
-        Expression::appendArg(res->rhs,e);
+        res->appendRhs(e);
         while( la.d_type == Tok_Comma || FIRST_component(la.d_type) ) {
             if( la.d_type == Tok_Comma ) {
                 expect(Tok_Comma, false, "constructor");
@@ -1198,7 +1206,7 @@ Expression* Parser2::constructor() {
                 delete res;
                 return 0;
             }
-            Expression::appendArg(res->rhs,e);
+            res->appendRhs(e);
         }
     }
     expect(Tok_Rbrace, false, "constructor");
@@ -1342,8 +1350,6 @@ Statement* Parser2::assignmentOrProcedureCall() {
         return stat;
     }else
     {
-        // TODO
-        // call procedure without ()
         Statement* stat = new Statement(Statement::Call, t.toRowCol());
         stat->lhs = lhs;
         return stat;
@@ -1636,15 +1642,16 @@ void Parser2::procedure() {
 Type* Parser2::ProcedureType() {
 	procedure();
     mdl->openScope(0);
+    Type* p = new Type();
+    p->form = Type::Proc;
     if( la.d_type == Tok_Hat ) {
 		expect(Tok_Hat, false, "ProcedureType");
+        p->receiver = true;
 	}
     Type* ret = mdl->getType(BasicType::NoType);
 	if( FIRST_FormalParameters(la.d_type) ) {
         ret = FormalParameters();
 	}
-    Type* p = new Type();
-    p->form = Type::Proc;
     p->subs = AstModel::toList(mdl->closeScope(true));
     p->base = ret;
     return p;

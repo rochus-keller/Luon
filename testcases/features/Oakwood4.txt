@@ -1,4 +1,0 @@
-aA
-0abcdH -12345 123.45 -1.234E3
-"this is a string"
-Hello World

@@ -9,7 +9,7 @@ module Minimal2
 	begin
 		//trap()
 		inner( 44, 55 )
-		str2 := str
+		copy(str2,str)
 		println(str2)
 	end doit
 

@@ -8,6 +8,7 @@ module Procs5
 	
 	proc ( this : Superclass ) Hello()
 	begin
+	   // gives error: this.Hello^
 		println("Hello Superclass!")
 	end Hello
 	
@@ -19,13 +20,13 @@ module Procs5
 
 	proc ( this : Class ) Hello()
 	begin
-		// this.Hello // TODO: call superclass
+		this.Hello^ // call superclass
 		println("Hello Class!")
 	end Hello
 	
 	proc ( this : Class ) Hello2(str: array of char)
 	begin
-		// this.Hello2(str) // TODO: call superclass
+		this.Hello2^(str) // call superclass
 		println("Hello2 Class!")
 	end Hello2
 

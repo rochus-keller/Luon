@@ -59,6 +59,13 @@ The IDE is ready for testing and debugging. I derived it from the LuaJIT version
 The LuaJIT bytecode generator including most built-in procedures is complete and ready for testing and debugging. All functions of the LuonFfi.c file 
 were migrated to LUON.lua to avoid C dependencies. Added Oakwood implementations in Lua (Files is no longer Oakwood compatible).
 
+#### Status on November 09, 2024
+
+After a lot of testing, debugging and fixes the generated code seems to be sufficiently correct for the moment to continue with other stuff. The testcases
+in the all.lnpro project, which I migrated from Oberon+ ("features" subfolder), work, which covers most aspect of the language. I also 
+implemented delegates and the copy() builtin, and made some other language changes (e.g. := no longer copies char arrays by value). Next goal is
+to run the Luon Awfy suite.
+
 #### Precompiled versions
 
 Not available at this time.

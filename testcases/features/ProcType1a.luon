@@ -1,0 +1,21 @@
+module ProcType1a
+
+   type T = record end
+		proc (this: T)sayHello( str: array of char)
+		begin
+			println("hello from method:")
+			println(str)
+		end sayHello
+	
+	var t: T
+   	m : proc^( str: array of char) 
+
+begin
+	println("ProcType1a start")
+	new(t)
+	m := 
+   	t.sayHello
+	m("5679")
+
+	println("ProcType1a done")
+end ProcType1a

@@ -385,8 +385,14 @@ void Validator::visitExpr(Expression* e, Type* hint, bool doNext)
         indexOp(e);
         break;
     case Expression::Call:
-        visitExpr(e->lhs); // proc
+        if( e->lhs && e->lhs->kind == Expression::Super )
+            visitExpr(e->lhs->lhs);
+        else
+            visitExpr(e->lhs); // proc
         callOp(e);
+        break;
+    case Expression::Super:
+        error(e->pos,"super call cannot be used here");
         break;
     case Expression::Constructor:
         constructor(e,hint);
@@ -1319,6 +1325,8 @@ void Validator::selectOp(Expression* e)
     Type* lhsT = deref(e->lhs->type);
     if( lhsT->form == Type::Record )
     {
+        if( !e->lhs->isLvalue() )
+            error(e->lhs->pos,"selector expects a variable on the left side");
         Declaration* field = lhsT->find(e->val.toByteArray());
         if( field == 0 )
             error(e->pos,QString("the record doesn't have a field named '%1'"). arg(e->val.toString()) );
@@ -1336,20 +1344,27 @@ void Validator::selectOp(Expression* e)
 
 void Validator::callOp(Expression* e)
 {
-    if( e->lhs == 0 || e->lhs->type == 0 ) // e->rhs is null in case there are no args
+    bool supercall = false;
+    Expression* lhs = e->lhs;
+    if( lhs && lhs->kind == Expression::Super )
+    {
+        supercall = true;
+        lhs = lhs->lhs;
+    }
+    if( lhs == 0 || lhs->type == 0 ) // e->rhs is null in case there are no args
         return;
 
     Declaration* proc = 0;
-    if( e->lhs->kind == Expression::DeclRef ||
-            e->lhs->kind == Expression::Select ) // Select because of bound procedures
+    if( lhs->kind == Expression::DeclRef ||
+            lhs->kind == Expression::Select ) // Select because of bound procedures
     {
-        proc = e->lhs->val.value<Declaration*>();
+        proc = lhs->val.value<Declaration*>();
         if( proc && (proc->kind == Declaration::Field || proc->isLvalue()) )
             proc = 0; // this must be a proc type field
-    }else if( e->lhs->kind == Expression::ConstVal && e->lhs->val.canConvert<Declaration*>() )
-        proc = e->lhs->val.value<Declaration*>(); // happens if a procedure is passed in via meta actual
+    }else if( lhs->kind == Expression::ConstVal && lhs->val.canConvert<Declaration*>() )
+        proc = lhs->val.value<Declaration*>(); // happens if a procedure is passed in via meta actual
 
-    const DeclList formals = e->lhs->getFormals();
+    const DeclList formals = lhs->getFormals();
     Expression* arg = e->rhs;
     for(int i = 0; arg != 0; i++, arg = arg->next )
     {
@@ -1362,9 +1377,11 @@ void Validator::callOp(Expression* e)
             e->rhs->kind == Expression::DeclRef &&
             e->rhs->val.value<Declaration*>()->kind == Declaration::TypeDecl;
 
-    Type* lhsT = deref(e->lhs->type);
+    Type* lhsT = deref(lhs->type);
     if( isTypeCast )
     {
+        if( supercall )
+            return error(e->pos,"super call operator cannot be used here");
         e->kind = Expression::Cast;
         e->type = deref(e->rhs->type);
         if( e->rhs->next )
@@ -1376,12 +1393,15 @@ void Validator::callOp(Expression* e)
         if( proc )
         {
             if( proc->kind != Declaration::Procedure && proc->kind != Declaration::Builtin )
-                return error(e->lhs->pos,"this expression cannot be called");
+                return error(lhs->pos,"this expression cannot be called");
             e->type = proc->type;
         }else if( lhsT->form != Type::Proc )
-            return error(e->lhs->pos,"this expression cannot be called");
+            return error(lhs->pos,"this expression cannot be called");
         else
             e->type = lhsT->base;
+
+        if( supercall && (proc == 0 || proc->mode != Declaration::Receiver || proc->super == 0) )
+            return error(e->pos,"super call operator cannot be used here");
 
         ExpList actuals = Expression::getList(e->rhs);
 
@@ -1391,13 +1411,13 @@ void Validator::callOp(Expression* e)
             {
                 Expression* ee = new Expression(Expression::Literal,e->pos);
                 ee->type = mdl->getType(BasicType::INTEGER);
-                ee->val = e->lhs->pos.d_row;
-                Expression::appendArg(e->rhs,ee);
+                ee->val = lhs->pos.d_row;
+                e->appendRhs(ee);
                 ee = new Expression(Expression::Literal,e->pos);
                 ee->type = mdl->getType(BasicType::StrLit);
                 ModuleData md = module->data.value<ModuleData>();
                 ee->val = md.fullName;
-                Expression::appendArg(e->rhs,ee);
+                e->appendRhs(ee);
             }
             checkBuiltinArgs(proc->id, actuals, &e->type, e->pos);
         }else
@@ -1424,7 +1444,7 @@ void Validator::callOp(Statement* s)
     Q_ASSERT( s->lhs );
     if( s->lhs->kind != Expression::Call )
     {
-        Expression* call = new Expression(Expression::Call, s->pos);
+        Expression* call = new Expression(Expression::Call, s->lhs->pos);
         call->lhs = s->lhs;
         s->lhs = call;
     }
@@ -1502,127 +1522,128 @@ static inline int find_( const QList<Declaration*>& l, const QByteArray& name )
     return -1;
 }
 
-void Validator::constructor(Expression* e, Type* hint)
+void Validator::constructor(Expression* constr, Type* hint)
 {
     // e->type is preset if NamedType is present
     // otherwise we use hint, or SET
-    if( e->type == 0 )
+    if( constr->type == 0 )
     {
         if( hint )
-            e->type = deref(hint);
+            constr->type = deref(hint);
         else
-            e->type = mdl->getType(BasicType::SET);
+            constr->type = mdl->getType(BasicType::SET);
     }
-    Expression* c = e->rhs;
     QList<Declaration*> fields;
-    if( e->type->form == Type::Record)
-        fields = e->type->fieldList();
+    if( constr->type->form == Type::Record)
+        fields = constr->type->fieldList();
     int index = 0;
     int maxIndex = 0;
     bool allConst = true;
-    Type* et = deref(e->type);
-    while( c )
+    Type* constrT = deref(constr->type);
+    // e is of the structure { c, c, c, .. }
+    Expression* comp = constr->rhs;
+    while( comp )
     {
         // go through all components
-        if( et->form == Type::Record )
+        if( constrT->form == Type::Record )
         {
-            if( c->kind == Expression::KeyValue )
+            if( comp->kind == Expression::KeyValue )
             {
-                if( !c->byName )
-                    return error(c->pos,"index components not supported in record constructors");
-                Q_ASSERT( c->lhs->kind == Expression::NameRef );
-                Qualident q = c->lhs->val.value<Qualident>();
+                if( !comp->byName )
+                    return error(comp->pos,"index components not supported in record constructors");
+                Q_ASSERT( comp->lhs->kind == Expression::NameRef );
+                Qualident q = comp->lhs->val.value<Qualident>();
                 index = find_(fields, q.second);
                 if( index < 0 )
-                    return error(c->pos,"field not known in record or its base records");
-                visitExpr(c->rhs, fields[index]->type);
-                c->lhs->val = QVariant::fromValue(fields[index]);
-                c->type = c->rhs->type;
-                if( c->rhs->kind == Expression::Range )
-                    return error(c->pos,"cannot use a range here");
+                    return error(comp->pos,"field not known in record or its base records");
+                visitExpr(comp->rhs, fields[index]->type);
+                comp->lhs->val = QVariant::fromValue(fields[index]);
+                comp->type = comp->rhs->type;
+                if( comp->rhs->kind == Expression::Range )
+                    return error(comp->pos,"cannot use a range here");
             }else
             {
-                if( c->kind == Expression::Range )
-                    return error(c->pos,"cannot use a range here");
+                if( comp->kind == Expression::Range )
+                    return error(comp->pos,"cannot use a range here");
                 if( index >=  fields.size() )
-                    return error(c->pos,"component position out of record");
-                visitExpr(c, fields[index]->type);
+                    return error(comp->pos,"component position out of record");
+                visitExpr(comp, fields[index]->type, false);
             }
-            if( !assigCompat(fields[index]->type,c->type) )
-                return error(c->pos,"component type incompatible with field type");
-        }else if( et->form == Type::Array )
+            if( !assigCompat(fields[index]->type,comp->type) )
+                return error(comp->pos,"component type incompatible with field type");
+        }else if( constrT->form == Type::Array )
         {
-            if( c->kind == Expression::KeyValue )
+            if( comp->kind == Expression::KeyValue )
             {
-                if( c->byName )
-                    return error(c->pos,"label components not supported in array constructors");
-                visitExpr(c->lhs);
-                if( !c->lhs->isConst() || deref(e->lhs->type)->isInteger() )
-                    return error(c->pos,"index must be a constant expression of integer type");
-                index = c->lhs->val.toLongLong();
-                visitExpr(c->rhs, et->base);
-                c->type = c->rhs->type;
-                if( c->rhs->kind == Expression::Range )
-                    return error(c->pos,"cannot use a range here");
+                if( comp->byName )
+                    return error(comp->pos,"label components not supported in array constructors");
+                visitExpr(comp->lhs);
+                if( !comp->lhs->isConst() || deref(constr->lhs->type)->isInteger() )
+                    return error(comp->pos,"index must be a constant expression of integer type");
+                index = comp->lhs->val.toLongLong();
+                visitExpr(comp->rhs, constrT->base);
+                comp->type = comp->rhs->type;
+                if( comp->rhs->kind == Expression::Range )
+                    return error(comp->pos,"cannot use a range here");
             }else
             {
-                if( c->kind == Expression::Range )
-                    return error(c->pos,"cannot use a range here");
-                visitExpr(c, et->base);
+                if( comp->kind == Expression::Range )
+                    return error(comp->pos,"cannot use a range here");
+                visitExpr(comp, constrT->base, false);
             }
-            if( et->len && index >= et->len )
-                return error(c->pos,"component position out of array");
-            if( !assigCompat(et->base,c->type) )
-                return error(c->pos,"component type incompatible with element type");
-        }else if( et->form == Type::HashMap )
+            if( constrT->len && index >= constrT->len )
+                return error(comp->pos,"component position out of array");
+            if( !assigCompat(constrT->base,comp->type) )
+                return error(comp->pos,"component type incompatible with element type");
+        }else if( constrT->form == Type::HashMap )
         {
             // TODO: a : b could be the same as ["a"] : b, but then we should also support h.a for h["a"]
-            if( c->kind == Expression::KeyValue )
+            if( comp->kind == Expression::KeyValue )
             {
-                if( c->byName )
-                    return error(c->pos,"label components not supported in record constructors");
-                visitExpr(c->lhs);
-                if( et->expr && !assigCompat(et->expr->type, c->lhs->type) )
-                    return error(c->pos,"index type of component not compatible with key type");
-                visitExpr(c->rhs, et->base);
-                c->type = c->rhs->type;
-                if( c->rhs->kind == Expression::Range )
-                    return error(c->pos,"cannot use a range here");
+                if( comp->byName )
+                    return error(comp->pos,"label components not supported in record constructors");
+                visitExpr(comp->lhs);
+                if( constrT->expr && !assigCompat(constrT->expr->type, comp->lhs->type) )
+                    return error(comp->pos,"index type of component not compatible with key type");
+                visitExpr(comp->rhs, constrT->base);
+                comp->type = comp->rhs->type;
+                if( comp->rhs->kind == Expression::Range )
+                    return error(comp->pos,"cannot use a range here");
             }else
-                return error(c->pos,"only key-value-components supported for HASHMAP constructors");
-        }else if( et->form == BasicType::SET )
+                return error(comp->pos,"only key-value-components supported for HASHMAP constructors");
+        }else if( constrT->form == BasicType::SET )
         {
-            if( c->kind == Expression::KeyValue || c->kind == Expression::Constructor )
-                return error(c->pos,"component type not supported for SET constructors");
-            visitExpr(c);
-            if( c->kind == Expression::Range && !sameType(c->lhs->type, c->rhs->type) )
-                error(e->pos,"types in range must be the same");
-            if( c->type && !deref(c->type)->isInteger() )
-                return error(c->pos,"expecting integer compontents for SET constructors");
+            if( comp->kind == Expression::KeyValue || comp->kind == Expression::Constructor )
+                return error(comp->pos,"component type not supported for SET constructors");
+            visitExpr(comp, 0, false);
+            if( comp->kind == Expression::Range && !sameType(comp->lhs->type, comp->rhs->type) )
+                error(constr->pos,"types in range must be the same");
+            if( comp->type && !deref(comp->type)->isInteger() )
+                return error(comp->pos,"expecting integer compontents for SET constructors");
         }else
         {
-            return error(e->pos,"constructors cannot be used to create the given type");
+            return error(constr->pos,"constructors cannot be used to create the given type");
             // stop immediately
         }
-        if( !c->isConst() )
+        if( !comp->isConst() )
             allConst = false;
         if( index > maxIndex )
             maxIndex = index;
         index++;
-        c = c->next;
+        comp = comp->next;
     }
-    if( et->form == Type::Array && et->len == 0 )
+    if( constrT->form == Type::Array && constrT->len == 0 )
     {
         // create new array type with fix len = maxIndex+1
         Type* a = new Type();
         a->form = Type::Array;
         a->len = maxIndex + 1;
-        a->base = deref(et->base);
+        a->base = deref(constrT->base);
         a->anonymous = true;
         addHelper(a);
-    }else if( et->form == BasicType::SET && allConst )
+    }else if( constrT->form == BasicType::SET && allConst )
     {
-        Expression* c = e->rhs;
+        Expression* c = constr->rhs;
         std::bitset<32> bits;
         while( c )
         {
@@ -1648,8 +1669,8 @@ void Validator::constructor(Expression* e, Type* hint)
                     bits.set(n);
             }
         }
-        toConstVal(e);
-        e->val = (qint64)bits.to_ulong();
+        toConstVal(constr);
+        constr->val = (qint64)bits.to_ulong();
     }
 }
 
@@ -1692,8 +1713,11 @@ bool Validator::assigCompat(Type* lhs, Type* rhs) const
     if( lhs->form == Type::Proc && rhs->form == Type::Proc )
         return matchFormals(lhs->subs, rhs->subs) && matchResultType(lhs->base,rhs->base);
 
+#if 0
+    // no, we should use copy for this
     if( lhs->isDerefCharArray() && rhs->isDerefCharArray())
         return true; // check len at runtime
+#endif
 
     return false;
 }
@@ -1710,7 +1734,11 @@ bool Validator::assigCompat(Type* lhs, Declaration* rhs) const
 
     // Tv is a procedure type and e is the name of a procedure whose formal parameters match those of Tv.
     if( lhs->form == Type::Proc && rhs->kind == Declaration::Procedure )
+    {
+        if( lhs->receiver && rhs->mode != Declaration::Receiver || !lhs->receiver && rhs->mode == Declaration::Receiver )
+            return false;
         return matchFormals(lhs->subs, rhs->getParams(true)) && matchResultType(lhs->base,rhs->type);
+    }
 
     // Tv is an enumeration type and e is a valid element of the enumeration;
     if( lhs->form == Type::ConstEnum && rhs->kind == Declaration::ConstDecl && rhs->mode == Declaration::Enum )
@@ -1736,6 +1764,7 @@ bool Validator::assigCompat(Type* lhs, const Expression* rhs) const
     if( lhs->isDerefCharArray() && (rhsT->form == BasicType::StrLit ||
                                     rhsT->form == BasicType::STRING || rhsT->form == BasicType::ByteArrayLit ))
     {
+        // this is an abbreviation of COPY(lhs,rhs), i.e. an implicit copy operation
         if( lhs->len && rhsT->form == BasicType::StrLit && rhs->val.toByteArray().size() > lhs->len )
             return false;
         else
@@ -2014,6 +2043,36 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
             throw "second argument only applicable to open arrays";
         break;
         }
+    case Builtin::COPY:
+        // COPY(x): make a (shallow) copy of the array/record/hashmap pointed to by x and return it; if x is
+        //          a string or string literal, then create an open char array as a copy of x
+        // COPY(x, y): same as x := COPY(y), with the following exceptions:
+        // if x and y are char arrays and x is not nil, then the chars of y up to and with the first 0 are copied to x
+        // if x is a char array and y is a char literal or string and x is not nil, then the chars of y are copied to x
+        if( !expectingNMArgs(args,1,2) )
+            break;
+        else if( args.size() == 2)
+        {
+            if( !args[0]->isLvalue() )
+                throw "expecting a variable as the first argument";
+            Type* lt = deref(args[0]->type);
+            Type* rt = deref(args[1]->type);
+            if( !lt->isStructured() )
+                throw "expecting a structured first argument type";
+            if( lt->isDerefCharArray() && rt->isDerefCharArray() )
+                break; // both char arrays, do string copy
+            if( lt->isDerefCharArray() && ( rt->form == BasicType::StrLit || rt->form == BasicType::ByteArrayLit
+                                            || rt->form == BasicType::STRING))
+            if( !assigCompat(lt, rt) )
+                throw "type of second argument is not assignment compatible with first argument";
+        }else if(args.size() == 1)
+        {
+            Type* t = deref(args[0]->type);
+            if( !t->isStructured() ) // TODO string/literal
+                throw "expecting a record, array or hashmap argument type";
+            *ret = args[0]->type;
+        }
+        break;
 
         // TODO: check, fix
     case Builtin::PRINT:
@@ -2024,9 +2083,6 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
        break;
     case Builtin::HALT:
         expectingNArgs(args,1);
-        break;
-    case Builtin::COPY:
-        expectingNArgs(args,2);
         break;
     case Builtin::CAP:
         expectingNArgs(args,1);

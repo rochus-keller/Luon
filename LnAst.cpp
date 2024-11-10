@@ -274,7 +274,7 @@ QPair<int, int> Type::countAllocRecordMembers(bool recursive)
     if( recursive && base )
         counts = base->deref()->countAllocRecordMembers(true);
 
-    if( !allocated )
+    if( allocated )
         foreach( Declaration* sub, subs )
         {
             if( sub->kind == Declaration::Field )
@@ -582,12 +582,12 @@ bool Expression::isConst() const
                 return true;
             case Builtin::MIN:
             case Builtin::MAX:
-                return getNumOfArgs(args) == 1 || allConst(args);
+                return getCount(args) == 1 || allConst(args);
             case Builtin::GETENV:
             case Builtin::DEFAULT:
                 return true;
             case Builtin::CAST:
-                return getNumOfArgs(args) == 2 && args->next->isConst();
+                return getCount(args) == 2 && args->next->isConst();
             case Builtin::VARARG:
             case Builtin::VARARGS:
                 return false;
@@ -609,13 +609,14 @@ bool Expression::isConst() const
 
 DeclList Expression::getFormals() const
 {
+    Type* t = type ? type->deref() : 0;
     if( kind == DeclRef )
     {
         Declaration* d = val.value<Declaration*>();
         if( d && d->kind == Declaration::Procedure )
             return d->getParams();
-    }else if( type && type->form == Type::Proc )
-        return type->subs;
+    }else if( t && t->form == Type::Proc )
+        return t->subs;
 
     return DeclList();
 }
@@ -689,25 +690,33 @@ qint64 Expression::getCaseValue(bool* ok) const
     }
 }
 
-int Expression::getNumOfArgs(const Expression* e)
+void Expression::appendRhs(Expression* e)
+{
+    if( rhs == 0 )
+        rhs = e;
+    else
+        append(rhs,e);
+}
+
+int Expression::getCount(const Expression* list)
 {
     int count = 0;
-    while( e )
+    while( list )
     {
         count++;
-        e = e->next;
+        list = list->next;
     }
     return count;
 }
 
-void Expression::appendArg(Expression* exp, Expression* arg)
+void Expression::append(Expression* list, Expression* elem)
 {
-    while( exp && exp->next )
-        exp = exp->next;
-    if( exp )
+    while( list && list->next )
+        list = list->next;
+    if( list )
     {
-        Q_ASSERT(exp->next == 0);
-        exp->next = arg;
+        Q_ASSERT(list->next == 0);
+        list->next = elem;
     }
 }
 

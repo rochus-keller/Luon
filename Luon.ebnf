@@ -64,7 +64,9 @@ VariableDeclaration ::= IdentList ':' type
 
 designator ::= qualident {selector}
 
-selector ::= '.' ident | '[' expression ']' | '(' [ ExpList ] ')' 
+selector ::= '.' ident ['^']   // '^' is used to call base type method
+                    | '[' expression ']' 
+                    | '(' [ ExpList ] ')' 
 
 ExpList ::= expression { [','] expression }
 

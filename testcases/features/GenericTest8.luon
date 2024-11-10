@@ -2,7 +2,7 @@ module GenericTest8
 import H := Generic7(integer,eq)
 
 type 
-  proc eq(in lhs,rhs: integer):boolean
+  proc eq(const lhs,rhs: integer):boolean
   begin
     return lhs = rhs
   end eq

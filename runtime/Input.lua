@@ -22,11 +22,11 @@ end
 
 
 -- NOTE: these numbers are allocated as by LjbcGen and need to be updated if Input.luon changes!
-module[0] = 1000000
-module[1] = module.Available
-module[2] = module.Read
-module[3] = module.Mouse
-module[4] = module.SetMouseLimits
-module[5] = module.Time
+module[2] = 1000000
+module[3] = module.Available
+module[4] = module.Read
+module[5] = module.Mouse
+module[6] = module.SetMouseLimits
+module[7] = module.Time
 
 return module
