@@ -564,9 +564,9 @@ bool Expression::isConst() const
 
     if( kind == Call )
     {
-        Expression* args = val.value<Expression*>();
+        Expression* args = rhs;
         if( lhs == 0 )
-            return true;
+            return true; // error
         Declaration* d = lhs->val.value<Declaration*>();
         if( d->kind == Declaration::Procedure )
         {
@@ -576,11 +576,22 @@ bool Expression::isConst() const
                 return allConst(args);
         }else if( d->kind == Declaration::Builtin )
         {
-            // TODO
+            // TODO: this is no longer required since Validator::callOp removes const calls of builtins
             switch( d->id )
             {
-            case Builtin::LEN:
-                return true;
+            case Builtin::LEN: {
+                    // LEN handles compile-time and dynamic arguments
+                    if( getCount(args) != 1 )
+                        return true; // error
+                    if( args->isConst() )
+                        return true;
+                    Type* t = args->type ? args->type->deref() : 0;
+                    if( t && t->form == Type::Array )
+                        return t->len > 0;
+                    if( t && t->form == BasicType::STRING )
+                        return false;
+                    return true;
+                }
             case Builtin::MIN:
             case Builtin::MAX:
                 return getCount(args) == 1 || allConst(args);

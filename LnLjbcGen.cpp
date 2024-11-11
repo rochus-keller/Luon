@@ -122,7 +122,7 @@ public:
             switch( d->kind )
             {
             case Declaration::TypeDecl:
-                if( d->type && d->type->form == Type::Record )
+                if( d->type && d == d->type->decl && d->type->form == Type::Record )
                     emitClassObject(d->type);
                 break;
             case Declaration::ConstDecl:
@@ -199,13 +199,22 @@ public:
 
     void emitConstValue(quint8 to, const QVariant& data, Type* type, const RowCol& pos)
     {
-        Declaration* proc = data.value<Declaration*>();
-        if( proc )
+        Declaration* d = data.value<Declaration*>();
+        if( d )
         {
-            // this happens when a procedure is passed as a meta actual
-            Q_ASSERT(proc->kind == Declaration::Procedure);
-            fetchModule(proc->getModule(),to, pos);
-            emitGetTableByIndex(to, to, proc->id, pos);
+            switch( d->kind )
+            {
+            case Declaration::Procedure:
+                // this happens when a procedure is passed as a meta actual
+                fetchModule(d->getModule(),to, pos);
+                emitGetTableByIndex(to, to, d->id, pos);
+                break;
+            case Declaration::ConstDecl:
+                emitConstValue(to, d->data, d->type, pos);
+                break;
+            default:
+                Q_ASSERT(false);
+            }
             return;
         }
         Type* t = deref(type);
@@ -219,6 +228,7 @@ public:
         case BasicType::INTEGER:
         case BasicType::REAL:
         case BasicType::SET:
+        case Type::ConstEnum:
             bc.KSET(to, data, pos.packed() );
             break;
         case BasicType::Nil:
@@ -237,7 +247,7 @@ public:
             switch( d->kind )
             {
             case Declaration::TypeDecl:
-                if( d->type && d->type->form == Type::Record )
+                if( d->type && d == d->type->decl && d->type->form == Type::Record )
                     emitClassObject(d->type);
                 break;
             case Declaration::Procedure:
@@ -784,6 +794,7 @@ public:
             releaseSlot();
             break;
         case Builtin::DEFAULT:
+            Q_ASSERT(false); // only called at compile time
             emitInitializer(res, call->rhs->type, call->pos);
             break;
         case Builtin::ASSERT:
@@ -794,9 +805,11 @@ public:
             emitBuiltinN(proc->id, call, 1);
             break;
         case Builtin::MAX:
+            Q_ASSERT(false); // only called at compile time
             bc.KSET(res, BasicType::getMax(deref(call->rhs->type)->form), call->pos.packed());
             break;
         case Builtin::MIN:
+            Q_ASSERT(false); // only called at compile time
             bc.KSET(res, BasicType::getMin(deref(call->rhs->type)->form), call->pos.packed());
             break;
         case Builtin::EXCL:
@@ -1722,6 +1735,12 @@ public:
             break;
         case BasicType::REAL:
             bc.KSET(to,0.0,loc.packed());
+            break;
+        case Type::Record:
+        case Type::Array:
+        case Type::HashMap:
+        case Type::Proc:
+            bc.KNIL(to,1,loc.packed());
             break;
         }
     }

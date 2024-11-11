@@ -14,7 +14,7 @@ end
 
 function Out_String(s)
 	if type(s) == "cdata" then
-		io.stdout:write(ffi.string(s))
+            io.stdout:write(ffi.string(s))
 	else
 	    io.stdout:write(tostring(s))
 	end

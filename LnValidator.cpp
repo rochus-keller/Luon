@@ -18,6 +18,7 @@
 #include "LnToken.h"
 #include <bitset>
 #include <limits>
+#include <cmath>
 #include <QtDebug>
 using namespace Ln;
 
@@ -1419,7 +1420,15 @@ void Validator::callOp(Expression* e)
                 ee->val = md.fullName;
                 e->appendRhs(ee);
             }
-            checkBuiltinArgs(proc->id, actuals, &e->type, e->pos);
+            if( checkBuiltinArgs(proc->id, actuals, &e->type, e->pos) )
+            {
+                QVariant val;
+                if( evalBuiltin(proc->id, actuals, val, e->pos ) )
+                {
+                    e->val = val;
+                    toConstVal(e);
+                }
+            }
         }else
         {
             if( actuals.size() < formals.size() )
@@ -1433,9 +1442,8 @@ void Validator::callOp(Expression* e)
                     error(actuals[i]->pos, "actual argument not compatible with formal parameter");
                 }
             }
+            // TODO: compiletime execution if invar
         }
-
-        // TODO: call if const builtin or invar
     }
 }
 
@@ -1885,6 +1893,8 @@ static void checkBitArith(const ExpList& args, Type** ret)
 
 bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret, const RowCol& pos)
 {
+    // NOTE: args are already visited at this point
+
     Q_ASSERT(ret);
 
     *ret = mdl->getType(BasicType::NoType);
@@ -1949,7 +1959,11 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
     case Builtin::DEFAULT:
         if(!expectingNArgs(args,1))
             break;
-        *ret = args[0]->type;
+        t = deref(args[0]->type);
+        if( t->isStructured() )
+            *ret = mdl->getType(BasicType::Nil);
+        else
+            *ret = args[0]->type;
         break;    
     case Builtin::FLOOR:
         if( !expectingNArgs(args,1) )
@@ -2000,6 +2014,7 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
     case Builtin::STRLEN:
         if( !expectingNArgs(args,1) )
             break;
+        *ret = mdl->getType(BasicType::INTEGER);
         t = deref(args[0]->type);
         if( !t->isDerefCharArray() && t->form != BasicType::STRING && t->form != BasicType::StrLit )
             throw "expecing char array or string argument";
@@ -2126,6 +2141,146 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
     }
 
     return true;
+}
+
+bool Validator::evalBuiltin(quint8 builtin, const ExpList& args, QVariant& ret, const RowCol& pos)
+{
+    // NOTE: args and builtin are already checked at this point
+
+    switch( builtin )
+    {
+    case Builtin::LEN: {
+        // LEN handles compile-time and dynamic arguments
+            Type* t = deref(args.first()->type);
+            if( t->form == Type::Array )
+            {
+                if( t->len > 0 )
+                {
+                    ret = t->len;
+                    return true;
+                }
+            }else if( t->form == BasicType::StrLit )
+            {
+                ret = args.first()->val.toByteArray().size() + 1; // include terminating zero
+                return true;
+            }else if( t->form == BasicType::ByteArrayLit )
+            {
+                ret = args.first()->val.toByteArray().size(); // no terminating zero unless explicitly in literal
+                return true;
+            }
+            return false;
+        }
+    case Builtin::MAX:
+        ret = BasicType::getMax(deref(args.first()->type)->form);
+        return true;
+    case Builtin::MIN:
+        ret = BasicType::getMin(deref(args.first()->type)->form);
+        return true;
+    case Builtin::DEFAULT:
+        switch( deref(args.first()->type)->form )
+        {
+        case BasicType::BOOLEAN:
+            ret = false;
+            break;
+        case BasicType::CHAR:
+        case BasicType::INTEGER:
+        case BasicType::SET:
+        case Type::ConstEnum:
+            ret = (qint64)0;
+            break;
+        case BasicType::REAL:
+            ret = (double)0.0;
+            break;
+        default:
+            ret = QVariant();
+        }
+        return true;
+    }
+
+    for( int i = 0; i < args.size(); i++ )
+        if( !args[i]->isConst() )
+            return false;
+
+    switch( builtin )
+    {
+    case Builtin::ABS:
+        if( !deref(args.first()->type)->isInteger() )
+            ret = qAbs(args.first()->val.toLongLong());
+        else
+            ret = qAbs(args.first()->val.toDouble());
+        break;
+    case Builtin::BITAND:
+        ret = args[0]->val.toUInt() & args[1]->val.toUInt(); // LuaJIT only supports 32 bit bitops
+        break;
+    case Builtin::BITASR:
+        ret = args[0]->val.toInt() >> args[1]->val.toUInt();
+        break;
+    case Builtin::BITNOT:
+        ret = ~args[0]->val.toUInt();
+        break;
+    case Builtin::BITOR:
+        ret = args[0]->val.toUInt() | args[1]->val.toUInt();
+        break;
+    case Builtin::BITS:
+        ret = args[0]->val.toUInt();
+        break;
+    case Builtin::BITSHL:
+        ret = args[0]->val.toUInt() << args[1]->val.toUInt();
+        break;
+    case Builtin::BITSHR:
+        ret = args[0]->val.toUInt() >> args[1]->val.toUInt();
+        break;
+    case Builtin::BITXOR:
+        ret = args[0]->val.toUInt() ^ args[1]->val.toUInt();
+        break;
+    case Builtin::CAST:
+        ret = args[0]->val.toUInt(); // TODO: check enums?
+        break;
+    case Builtin::CHR:
+        ret = args[0]->val.toUInt();
+        break;
+    case Builtin::FLOOR:
+        ret = (qint64)::floor(args[0]->val.toDouble());
+        break;
+    case Builtin::FLT:
+        ret = (double)args[0]->val.toLongLong();
+        break;
+    case Builtin::ODD:
+        ret = args[0]->val.toLongLong() & 1;
+        break;
+    case Builtin::ORD:
+        ret = args[0]->val;
+        break;
+    case Builtin::STRLEN:
+        ret = ::strlen(args[0]->val.toByteArray().constData());
+        break;
+    case Builtin::INC:
+        if( args.size() == 2 )
+            ret = args[0]->val.toLongLong() + args[1]->val.toLongLong();
+        else
+            ret = args[0]->val.toLongLong() + 1;
+        break;
+    case Builtin::DEC:
+        if( args.size() == 2 )
+            ret = args[0]->val.toLongLong() - args[1]->val.toLongLong();
+        else
+            ret = args[0]->val.toLongLong() - 1;
+        break;
+    case Builtin::EXCL:
+        // TODO
+        break;
+    case Builtin::INCL:
+        // TODO
+        break;
+
+    case Builtin::CAP:
+        ret = args[0]->val.toChar().toUpper().toLatin1();
+        break;
+    default:
+        return false; // could not be evaluated as a constant
+    }
+
+    return true; // when we come here the builtin had const args and was evaluated
 }
 
 void Validator::markDecl(Declaration* d)

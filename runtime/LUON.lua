@@ -227,6 +227,8 @@ function module.clone(obj, fieldcount)
         for i=0,obj.count do
             res[i] = obj[i]
         end
+    elseif type(obj) == "string" then
+        return module.charToStringArray(obj)
     else
         res = {}
         for k,v in pairs(obj) do
@@ -261,7 +263,7 @@ module[20] = module.setDiv
 module[21] = module.setTest
 module[22] = setmetatable
 module[23] = module.is_a
-module[24] = module.strlen
+module[24] = strlen
 module[25] = module.println
 module[26] = ffi.sizeof -- bytesize
 module[27] = module.strcpy

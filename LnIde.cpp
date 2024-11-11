@@ -2253,8 +2253,8 @@ static QString nameOf( Type* r, bool frame = false )
 
 void Ide::printLocalVal(QTreeWidgetItem* item, Type* type, int depth)
 {
-    static const int numOfFetchedElems = 55;
-    static const int numOfLevels = 5;
+    static const int numOfFetchedElems = 100;
+    static const int numOfLevels = 7;
 
     if( depth > numOfLevels )
         return;
@@ -2287,14 +2287,16 @@ void Ide::printLocalVal(QTreeWidgetItem* item, Type* type, int depth)
         case BasicType::SET:
             item->setText(1,QString("{%1}").arg((quint32)lua_tointeger(L,-1),32,2,QChar('0')));
             return;
-        case BasicType::Any:
-            item->setText(1,QString("<any> %1").arg(lua_tostring(L,-1)));
-            return;
         case BasicType::Nil:
+            item->setText(1,"nil");
+            return;
         case BasicType::StrLit:
+        case BasicType::STRING:
+            item->setText(1,QString("\"%1\"").arg(lua_tostring(L,-1)));
+            return;
         case BasicType::ByteArrayLit:
-            Q_ASSERT( false );
-            break;
+            item->setText(1,QString("$%1$").arg(QByteArray(lua_tostring(L,-1)).toHex().constData()));
+            return;
         }
     } // else
     switch( type->form )
@@ -2306,7 +2308,7 @@ void Ide::printLocalVal(QTreeWidgetItem* item, Type* type, int depth)
             Q_ASSERT( at );
             const int arr = lua_gettop(L);
             const int luatype = lua_type(L, arr );
-            if( luatype == LUA_TNIL )
+            if( lua_isnil(L, -1) )
                 item->setText(1, QString("nil") );
             else if( luatype == 10 ) // cdata
             {
@@ -2401,7 +2403,7 @@ void Ide::printLocalVal(QTreeWidgetItem* item, Type* type, int depth)
             const int rec = lua_gettop(L);
             Type* r = type;
             const int lt = lua_type( L, rec );
-            if( lt == LUA_TNIL )
+            if( lua_isnil(L, -1) )
             {
                 item->setText(1,"nil");
                 break;
@@ -2428,6 +2430,7 @@ void Ide::printLocalVal(QTreeWidgetItem* item, Type* type, int depth)
             // look for the dynamic type
             if( lua_getmetatable(L,rec) )
             {
+                //lua_getfield(L, -1, "@mod");
                 lua_getfield(L, -1, "@cls");
                 if( !lua_isnil( L, -1 ) )
                 {
@@ -2453,6 +2456,7 @@ void Ide::printLocalVal(QTreeWidgetItem* item, Type* type, int depth)
         }
         break;
     default:
+        item->setText(1,lua_tostring(L,-1));
         break;
     }
 }
@@ -3020,7 +3024,7 @@ int main(int argc, char *argv[])
     a.setOrganizationName("me@rochus-keller.ch");
     a.setOrganizationDomain("github.com/rochus-keller/Luon");
     a.setApplicationName("Luon IDE (LuaJIT)");
-    a.setApplicationVersion("0.4.0");
+    a.setApplicationVersion("0.5.0");
     a.setStyle("Fusion");    
     QFontDatabase::addApplicationFont(":/font/DejaVuSansMono.ttf"); // "DejaVu Sans Mono"
 

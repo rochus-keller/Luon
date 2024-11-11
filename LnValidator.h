@@ -77,6 +77,7 @@ namespace Ln
         void constructor(Expression*, Type* hint);
         Type* deref(Type*) const;
         bool checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret, const RowCol& pos);
+        bool evalBuiltin(quint8 builtin, const ExpList& args, QVariant& ret, const RowCol& pos);
         void markDecl(Declaration*);
         Symbol* markRef(Declaration*, const RowCol&);
         Declaration* addHelper(Type*);
