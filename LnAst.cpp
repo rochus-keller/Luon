@@ -28,7 +28,6 @@ const char* BasicType::name[] = {
     "NoType",
     "StrLit",
     "ByteArrayLit",
-    "Any",
     "Nil",
     "BOOLEAN",
     "CHAR",
@@ -36,6 +35,7 @@ const char* BasicType::name[] = {
     "REAL",
     "SET",
     "STRING",
+    "ANYREC"
 };
 
 const char* Builtin::name[] = {
@@ -59,7 +59,7 @@ AstModel::AstModel():helper(0),helperId(0)
         types[BasicType::StrLit] = newType(BasicType::StrLit,1);
         types[BasicType::ByteArrayLit] = newType(BasicType::ByteArrayLit,1);
         types[BasicType::Nil] = newType(BasicType::Nil,1);
-        types[BasicType::Any] = addType("ANY", BasicType::Any,1);
+        types[BasicType::ANYREC] = addType("ANYREC", BasicType::ANYREC,1);
 
         types[BasicType::BOOLEAN] = addType("BOOLEAN", BasicType::BOOLEAN, 1 );
         types[BasicType::CHAR] = addType("CHAR", BasicType::CHAR, 1 );
@@ -366,6 +366,20 @@ QList<Declaration*> Type::fieldList() const
     return res;
 }
 
+QList<Declaration*> Type::methodList(bool recursive) const
+{
+    QList<Declaration*> res;
+    if( recursive && form == Record && base)
+        res = base->deref()->methodList();
+    foreach( Declaration* d, subs)
+    {
+        if( d->kind == Declaration::Procedure )
+            res << d;
+        d = d->getNext();
+    }
+    return res;
+}
+
 Type::~Type()
 {
     if( form != ConstEnum )
@@ -520,6 +534,30 @@ RowCol Declaration::getEndPos() const
         return s->pos;
     else
         return pos;
+}
+
+QByteArray Declaration::scopedName(bool withModule, bool withPath) const
+{
+    QByteArray res;
+    const Declaration* d = this;
+    while( d && d->kind != Declaration::Module )
+    {
+        if( !res.isEmpty() )
+            res = '$' + res;
+        res = d->name + res;
+        d = d->outer;
+    }
+    Q_ASSERT( d && d->kind == Declaration::Module );
+    if( withModule )
+    {
+        if( withPath )
+        {
+            ModuleData md = d->data.value<ModuleData>();
+            res = md.fullName + "." + res;
+        }
+        res = d->name + "." + res;
+    }
+    return res;
 }
 
 void Declaration::deleteAll(Declaration* d)

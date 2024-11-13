@@ -87,6 +87,209 @@ public:
 
     Imp():modSlot(0),lnlj(0),curClass(0),thisMod(0) {}
 
+    void createAllClassObjects(Declaration* scope)
+    {
+        // each record type is represented by a class object at runtime which is essentially
+        // the virtual table accomodating bound procedures.
+        // the class object is referenced by each instance of a record via the meta table slot of
+        // a lua table. also the super class is referenced via meta table slot of the class object.
+
+        Declaration* d = scope->link;
+        while( d )
+        {
+            switch( d->kind )
+            {
+            case Declaration::TypeDecl:
+                if( d->type && d == d->type->decl && d->type->form == Type::Record )
+                {
+                    Type* record = d->type;
+                    const QPair<int, int> counts = record->countAllocRecordMembers(true);
+                    bc.TNEW( curClass, counts.second, 2, d->pos.packed() );
+
+                    Q_ASSERT( ctx.back().scope == thisMod );
+
+                    // store the record slot number and module reference in each class object
+                    const int tmp = ctx.back().buySlots(1);
+                    bc.KSET(tmp, d->id, d->pos.packed() );
+                    bc.TSET(tmp, curClass, "@cls", d->pos.packed() );
+                    bc.TSET(modSlot, curClass, "@mod", d->pos.packed() );
+                    bc.KSET(tmp, d->scopedName(true), d->pos.packed());
+                    bc.TSET(tmp, curClass, "@name", d->pos.packed() );
+                    ctx.back().sellSlots(tmp);
+
+                    emitSetTableByIndex( curClass, modSlot, d->id, d->pos );
+
+                    foreach( Declaration* p, record->subs )
+                    {
+                        if( p->kind == Declaration::Procedure )
+                            createAllClassObjects(p);
+                    }
+                }
+                break;
+            case Declaration::Procedure:
+                createAllClassObjects(d);
+                break;
+            }
+
+            d = d->getNext();
+        }
+    }
+
+    void connectAllClassObjects(Declaration* scope)
+    {
+        Declaration* d = scope->link;
+        while( d )
+        {
+            switch( d->kind )
+            {
+            case Declaration::TypeDecl:
+                if( d->type && d == d->type->decl && d->type->form == Type::Record )
+                {
+                    Type* record = d->type;
+
+                    Q_ASSERT( ctx.back().scope == thisMod );
+
+                    emitGetTableByIndex( curClass, modSlot, d->id, d->pos );
+
+                    if( record->base )
+                    {
+                        const int baseClass = ctx.back().buySlots(1);
+                        fetchClass(baseClass, record->base, d->pos);
+                        const int tmp = ctx.back().buySlots(3,true);
+#if 1
+                        fetchLnlibMember(tmp, 6, d->pos); // module.assureNotNil
+                        bc.MOV( tmp+1, curClass, d->pos.packed() );
+                        bc.KSET(tmp+2, QString("connectAllClassObjects metaclass of %1 is nil")
+                                .arg(d->scopedName(true).constData()), d->pos.packed());
+                        bc.CALL( tmp, 0, 2, d->pos.packed() );
+#endif
+                        fetchLnlibMember(tmp, 22, d->pos); // setmetatable
+                        bc.MOV( tmp+1, curClass, d->pos.packed() );
+                        bc.MOV(tmp+2,baseClass, d->pos.packed() );
+                        bc.CALL( tmp, 0, 2, d->pos.packed() );
+                        ctx.back().sellSlots(tmp,3);
+                        ctx.back().sellSlots(baseClass);
+                    }
+
+                    foreach( Declaration* p, record->subs )
+                    {
+                        if( p->kind == Declaration::Procedure )
+                            connectAllClassObjects(p);
+                    }
+                }
+                break;
+            case Declaration::Procedure:
+                connectAllClassObjects(d);
+                break;
+            }
+            d = d->getNext();
+        }
+    }
+
+    void emitAllImports(Declaration* scope)
+    {
+        Declaration* d = scope->link;
+        while( d )
+        {
+            switch( d->kind )
+            {
+            case Declaration::Import:
+                emitImport(d);
+                break;
+            }
+            d = d->getNext();
+        }
+    }
+
+    void emitAllProcedures(Declaration* scope)
+    {
+        Declaration* d = scope->link;
+        while( d )
+        {
+            switch( d->kind )
+            {
+            case Declaration::TypeDecl:
+                if( d->type && d == d->type->decl && d->type->form == Type::Record )
+                {
+                    foreach( Declaration* p, d->type->subs )
+                        if( p->kind == Declaration::Procedure )
+                            emitAllProcedures(p);
+
+                    Q_ASSERT( ctx.back().scope == thisMod );
+                    emitGetTableByIndex( curClass, modSlot, d->id, d->pos );
+                    foreach( Declaration* p, d->type->subs )
+                    {
+                        if( p->kind == Declaration::Procedure )
+                            emitProcedure(p);
+                    }
+                }
+                break;
+            case Declaration::Procedure:
+                emitAllProcedures(d);
+                emitProcedure(d);
+                break;
+            }
+            d = d->getNext();
+        }
+    }
+
+    void downcopyRecord(Type* record, QSet<Type*>& seen)
+    {
+        if( seen.contains(record) )
+            return;
+        seen.insert(record);
+        if( record->decl->getModule() != thisMod )
+            return;
+
+        if( record->base )
+        {
+            Type* base = deref(record->base);
+            if( base->form == Type::Record )
+                downcopyRecord(base,seen);
+
+            Declaration* d = record->decl;
+            emitGetTableByIndex( curClass, modSlot, d->id, d->pos );
+
+            const int baseClass = ctx.back().buySlots(1);
+            fetchClass(baseClass, record->base, d->pos);
+            const int tmp = ctx.back().buySlots(1);
+            const QPair<int, int> counts = base->countAllocRecordMembers(true);
+            QList<Declaration*> methods = record->methodList();
+            QSet<int> used;
+            foreach( Declaration* d, methods )
+                used.insert(d->id);
+
+            for( int i = 0; i < counts.second; i++ )
+            {
+                if( used.contains(i) )
+                    continue; // don't overwrite the methods bound to this specific class
+                emitGetTableByIndex(tmp,baseClass,i,record->decl->pos);
+                emitSetTableByIndex(tmp,curClass,i,record->decl->pos);
+            }
+
+            ctx.back().sellSlots(tmp);
+            ctx.back().sellSlots(baseClass);
+        }
+    }
+
+    void downcopyAllMethods(Declaration* scope, QSet<Type*>& seen)
+    {
+        Declaration* d = scope->link;
+        while( d )
+        {
+            if( d->kind == Declaration::TypeDecl && d->type && d == d->type->decl && d->type->form == Type::Record )
+            {
+                downcopyRecord(d->type, seen);
+                foreach( Declaration* p, d->type->subs )
+                {
+                    if( p->kind == Declaration::Procedure )
+                        downcopyAllMethods(p, seen);
+                }
+            }
+            d = d->getNext();
+        }
+    }
+
     bool visitModule(Declaration* module, QIODevice* out, bool strip)
     {
         Q_ASSERT( module && module->kind == Declaration::Module );
@@ -115,47 +318,47 @@ public:
 
         curClass = ctx.back().buySlots(1);
 
-        Declaration* d = module->link;
-        Declaration* begin = 0;
-        while( d )
-        {
-            switch( d->kind )
-            {
-            case Declaration::TypeDecl:
-                if( d->type && d == d->type->decl && d->type->form == Type::Record )
-                    emitClassObject(d->type);
-                break;
-            case Declaration::ConstDecl:
-                emitConst(d);
-                break;
-            case Declaration::VarDecl: {
-                const int val = ctx.back().buySlots(1);
-                emitInitializer(val,d->type,d->pos);
-                emitSetTableByIndex(val,modSlot,d->id,d->pos);
-                ctx.back().sellSlots(val);
-                break;
-                }
-            case Declaration::Import:
-                emitImport(d);
-                break;
-            case Declaration::Procedure:
-                emitAllProcsAndClasses(d);
-                emitProcedure(d);
-                if( d->mode == Declaration::Begin)
-                    begin = d;
-                break;
-            }
-
-            d = d->getNext();
-        }
-
-        // make Module table a global variable
+        // make Module table a global variable (at the start to allow generic instances to access it
         bc.GSET( modSlot, md.fullName, md.end.packed() );
         const int tmp = ctx.back().buySlots(1);
         // save the module path in the module table under the name "@mod"
         bc.KSET(tmp, md.fullName, md.end.packed() );
         bc.TSET(tmp,modSlot,"@mod", md.end.packed() );
         ctx.back().sellSlots(tmp);
+
+        // first create all class objects, because imported generic instances need them
+        createAllClassObjects(module);
+        // then make sure all modules are initialized this one depends on
+        emitAllImports(module);
+        connectAllClassObjects(module);
+        emitAllProcedures(module);
+        // at this point, methods are not yet downcopied from their superclass
+        QSet<Type*> seen;
+        downcopyAllMethods(module, seen);
+
+        Declaration* d = module->link;
+        Declaration* begin = 0;
+        while( d )
+        {
+            switch( d->kind )
+            {
+            case Declaration::ConstDecl:
+                emitConst(d);
+                break;
+            case Declaration::VarDecl: {
+                    const int val = ctx.back().buySlots(1);
+                    emitInitializer(val,d->type,d->pos);
+                    emitSetTableByIndex(val,modSlot,d->id,d->pos);
+                    ctx.back().sellSlots(val);
+                    break;
+                }
+            case Declaration::Procedure:
+                if( d->mode == Declaration::Begin)
+                    begin = d;
+                break;
+            }
+            d = d->getNext();
+        }
 
         if( begin )
         {
@@ -192,6 +395,7 @@ public:
         const int tbl = ctx.back().buySlots(1);
 
         fetchModule(tbl,d->pos);
+        emitConstValue(val, d->data, d->type, d->pos);
         emitSetTableByIndex(val,tbl,d->id,d->pos);
         ctx.back().sellSlots(val);
         ctx.back().sellSlots(tbl);
@@ -239,47 +443,14 @@ public:
         }
     }
 
-    void emitAllProcsAndClasses(Declaration* scope)
-    {
-        Declaration* d = scope->link;
-        while( d )
-        {
-            switch( d->kind )
-            {
-            case Declaration::TypeDecl:
-                if( d->type && d == d->type->decl && d->type->form == Type::Record )
-                    emitClassObject(d->type);
-                break;
-            case Declaration::Procedure:
-                emitAllProcsAndClasses(d);
-                emitProcedure(d);
-                break;
-            }
-            d = d->getNext();
-        }
-    }
-
-    static inline QByteArray scopedName(Declaration* d)
-    {
-        QByteArray res;
-        while( d && d->kind != Declaration::Module )
-        {
-            if( !res.isEmpty() )
-                res = '$' + res;
-            res = d->name + res;
-            d = d->outer;
-        }
-        return res;
-    }
-
     void emitProcedure(Declaration* p)
     {
-        ctx.push_back( Ctx(p) );
-
         const RowCol end = p->getEndPos();
         DeclList params = p->getParams();
-        const int id = bc.openFunction( params.size(), scopedName(p), p->pos.packed(), end.packed() );
+        ctx.push_back( Ctx(p) );
+        const int id = bc.openFunction( params.size(), p->scopedName(true), p->pos.packed(), end.packed() );
         Q_ASSERT( id >= 0 );
+
         QHash<quint8,QByteArray> names;
 
         Declaration* d = p->link;
@@ -293,6 +464,7 @@ public:
                 // done on module level for all nested record decls and procedures
                 break;
             case Declaration::ConstDecl:
+            case Declaration::Import:
                 // we don't need this
                 break;
             case Declaration::LocalDecl:
@@ -1962,79 +2134,6 @@ public:
         }
     }
 
-    void emitClassObject(Type* record)
-    {
-        // each record type is represented by a class object at runtime which is essentially
-        // the virtual table accomodating bound procedures.
-        // the class object is referenced by each instance of a record via the meta table slot of
-        // a lua table. also the super class is referenced via meta table slot of the class object.
-
-        Q_ASSERT( record && record->form == Type::Record );
-        if( record->generated )
-            return;
-        Type* base = deref(record->base);
-        if( base->form == BasicType::NoType )
-            base = 0;
-        if( base && base->form == Type::Record && !base->generated )
-        {
-            Declaration* otherMod = base->decl->getModule();
-            if( otherMod != thisMod )
-            {
-                const QString msg = QString("this record depends on a not yet generated base record "
-                            "of module %1").arg(otherMod->name.constData());
-                errors << LjbcGen::Error(msg, record->decl->pos, thisMod->name );
-                throw "";
-            }
-            emitClassObject(base);
-        }
-
-        record->generated = true;
-        const quint32 packed = record->decl->pos.packed();
-
-        const QPair<int, int> counts = record->countAllocRecordMembers(true);
-        bc.TNEW( curClass, counts.second, 2, packed );
-
-        const int mod = ctx.back().buySlots(1);
-        fetchModule(mod, record->decl->pos);
-
-        // store the record slot number and module reference in each class object
-        const int tmp = ctx.back().buySlots(1);
-        bc.KSET(tmp, record->decl->id, packed );
-        bc.TSET(tmp, curClass, "@cls", packed );
-        bc.TSET(mod, curClass, "@mod", packed );
-        ctx.back().sellSlots(tmp);
-
-        emitSetTableByIndex( curClass, mod, record->decl->id, record->decl->pos );
-        ctx.back().sellSlots(mod);
-
-        if( base )
-        {
-            const int baseClass = ctx.back().buySlots(1);
-            fetchClass(baseClass, base, record->decl->pos);
-            const int tmp = ctx.back().buySlots(3,true);
-            fetchLnlibMember(tmp, 22, record->decl->pos);
-            bc.MOV( tmp+1, curClass, packed );
-            bc.MOV(tmp+2,baseClass, packed );
-            bc.CALL( tmp, 0, 2, packed );
-            ctx.back().sellSlots(tmp,3);
-
-            // copy down all methods
-            const int tmp2 = ctx.back().buySlots(1);
-            for( int i = 0; i < counts.second; i++ )
-            {
-                emitGetTableByIndex(tmp2,baseClass,i,record->decl->pos);
-                emitSetTableByIndex(tmp2,curClass,i,record->decl->pos);
-            }
-            ctx.back().sellSlots(tmp2);
-            ctx.back().sellSlots(baseClass);
-        }
-        foreach( Declaration* p, record->subs )
-        {
-            if( p->kind == Declaration::Procedure )
-                emitProcedure(p);
-        }
-    }
-
     void emitImport(Declaration* d)
     {
         Q_ASSERT( d && d->kind == Declaration::Import );
@@ -2078,7 +2177,22 @@ public:
         const quint32 index = thisMod->id++;
         imports[module] = index;
         ModuleData md = module->data.value<ModuleData>();
-        emitImport( md.fullName, index, loc );
+
+        // at this point require has already be called (recursively) for every module, so
+        // we assume the module be available under its full name in the global space
+        // if we call require here again instead, we get a circular dependency when instantiating
+        // generic modules with meta actuals from the importing module
+        const int tmp = ctx.back().buySlots(2);
+        bc.GGET(tmp, md.fullName, loc.packed() );
+        if( thisMod == ctx.back().scope )
+            emitSetTableByIndex(tmp,modSlot,index,loc);
+        else
+        {
+            fetchModule(tmp+1,loc);
+            emitSetTableByIndex(tmp,tmp+1,index,loc);
+        }
+        ctx.back().sellSlots(2);
+
         return index;
     }
 
@@ -2179,8 +2293,8 @@ public:
     {
         Type* record = deref(t);
         Q_ASSERT( record->form == Type::Record );
-        Declaration* module = record->decl->getModule();
-        fetchModule(module, to, loc); // get the module where record was declared and where the class object is
+        // get the module where record was declared and where the class object is
+        fetchModule(record->decl->getModule(), to, loc);
         emitGetTableByIndex(to, to, record->decl->id, loc );
     }
 

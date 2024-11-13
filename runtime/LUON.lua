@@ -245,7 +245,12 @@ if ASSERT == nil then
     end
 end
 
+function module.assureNotNil(obj, txt)
+    if obj == nil then error(txt) end
+end
+
 -- Magic mumbers used by the compiler
+module[6] = module.assureNotNil
 module[7] = module.charToStringArray
 module[8] = module.createCharArray
 module[9] = addElemToSet

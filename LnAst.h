@@ -35,7 +35,6 @@ namespace Ln
                NoType,
                StrLit,
                ByteArrayLit,
-               Any,
                Nil,
                BOOLEAN,
                CHAR,
@@ -43,6 +42,7 @@ namespace Ln
                REAL,    // double
                SET,     // cut at uint32
                STRING,
+               ANYREC,
                Max
              };
 
@@ -80,7 +80,6 @@ namespace Ln
         uint anonymous : 1;
         uint validated : 1;
         uint allocated : 1;
-        uint generated : 1;
         uint receiver : 1;
         quint32 len; // array length
         Type* base; // array/pointer base type, return type
@@ -104,9 +103,10 @@ namespace Ln
 
         Declaration* find(const QByteArray& name, bool recursive = true) const;
         QList<Declaration*> fieldList() const;
+        QList<Declaration*> methodList(bool recursive = false) const;
 
         Type():form(0),len(0),base(0),decl(0),deferred(false),anonymous(false),
-            expr(0),validated(false),allocated(false),generated(false),receiver(false){}
+            expr(0),validated(false),allocated(false),receiver(false){}
         ~Type();
     };
 
@@ -153,6 +153,7 @@ namespace Ln
         Declaration* getModule();
         void appendMember(Declaration*);
         RowCol getEndPos() const;
+        QByteArray scopedName(bool withModule = false, bool withPath = false) const;
         static void deleteAll(Declaration*);
 
     private:

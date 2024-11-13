@@ -30,6 +30,7 @@ begin
 	new(a)
 	a.a := 33
 
+  new(b)
 	b.b := 44
 	a.test(b)
 

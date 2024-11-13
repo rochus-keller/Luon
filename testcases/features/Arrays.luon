@@ -29,6 +29,8 @@ begin
 	println(c)
 	println(c[3])
 
+  new(d)
+  new(d[1])
 	d[1].a := 5
 	println(d[1].a)
 	e := $20616263$

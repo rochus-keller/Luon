@@ -83,7 +83,7 @@ bool Validator::validate(Declaration* module, const Import& import)
         }
         for( int i = 0; i < md.metaParams.size(); i++ )
         {
-            //Type* mt = deref(md.metaParams[i]->type);
+            Type* mt = deref(md.metaParams[i]->type);
             Expression* ma = md.metaActuals[i];
 #if 0
             // TODO: doesn't work yet because procedure types/consts not yet completely validated
@@ -95,17 +95,32 @@ bool Validator::validate(Declaration* module, const Import& import)
 #endif
             if( md.metaParams[i]->kind == Declaration::TypeDecl )
             {
-                if( md.metaParams[i]->type && md.metaParams[i]->ownstype )
-                    delete md.metaParams[i]->type;
-                md.metaParams[i]->type = ma->type;
-                md.metaParams[i]->ownstype = false;
+                // No, we have to always replace the type.
+                // otherwise the wrong type is created when doing new(T) in the generic, and there
+                // is a loophole in type checking
+                // if( mt->form == Type::Generic )
+                {
+                    if( md.metaParams[i]->type && md.metaParams[i]->ownstype )
+                        delete md.metaParams[i]->type;
+                    md.metaParams[i]->type = ma->type;
+                    md.metaParams[i]->ownstype = false;
+                }
             }else
             {
                 if( !ma->isConst() )
                     errors << Error("expecting a const expression", ma->pos, importer);
-                if( md.metaParams[i]->type && md.metaParams[i]->ownstype )
-                    delete md.metaParams[i]->type;
-                md.metaParams[i]->type = ma->type;
+#if 0
+                if( mt->form < BasicType::StrLit && mt->form > BasicType::ANYREC )
+                    // don't support proc refs as meta params for now because of circular references
+                    errors << Error("only const meta parameters of basic type are supported", ma->pos, importer);
+#endif
+                // if( mt->form == Type::Generic )
+                {
+                    if( md.metaParams[i]->type && md.metaParams[i]->ownstype )
+                        delete md.metaParams[i]->type;
+                    md.metaParams[i]->type = ma->type;
+                    md.metaParams[i]->ownstype = false;
+                }
                 md.metaParams[i]->data = ma->val;
             }
         }
@@ -1438,7 +1453,7 @@ void Validator::callOp(Expression* e)
             {
                 if( !paramCompat(formals[i],actuals[i]) )
                 {
-                    //paramCompat(formals[i],actuals[i]); // TEST
+                    // paramCompat(formals[i],actuals[i]); // TEST
                     error(actuals[i]->pos, "actual argument not compatible with formal parameter");
                 }
             }

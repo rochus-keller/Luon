@@ -1723,6 +1723,8 @@ void Parser2::ProcedureDeclaration() {
         }
     }else
     {
+#if 0
+        // INVAR and INLINE are not yet supported
         if( la.d_type == Tok_INLINE || la.d_type == Tok_INVAR ) {
             if( la.d_type == Tok_INLINE ) {
                 expect(Tok_INLINE, true, "ProcedureDeclaration");
@@ -1739,6 +1741,7 @@ void Parser2::ProcedureDeclaration() {
             } else
                 invalid("ProcedureDeclaration");
         }
+#endif
         if( la.d_type == Tok_Semi ) {
             expect(Tok_Semi, false, "ProcedureDeclaration");
         }

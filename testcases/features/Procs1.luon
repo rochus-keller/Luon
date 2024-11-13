@@ -36,6 +36,7 @@ begin
 	println("Procs1 start")
 	println( Proc1() )
 	println( Proc2() )
+
 	Proc3("Test")
 	x := 12
 	Proc4(x)

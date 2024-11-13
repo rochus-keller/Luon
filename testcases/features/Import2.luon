@@ -9,6 +9,7 @@ var
 begin
 	println("Import2 start")
 
+  new(r)
 	r.f := 33
 	println(r.f)
 	

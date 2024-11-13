@@ -89,7 +89,7 @@ class Ide::Editor : public CodeEditor
 public:
     Editor(Ide* p, Project* pro):CodeEditor(p),d_pro(pro),d_ide(p),dbgRow(0),dbgCol(0)
     {
-        setCharPerTab(3);
+        setCharPerTab(2);
         setTypingLatency(400);
         setPaintIndents(false);
         d_hl = new Highlighter( document() );
@@ -120,7 +120,7 @@ public:
     {
         for( int i = Builtin::ABS; i < Builtin::Max; i++ )
             d_hl->addBuiltIn(Builtin::name[i]);
-        for( int i = BasicType::Any; i <= BasicType::Max; i++ )
+        for( int i = BasicType::Nil; i <= BasicType::Max; i++ )
             d_hl->addBuiltIn(BasicType::name[i]);
         d_hl->addBuiltIn("ANYREC");
     }
@@ -2243,7 +2243,7 @@ static QString nameOf( Type* r, bool frame = false )
     QString name;
     Declaration* decl = r->decl;
     if( decl )
-        name = decl->name;
+        name = decl->scopedName(true);
     else if( frame )
         name = "<record>";
     else
@@ -2402,12 +2402,12 @@ void Ide::printLocalVal(QTreeWidgetItem* item, Type* type, int depth)
         {
             const int rec = lua_gettop(L);
             Type* r = type;
-            const int lt = lua_type( L, rec );
-            if( lua_isnil(L, -1) )
+            const int luaType = lua_type( L, rec );
+            if( lua_isnil(L, rec) )
             {
                 item->setText(1,"nil");
                 break;
-            }else if( lt == 10 ) // ffi type
+            }else if( luaType == 10 ) // ffi type
             {
                 item->setText(1,nameOf(r,true));
                 foreach( Declaration* f, r->subs )
@@ -2419,32 +2419,55 @@ void Ide::printLocalVal(QTreeWidgetItem* item, Type* type, int depth)
                     lua_pop( L, 1 );
                 }
                 break;
-            }else if( lt != LUA_TTABLE )
+            }else if( luaType != LUA_TTABLE )
             {
-                item->setText(1,tr("<invalid %1>").arg(nameOf(r)));
+                item->setText(1,tr("<invalid class %1, lua type %2>").arg(nameOf(r)).arg(luaType));
                 // qWarning() << "wrong type, expecting table, got type" << type;
                 // happens when a procedure is entered before initialization code could run
                 break;
             }
 
+            QByteArray className;
+            QByteArray superClassName;
             // look for the dynamic type
             if( lua_getmetatable(L,rec) )
             {
+                lua_getfield(L, -1, "@name");
+                if( !lua_isnil( L, -1 ) )
+                    className = lua_tostring(L, -1);
+                lua_pop(L,1); // field
+                if( lua_getmetatable(L,-1) )
+                {
+                    lua_getfield(L, -1, "@name");
+                    if( !lua_isnil( L, -1 ) )
+                        superClassName = lua_tostring(L, -1);
+                    lua_pop(L,1); // field
+                    lua_pop(L,1); // metatable
+                }
+                lua_pop(L,1); // metatable
+#if 0
                 //lua_getfield(L, -1, "@mod");
                 lua_getfield(L, -1, "@cls");
                 if( !lua_isnil( L, -1 ) )
                 {
-#if 0
                     // TODO show dynamic instead of static type
                     Record* rd = r->findBySlot( lua_tointeger(L, -1) );
                     if( rd )
                         r = rd;
-#endif
                 }
                 lua_pop(L,2); // meta + field
+#endif
             }
+            if( className.isEmpty() )
+                className = QString("<no class, should be %1>").arg(nameOf(r,true)).toUtf8();
 
-            item->setText(1,nameOf(r,true));
+            item->setText(1,className);
+            if( !superClassName.isEmpty() )
+            {
+                QTreeWidgetItem* super = new QTreeWidgetItem(item);
+                super->setText(0,"<super>");
+                super->setText(1,superClassName);
+            }
             foreach( Declaration* f, r->subs ) // TODO: inherited fields?
             {
                 QTreeWidgetItem* sub = new QTreeWidgetItem(item);
@@ -3024,7 +3047,7 @@ int main(int argc, char *argv[])
     a.setOrganizationName("me@rochus-keller.ch");
     a.setOrganizationDomain("github.com/rochus-keller/Luon");
     a.setApplicationName("Luon IDE (LuaJIT)");
-    a.setApplicationVersion("0.5.0");
+    a.setApplicationVersion("0.6.0");
     a.setStyle("Fusion");    
     QFontDatabase::addApplicationFont(":/font/DejaVuSansMono.ttf"); // "DejaVu Sans Mono"
 

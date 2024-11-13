@@ -66,6 +66,12 @@ in the all.lnpro project, which I migrated from Oberon+ ("features" subfolder), 
 implemented delegates and the copy() builtin, and made some other language changes (e.g. := no longer copies char arrays by value). Next goal is
 to run the Luon Awfy suite.
 
+#### Status on November 13, 2024
+
+The Luon Are-we-fast-yet suite works up to Json; a significant refactoring of the code generator was necessary for this to properly intitialize all
+class objects up-front; the performance is currently slightly (1%) better than Lua, and there is room for improvement. Now after a calendar month 
+in the project, the compiler and IDE seem ready for implementing a Smalltalk VM, so let's go for it.
+
 #### Precompiled versions
 
 Not available at this time.

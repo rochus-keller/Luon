@@ -10,6 +10,7 @@ type
 var
 	a: A
 begin
+  new(a)
 	a.c := 333
 	println(a.c)
 end Circular1

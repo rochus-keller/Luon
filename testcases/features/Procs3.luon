@@ -22,16 +22,16 @@ module Procs3
 
 begin
 	println("Procs3 start")
+	new(d)	
 	for i := 0 to len(d)-1 do
+    new(d[i])
 		for j := 0 to len(d[0])-1 do
 			d[i][j] := i + j + i * j
 		end
 	end
-	new(d)
-	new(d[2])
-   println(d[2][3])
+  println(d[2][3])
 	Q(d)
-   println(d[2][3])
+  println(d[2][3])
 	
 	Str("Test")
 
