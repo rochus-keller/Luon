@@ -1048,7 +1048,7 @@ void Ide::onExportBc()
 
     const QString curPath = d_tab->getCurrentDoc().toString();
 
-    LjRuntime::BytecodeList l = d_rt->findByteCode(curPath);
+    LjRuntime::BytecodeList l = d_rt->findAllByteCodesOfPath(curPath);
     for( int i = 0; i < l.size(); i++ )
     {
         QString path = dir.absoluteFilePath(l[i].first->name + ".lua");
@@ -1628,8 +1628,10 @@ Ide::Editor* Ide::showEditor(const QString& path, int row, int col, bool setMark
         d_tab->addDoc(edit,filePath);
         onEditorChanged();
     }
-    if( f && f->d_mod )
-        showBc( d_rt->findByteCode(f->d_mod) ); // TODO: instances
+    QByteArray bc = d_rt->findByteCode(path.toUtf8());
+    if( bc.isEmpty() && f && f->d_mod )
+        bc = d_rt->findByteCode(f->d_mod);
+    showBc( bc );
     if( row > 0 && col > 0 )
     {
         edit->setCursorPosition( row-1, col-1, center );
@@ -3047,7 +3049,7 @@ int main(int argc, char *argv[])
     a.setOrganizationName("me@rochus-keller.ch");
     a.setOrganizationDomain("github.com/rochus-keller/Luon");
     a.setApplicationName("Luon IDE (LuaJIT)");
-    a.setApplicationVersion("0.6.0");
+    a.setApplicationVersion("0.6.1");
     a.setStyle("Fusion");    
     QFontDatabase::addApplicationFont(":/font/DejaVuSansMono.ttf"); // "DejaVu Sans Mono"
 

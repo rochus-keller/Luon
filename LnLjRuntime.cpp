@@ -164,10 +164,26 @@ bool LjRuntime::loadBytecode()
             ModuleData md = d_byteCode[i].first->data.value<ModuleData>();
             const QByteArray name = md.fullName;
             qDebug() << "loading" << name;
-            if( !d_lua->addSourceLib( d_byteCode[i].second, name ) )
+            if( md.metaActuals.isEmpty() )
             {
-                printLoadError(d_lua,name);
-                hasErrors = true;
+                // normal modules are directly loaded and executed; the order of
+                // d_byteCode reflects the import dependencies
+                if( !d_lua->addSourceLib( d_byteCode[i].second, name ) )
+                {
+                    printLoadError(d_lua,name);
+                    hasErrors = true;
+                }
+            }else
+            {
+                // generic module instances are just referenced so the client of the module
+                // can load it via require and only then the instance is run for the first time.
+                // this assures that the module table of the client is present when the generic
+                // instance, which depends on this table, is run.
+                if( !d_lua->addPreloadLib( d_byteCode[i].second, name ) )
+                {
+                    printLoadError(d_lua,name);
+                    hasErrors = true;
+                }
             }
             if( d_lua->isAborted() )
             {
@@ -221,13 +237,24 @@ QByteArray LjRuntime::findByteCode(Declaration* m) const
     return QByteArray();
 }
 
-LjRuntime::BytecodeList LjRuntime::findByteCode(const QString& filePath) const
+QByteArray LjRuntime::findByteCode(const QByteArray& name) const
+{
+    for( int i = 0; i < d_byteCode.size(); i++ )
+    {
+        if( d_byteCode[i].first->name == name )
+            return d_byteCode[i].second;
+    }
+    return QByteArray();
+}
+
+LjRuntime::BytecodeList LjRuntime::findAllByteCodesOfPath(const QString& filePath) const
 {
     BytecodeList res;
     for( int i = 0; i < d_byteCode.size(); i++ )
     {
+        QByteArray moduleName = filePath.toUtf8();
         ModuleData md = d_byteCode[i].first->data.value<ModuleData>();
-        if( md.source == filePath )
+        if( md.source == filePath || d_byteCode[i].first->name == moduleName || md.fullName == moduleName )
             res.append(d_byteCode[i]);
     }
     return res;

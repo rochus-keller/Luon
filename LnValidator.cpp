@@ -51,6 +51,9 @@ bool Validator::validate(Declaration* module, const Import& import)
 
     Ln::ModuleData md = module->data.value<Ln::ModuleData>();
 
+    try
+    {
+
     md.metaActuals = import.metaActuals;
     md.path = import.path;
     if( imp )
@@ -126,10 +129,10 @@ bool Validator::validate(Declaration* module, const Import& import)
         }
     }
 
-    try
+    visitScope(module);
+    }catch(...)
     {
-        visitScope(module);
-    }catch(...){ }
+    }
 
     if( first )
         last->next = first; // close the circle
@@ -150,7 +153,7 @@ Xref Validator::takeXref()
     return res;
 }
 
-void Validator::error(const RowCol& pos, const QString& msg)
+void Validator::error(const RowCol& pos, const QString& msg) const
 {
     ModuleData md = module->data.value<ModuleData>();
     errors << Error(msg, pos, md.source);
@@ -264,7 +267,9 @@ void Validator::visitImport(Declaration* import)
     if( import->outer->kind != Declaration::Module )
         error(import->pos,"imports are only supported on module level");
 
-    Declaration* mod = imp ? imp->loadModule(i) : 0;
+    Declaration* mod = 0;
+    if( imp )
+        mod = imp->loadModule(i);
     if( mod )
     {
         // loadModule returns the module decl; we just need the list of module elements:
@@ -1707,7 +1712,13 @@ Type*Validator::deref(Type* t) const
         if( !t->validated )
         {
             Qualident q = t->decl->data.value<Qualident>();
-            qWarning() << "using unresolved NameRef:" << q.first.constData() << q.second.constData();
+            QString name = q.second;
+            if( !q.first.isEmpty() )
+                name = QString(q.first) + "." + name;
+            Declaration* m = t->decl->getModule();
+            ModuleData md = m->data.value<ModuleData>();
+            errors << Error(QString("cannot resolve %1").arg(name), t->decl->pos, md.source);
+            t->validated = true; // avoid duplicate errors
         }
         return t->deref();
     }else

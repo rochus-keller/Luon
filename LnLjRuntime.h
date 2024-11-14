@@ -54,7 +54,8 @@ namespace Ln
         bool restartEngine();
 
         QByteArray findByteCode(Declaration*)const;
-        BytecodeList findByteCode( const QString& filePath ) const;
+        QByteArray findByteCode(const QByteArray& name)const;
+        BytecodeList findAllByteCodesOfPath( const QString& filePath ) const;
         bool saveBytecode(const QString& outPath, const QString& suffix = ".lua") const;
         bool hasBytecode() const { return !d_byteCode.isEmpty(); }
         bool hasBuildErrors() const { return d_buildErrors; }

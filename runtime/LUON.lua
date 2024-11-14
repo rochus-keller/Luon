@@ -25,7 +25,7 @@ local bit = require 'bit'
 local os = require 'os'
 local jit = require 'jit'
 
-local module = {}
+local module = { ["@mod"] = "LUON" }
 LUON = module -- directly publish the module by global var
 
 ffi.cdef[[

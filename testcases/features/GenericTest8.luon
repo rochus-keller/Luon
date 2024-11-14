@@ -1,12 +1,13 @@
 module GenericTest8
-import H := Generic7(integer,eq)
 
-type 
+import 
+  H := Generic7(integer,eq)
+
   proc eq(const lhs,rhs: integer):boolean
   begin
     return lhs = rhs
   end eq
-  
+
 var
   l: H.List
   i: integer

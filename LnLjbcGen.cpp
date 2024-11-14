@@ -67,10 +67,11 @@ public:
     QList<LjbcGen::Error> errors;
     Lua::JitComposer bc;
     QList<Ctx> ctx;
-    quint8 modSlot, lnlj, curClass;
+    quint8 modSlot, lnlj;
     Declaration* thisMod;
     AstModel mdl;
     QMap<Declaration*, quint32> imports; // module -> slot
+    QList<Declaration*> deferred;
     QList<quint8> slotStack; // for expression evaluation
     QList <quint32> exitJumps; // TODO: must be a separate list for each (nested) LOOP
 
@@ -85,7 +86,7 @@ public:
         Lvalue():kind(Invalid),disposeSlot(0),disposeIndex(0),slot(0),index(0){}
     };
 
-    Imp():modSlot(0),lnlj(0),curClass(0),thisMod(0) {}
+    Imp():modSlot(0),lnlj(0),thisMod(0) {}
 
     void createAllClassObjects(Declaration* scope)
     {
@@ -104,6 +105,7 @@ public:
                 {
                     Type* record = d->type;
                     const QPair<int, int> counts = record->countAllocRecordMembers(true);
+                    const int curClass = ctx.back().buySlots(1);
                     bc.TNEW( curClass, counts.second, 2, d->pos.packed() );
 
                     Q_ASSERT( ctx.back().scope == thisMod );
@@ -116,6 +118,7 @@ public:
                     bc.KSET(tmp, d->scopedName(true), d->pos.packed());
                     bc.TSET(tmp, curClass, "@name", d->pos.packed() );
                     ctx.back().sellSlots(tmp);
+                    ctx.back().sellSlots(curClass);
 
                     emitSetTableByIndex( curClass, modSlot, d->id, d->pos );
 
@@ -147,28 +150,28 @@ public:
                 {
                     Type* record = d->type;
 
-                    Q_ASSERT( ctx.back().scope == thisMod );
-
-                    emitGetTableByIndex( curClass, modSlot, d->id, d->pos );
 
                     if( record->base )
                     {
+                        Q_ASSERT( ctx.back().scope == thisMod );
+                        const int curClass = ctx.back().buySlots(1);
+                        emitGetTableByIndex( curClass, modSlot, d->id, d->pos );
+
                         const int baseClass = ctx.back().buySlots(1);
                         fetchClass(baseClass, record->base, d->pos);
-                        const int tmp = ctx.back().buySlots(3,true);
-#if 1
-                        fetchLnlibMember(tmp, 6, d->pos); // module.assureNotNil
-                        bc.MOV( tmp+1, curClass, d->pos.packed() );
-                        bc.KSET(tmp+2, QString("connectAllClassObjects metaclass of %1 is nil")
-                                .arg(d->scopedName(true).constData()), d->pos.packed());
-                        bc.CALL( tmp, 0, 2, d->pos.packed() );
+#ifdef _DEBUG
+                        emitAssureNotNil(curClass,QString("connectAllClassObjects metaclass of %1 is nil in %2")
+                                         .arg(d->scopedName(true).constData())
+                                         .arg(thisMod->name.constData()), d->pos);
 #endif
+                        const int tmp = ctx.back().buySlots(3,true);
                         fetchLnlibMember(tmp, 22, d->pos); // setmetatable
                         bc.MOV( tmp+1, curClass, d->pos.packed() );
                         bc.MOV(tmp+2,baseClass, d->pos.packed() );
                         bc.CALL( tmp, 0, 2, d->pos.packed() );
                         ctx.back().sellSlots(tmp,3);
                         ctx.back().sellSlots(baseClass);
+                        ctx.back().sellSlots(curClass);
                     }
 
                     foreach( Declaration* p, record->subs )
@@ -216,12 +219,14 @@ public:
                             emitAllProcedures(p);
 
                     Q_ASSERT( ctx.back().scope == thisMod );
+                    const int curClass = ctx.back().buySlots(1);
                     emitGetTableByIndex( curClass, modSlot, d->id, d->pos );
                     foreach( Declaration* p, d->type->subs )
                     {
                         if( p->kind == Declaration::Procedure )
-                            emitProcedure(p);
+                            emitProcedure(p,curClass);
                     }
+                    ctx.back().sellSlots(curClass);
                 }
                 break;
             case Declaration::Procedure:
@@ -248,6 +253,8 @@ public:
                 downcopyRecord(base,seen);
 
             Declaration* d = record->decl;
+            Q_ASSERT( ctx.back().scope == thisMod );
+            const int curClass = ctx.back().buySlots(1);
             emitGetTableByIndex( curClass, modSlot, d->id, d->pos );
 
             const int baseClass = ctx.back().buySlots(1);
@@ -269,6 +276,7 @@ public:
 
             ctx.back().sellSlots(tmp);
             ctx.back().sellSlots(baseClass);
+            ctx.back().sellSlots(curClass);
         }
     }
 
@@ -290,6 +298,15 @@ public:
         }
     }
 
+    void emitPrint(const QString& msg, const RowCol& pos)
+    {
+        const int tmp = ctx.back().buySlots(2, true);
+        bc.GGET(tmp, "print", pos.packed());
+        bc.KSET(tmp+1,msg,pos.packed());
+        bc.CALL(tmp, 0, 1, pos.packed());
+        ctx.back().sellSlots(tmp,2);
+    }
+
     bool visitModule(Declaration* module, QIODevice* out, bool strip)
     {
         Q_ASSERT( module && module->kind == Declaration::Module );
@@ -306,6 +323,10 @@ public:
         ctx.push_back( Imp::Ctx(module) );
         bc.openFunction(0,md.fullName,module->pos.packed(), md.end.packed() );
 
+#ifdef _DEBUG
+        // TEST emitPrint(QString("hello from %1").arg(md.fullName.constData()),module->pos);
+#endif
+
         QHash<quint8,QByteArray> names;
         modSlot = ctx.back().buySlots(1);
         names[modSlot] = "@mod";
@@ -315,8 +336,6 @@ public:
         bc.TNEW( modSlot, module->id, 0, module->pos.packed() );
 
         emitImport("LUON", lnlj, module->pos, true );
-
-        curClass = ctx.back().buySlots(1);
 
         // make Module table a global variable (at the start to allow generic instances to access it
         bc.GSET( modSlot, md.fullName, md.end.packed() );
@@ -336,6 +355,10 @@ public:
         QSet<Type*> seen;
         downcopyAllMethods(module, seen);
 
+        foreach( Declaration* m, deferred )
+            emitDeferredImports(m,md.end);
+        deferred.clear();
+
         Declaration* d = module->link;
         Declaration* begin = 0;
         while( d )
@@ -343,7 +366,8 @@ public:
             switch( d->kind )
             {
             case Declaration::ConstDecl:
-                emitConst(d);
+                if( d->mode != Declaration::Meta )
+                    emitConst(d);
                 break;
             case Declaration::VarDecl: {
                     const int val = ctx.back().buySlots(1);
@@ -443,7 +467,7 @@ public:
         }
     }
 
-    void emitProcedure(Declaration* p)
+    void emitProcedure(Declaration* p, int curClass = -1)
     {
         const RowCol end = p->getEndPos();
         DeclList params = p->getParams();
@@ -544,6 +568,7 @@ public:
 
         if( p->mode == Declaration::Receiver )
         {
+            Q_ASSERT(curClass >= 0);
             emitSetTableByIndex( tmp, curClass, p->id, end );
         }else
         {
@@ -2148,6 +2173,7 @@ public:
     {
         Q_ASSERT( !modName.isEmpty() );
         const int tmp = ctx.back().buySlots(2,true);
+        // TEST emitPrint(QString("importing %1 by %2").arg(modName.constData()).arg(thisMod->name.constData()),loc);
         bc.GGET( tmp, "require", loc.packed() );
         bc.KSET( tmp+1, modName, loc.packed() );
         bc.CALL( tmp, 1, 1, loc.packed() );
@@ -2163,6 +2189,47 @@ public:
         ctx.back().sellSlots(tmp,2);
     }
 
+    void emitAssureNotNil(quint8 what, const QString& msg, const RowCol& loc)
+    {
+        const int tmp = ctx.back().buySlots(3, true);
+        fetchLnlibMember(tmp, 6, loc); // module.assureNotNil
+        bc.MOV( tmp+1, what, loc.packed() );
+        bc.KSET(tmp+2, msg, loc.packed());
+        bc.CALL( tmp, 0, 2, loc.packed() );
+        ctx.back().sellSlots(tmp,3);
+    }
+
+    void emitDeferredImports( Declaration* module, const RowCol& loc )
+    {
+        ModuleData md = module->data.value<ModuleData>();
+
+        Q_ASSERT( module && module->kind == Declaration::Module );
+        QMap<Declaration*, quint32>::const_iterator i = imports.find(module);
+        Q_ASSERT( i != imports.end() );
+        const quint32 index = i.value();
+
+        // at this point require has already been called (recursively) for every module, so
+        // we assume the module be available under its full name in the global space
+        // if we call require here again instead, we get a circular dependency when instantiating
+        // generic modules with meta actuals from the importing module
+        const int imported = ctx.back().buySlots(1);
+        bc.GGET(imported, md.fullName, loc.packed() );
+#ifdef _DEBUG
+        emitAssureNotNil(imported, QString("emitImportImplicit module %1 is nil in %2")
+                         .arg(md.fullName.constData()).arg(thisMod->name.constData()), loc);
+#endif
+        if( thisMod == ctx.back().scope )
+            emitSetTableByIndex(imported,modSlot,index,loc);
+        else
+        {
+            const int local = ctx.back().buySlots(1);
+            fetchModule(local,loc);
+            emitSetTableByIndex(imported,local,index,loc);
+            ctx.back().sellSlots(local);
+        }
+        ctx.back().sellSlots(imported);
+    }
+
     quint32 emitImportImplicit( Declaration* module, const RowCol& loc )
     {
         // this is for modules not explicitly on the import list but still used
@@ -2176,22 +2243,10 @@ public:
         // else
         const quint32 index = thisMod->id++;
         imports[module] = index;
-        ModuleData md = module->data.value<ModuleData>();
 
-        // at this point require has already be called (recursively) for every module, so
-        // we assume the module be available under its full name in the global space
-        // if we call require here again instead, we get a circular dependency when instantiating
-        // generic modules with meta actuals from the importing module
-        const int tmp = ctx.back().buySlots(2);
-        bc.GGET(tmp, md.fullName, loc.packed() );
-        if( thisMod == ctx.back().scope )
-            emitSetTableByIndex(tmp,modSlot,index,loc);
-        else
-        {
-            fetchModule(tmp+1,loc);
-            emitSetTableByIndex(tmp,tmp+1,index,loc);
-        }
-        ctx.back().sellSlots(2);
+        // we have to defer the actual load of the module to the top (i.e. module setup) procedure
+        // because only there we can guarantee that the import is run first before the module is used
+        deferred.append(module);
 
         return index;
     }

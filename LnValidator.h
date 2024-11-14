@@ -44,9 +44,9 @@ namespace Ln
             QString path;
             Error( const QString& m, const RowCol& pos, const QString& p):msg(m),pos(pos),path(p){}
         };
-        QList<Error> errors;
+        mutable QList<Error> errors;
     protected:
-        void error( const RowCol&, const QString& msg );
+        void error( const RowCol&, const QString& msg ) const;
         void visitScope( Declaration* scope );
         void visitDecl( Declaration* );
         void visitImport(Declaration* import);

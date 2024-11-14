@@ -1,6 +1,6 @@
 module Generic6(T; const eq: EQ)
 
-type EQ* = proc(const lhs,rhs: T):boolean;
+  type EQ* = proc(const lhs,rhs: T):boolean;
 
 	List* = record 
             value* : T
