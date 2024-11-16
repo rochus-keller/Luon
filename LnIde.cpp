@@ -1488,6 +1488,8 @@ bool Ide::compile(bool doGenerate )
     {
         Editor* e = static_cast<Editor*>( d_tab->widget(i) );
         Project::File* f = d_rt->getPro()->findFile( e->getPath() );
+        if( f == 0 )
+            continue;
         if( e->isModified() )
             f->d_cache = e->toPlainText().toUtf8();
         else
@@ -2281,6 +2283,7 @@ void Ide::printLocalVal(QTreeWidgetItem* item, Type* type, int depth)
             }
             return;
         case BasicType::INTEGER:
+        case BasicType::BYTE:
             item->setText(1,QString::number(lua_tointeger(L,-1)));
             return;
         case BasicType::REAL:
@@ -2341,6 +2344,7 @@ void Ide::printLocalVal(QTreeWidgetItem* item, Type* type, int depth)
                         createArrayElems<quint8>( item, ptr, bytesize, numOfFetchedElems, 'b');
                         break;
                     case BasicType::INTEGER:
+                    case BasicType::BYTE:
                         createArrayElems<qint32>( item, ptr, bytesize, numOfFetchedElems);
                         break;
                     case BasicType::REAL:

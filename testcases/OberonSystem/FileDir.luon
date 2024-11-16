@@ -1,0 +1,91 @@
+MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013*)
+  IMPORT Kernel, PAL;
+
+  (*File Directory is a B-tree with its root page at DirRootAdr.
+    Each entry contains a file name and the disk address of the file's head sector*)
+
+  CONST FnLength*    = 32;
+        SecTabSize*   = 64;
+        ExTabSize*   = 12;
+        SectorSize*   = 1024;
+        IndexSize*   = SectorSize DIV 4;
+        HeaderSize*  = 352;
+        DirRootAdr*  = 29;
+        DirPgSize*   = 24;
+        N = DirPgSize DIV 2;
+        DirMark*    = 9B1EA38DH;
+        HeaderMark* = 9BA71D86H;
+        FillerSize = 52;
+
+  TYPE DiskAdr      = INTEGER;
+    FileName*       = ARRAY FnLength OF CHAR;
+    SectorTable*    = ARRAY SecTabSize OF DiskAdr;
+    ExtensionTable* = ARRAY ExTabSize OF DiskAdr;
+    EntryHandler*   = PROCEDURE (CONST name: ARRAY OF CHAR; sec: DiskAdr; VAR continue: BOOLEAN);
+
+    FileHeader* =
+      RECORD (*first page of each file on disk*)
+        mark*: INTEGER;
+        name*: FileName;
+        aleng*, bleng*, date*: INTEGER;
+        ext*:  ExtensionTable;
+        sec*: SectorTable;
+        fill: ARRAY SectorSize - HeaderSize OF BYTE;
+      END ;
+
+    FileHd* = FileHeader;
+    IndexSector* = ARRAY IndexSize OF DiskAdr;
+    DataSector* = ARRAY SectorSize OF BYTE;
+
+    DirEntry* =  (*B-tree node*)
+      RECORD
+        name*: FileName;
+        adr*:  DiskAdr; (*sec no of file header*)
+        p*:    DiskAdr  (*sec no of descendant in directory*)
+      END ;
+
+    DirPage*  =
+      RECORD mark*:  INTEGER;
+        m*:     INTEGER;
+        p0*:    DiskAdr;  (*sec no of left descendant in directory*)
+        fill:  ARRAY FillerSize OF BYTE;
+        e*:  ARRAY DirPgSize OF DirEntry
+      END ;
+
+  (*Exported procedures: Search, Insert, Delete, Enumerate, Init*)
+
+  PROCEDURE Search*(name: FileName; VAR A: DiskAdr);
+  BEGIN
+	// NOP
+  END Search;
+  
+  PROCEDURE Insert*(name: FileName; fad: DiskAdr);
+  BEGIN
+	  // NOP
+  END Insert;
+
+  PROCEDURE Delete*(name: FileName; VAR fad: DiskAdr);
+  BEGIN
+	  // NOP
+  END Delete;
+
+  PROCEDURE Enumerate*(CONST prefix: ARRAY OF CHAR; proc_: EntryHandler);
+    VAR n,i: INTEGER;
+	    b: BOOLEAN;
+	    str: ARRAY 64 OF CHAR;
+  BEGIN
+		n := PAL.listFiles();
+		FOR i := 0 TO n-1 DO
+		  PAL.fileName(i, str, len(str));
+		  proc_(str,0,b);
+		END
+  END Enumerate;
+
+(* ----- initialization ----- *)
+
+  PROCEDURE Init*;
+  BEGIN
+	 // NOP
+  END Init; 
+  
+END FileDir.

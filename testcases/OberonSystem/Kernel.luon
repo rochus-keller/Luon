@@ -1,0 +1,101 @@
+MODULE Kernel;  (*NW/PR  11.4.86 / 27.12.95 / 4.2.2014*)
+  IMPORT PAL;
+  CONST SectorLength* = 1024;
+    FSoffset = 80000H; (*256MB in 512-byte blocks*)
+    mapsize = 10000H; (*1K sectors, 64MB*)
+
+  TYPE Sector* = ARRAY SectorLength OF BYTE;
+
+  VAR allocated*, NofSectors*: INTEGER;
+    heapOrg*, heapLim*: INTEGER; 
+    stackOrg* ,  stackSize*, MemLim*: INTEGER;
+    clock: INTEGER;
+    list0, list1, list2, list3: INTEGER;  (*lists of free blocks of size n*256, 128, 64, 32 bytes*)
+    data: INTEGER; (*SPI data in*)
+    sectorMap: ARRAY mapsize DIV 32 OF SET;
+    
+(* ---------- New: heap allocation ----------*)
+
+  PROCEDURE New*(VAR ptr: INTEGER; tag: INTEGER);
+    (*called by NEW via MT[0]; ptr and tag are pointers*)
+  BEGIN
+    ASSERT(FALSE)
+  END New;
+
+(* ---------- Garbage collector ----------*)
+
+  PROCEDURE Mark*(pref: INTEGER);
+  BEGIN
+    // NOP
+  END Mark;
+
+  PROCEDURE Scan*;
+  BEGIN
+    // NOP
+  END Scan;
+
+(* ---------- Disk storage management ----------*)
+
+  PROCEDURE InitSecMap*;
+    VAR i: INTEGER;
+  BEGIN NofSectors := 0; sectorMap[0] := {0 .. 31}; sectorMap[1] := {0 .. 31};
+    FOR i := 2 TO mapsize DIV 32 - 1 DO sectorMap[i] := {} END
+  END InitSecMap;
+
+  PROCEDURE MarkSector*(sec: INTEGER);
+  BEGIN sec := sec DIV 29; 
+    INCL(sectorMap[sec DIV 32], sec MOD 32); INC(NofSectors)
+  END MarkSector;
+
+  PROCEDURE FreeSector*(sec: INTEGER);
+  BEGIN sec := sec DIV 29; 
+    EXCL(sectorMap[sec DIV 32], sec MOD 32); DEC(NofSectors)
+  END FreeSector;
+
+  PROCEDURE AllocSector*(hint: INTEGER; VAR sec: INTEGER);
+    VAR s: INTEGER;
+  BEGIN (*find free sector, starting after hint*)
+    hint := hint DIV 29; s := hint;
+    REPEAT INC(s);
+      IF s = mapsize THEN s := 1 END ;
+    UNTIL ~(s MOD 32 IN sectorMap[s DIV 32]);
+    INCL(sectorMap[s DIV 32], s MOD 32); INC(NofSectors); sec := s * 29
+  END AllocSector;
+
+  PROCEDURE GetSector*(src: INTEGER; VAR dst: Sector);
+  BEGIN ASSERT(FALSE)
+  END GetSector;
+  
+  PROCEDURE PutSector*(dst: INTEGER; VAR src: Sector);
+  BEGIN ASSERT(FALSE)
+  END PutSector;
+
+(*-------- Miscellaneous procedures----------*)
+
+  PROCEDURE Time*(): INTEGER;
+  BEGIN
+    RETURN PAL.getTime()
+  END Time;
+
+  PROCEDURE Clock*(): INTEGER;
+  BEGIN
+    RETURN clock
+  END Clock;
+
+  PROCEDURE SetClock*(dt: INTEGER);
+  BEGIN clock := dt
+  END SetClock;
+
+  PROCEDURE Install*(Padr, at: INTEGER);
+  BEGIN ASSERT(FALSE)
+  END Install;
+
+  PROCEDURE Init*;
+  BEGIN 
+    MemLim := 10000000; heapOrg := 1; // dummy values
+    stackOrg := heapOrg; stackSize := 8000H; heapLim := MemLim;
+    list1 := 0; list2 := 0; list3 := 0; list0 := heapOrg;
+    allocated := 0; clock := 0; InitSecMap
+  END Init;
+
+END Kernel.

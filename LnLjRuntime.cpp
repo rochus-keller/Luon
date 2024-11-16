@@ -53,7 +53,7 @@ static void loadLuaLib( Lua::Engine2* lua, const QByteArray& path, QByteArray na
         qCritical() << "cannot find" << path;
     if( name.isEmpty() )
         name = path;
-    if( !lua->addSourceLib( lib.readAll(), name ) )
+    if( !lua->addPreloadLib( lib.readAll(), name ) )
         printLoadError( lua, path );
 }
 
@@ -118,13 +118,12 @@ bool LjRuntime::loadLibraries()
 {
     if( d_pro->useBuiltInOakwood() )
     {
-        loadLuaLib(d_lua,"In");
-        loadLuaLib(d_lua,"Out");
-        loadLuaLib(d_lua,"Files");
-        loadLuaLib(d_lua,"Input");
-        loadLuaLib(d_lua,"Math");
-        loadLuaLib(d_lua,"Strings");
-        // loadLuaLib(d_lua,"XYPlane");
+        loadLuaLib(d_lua,"_In");
+        loadLuaLib(d_lua,"_Out");
+        loadLuaLib(d_lua,"_Files");
+        loadLuaLib(d_lua,"_Input");
+        loadLuaLib(d_lua,"_Math");
+        loadLuaLib(d_lua,"_Strings");
     }
 
     if( d_pro->useBuiltInObSysInner() )

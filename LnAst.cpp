@@ -31,6 +31,7 @@ const char* BasicType::name[] = {
     "Nil",
     "BOOLEAN",
     "CHAR",
+    "BYTE",
     "INTEGER",
     "REAL",
     "SET",
@@ -40,7 +41,7 @@ const char* BasicType::name[] = {
 
 const char* Builtin::name[] = {
     "ABS", "CAP", "BITAND", "BITASR", "BITNOT", "BITOR", "BITS", "BITSHL", "BITSHR",
-    "BITXOR", "CAST", "CHR", "DEFAULT", "FLOOR", "FLT", "GETENV", "LEN", "MAX",
+    "BITXOR", "CAST", "CHR", "CLIP", "DEFAULT", "FLOOR", "FLT", "GETENV", "LEN", "MAX",
     "MIN", "ODD", "ORD", "STRLEN", "VARARG", "VARARGS",
     "ASSERT", "COPY", "DEC", "EXCL", "HALT", "INC",
     "INCL", "NEW", "PCALL", "PRINT", "PRINTLN", "RAISE", "SETENV",
@@ -63,6 +64,7 @@ AstModel::AstModel():helper(0),helperId(0)
 
         types[BasicType::BOOLEAN] = addType("BOOLEAN", BasicType::BOOLEAN, 1 );
         types[BasicType::CHAR] = addType("CHAR", BasicType::CHAR, 1 );
+        types[BasicType::BYTE] = addType("BYTE", BasicType::BYTE, 1 );
         types[BasicType::INTEGER] = addType("INTEGER", BasicType::INTEGER, 8 );
         types[BasicType::REAL] = addType("REAL", BasicType::REAL, 8 );
         types[BasicType::SET] = addType("SET", BasicType::SET, 4 );
@@ -328,6 +330,17 @@ bool Type::isDerefCharArray() const
     return false;
 }
 
+bool Type::isDerefByteArray() const
+{
+    Type* t = deref();
+    if( t && t->form == Array && t->base )
+    {
+        Type* b = t->base->deref();
+        return b && b->form == BasicType::BYTE;
+    }
+    return false;
+}
+
 Type*Type::deref() const
 {
     if( form == NameRef )
@@ -404,6 +417,8 @@ QVariant BasicType::getMax(quint8 form)
         return std::numeric_limits<quint8>::max();
     case SET:
         return 31;
+    case BYTE:
+        return 255;
     case INTEGER:
         // see https://en.wikipedia.org/wiki/Double-precision_floating-point_format#IEEE_754_double-precision_binary_floating-point_format:_binary64
         // https://pursuit.purescript.org/packages/purescript-int-53/4.0.0/docs/Data.Int53
@@ -422,6 +437,8 @@ QVariant BasicType::getMin(quint8 form)
         return false;
     case CHAR:
         return std::numeric_limits<quint8>::min();
+    case BYTE:
+        return 0;
     case INTEGER:
         return -(1 << SignedIntBitWidth); // -9,007,199,254,740,991
     case REAL:
@@ -606,13 +623,13 @@ bool Expression::isConst() const
         if( lhs == 0 )
             return true; // error
         Declaration* d = lhs->val.value<Declaration*>();
-        if( d->kind == Declaration::Procedure )
+        if( d && d->kind == Declaration::Procedure )
         {
             if( d->mode != Declaration::Invar )
                 return false;
             else
                 return allConst(args);
-        }else if( d->kind == Declaration::Builtin )
+        }else if(d && d->kind == Declaration::Builtin )
         {
             // TODO: this is no longer required since Validator::callOp removes const calls of builtins
             switch( d->id )

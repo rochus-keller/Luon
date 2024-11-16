@@ -1,0 +1,113 @@
+module PAL
+
+  type 
+    Buffer* = ARRAY OF INTEGER
+    String = ARRAY OF CHAR
+
+  proc ROR*(x,n: integer):integer
+  begin
+  end ROR
+  
+  proc LED(x: integer) end
+  
+  type Command = PROCEDURE
+  proc LDCMD(a,b: array of char):Command end
+  
+  proc LDMOD(a: array of char):boolean end
+  
+  proc listFiles*(): integer 
+  begin
+	  return 0
+	end listFiles
+
+  proc fileName*(i: integer; name: String; maxlen: integer)
+  begin
+	end fileName
+	
+	proc openFile*(CONST filename: array of char): integer
+	begin
+	  return 0
+	end openFile
+	
+	proc newFile*(): integer
+	begin
+	  return 0
+	end newFile
+
+  proc saveFile*(const filename: array of char; buffer: integer): boolean
+  begin
+	  return false
+	end saveFile
+
+  proc freeFile*(buffer: integer)
+  begin
+	end freeFile
+
+  proc removeFile*(const filename: array of char): boolean
+  begin
+	  return false
+	end removeFile
+	
+  proc renameFile*(const oldName, newName: array of char): boolean
+  begin
+	  return false
+	end renameFile
+	
+  proc length*(buffer: integer): integer
+  begin
+	  return 0
+	end length
+	
+  proc setPos*(buffer, pos: integer): boolean
+  begin
+	  return false
+	end setPos
+	
+  proc atEnd*(buffer: integer): boolean
+  begin
+	  return false
+	end atEnd
+
+  proc getPos*(buffer: integer): integer
+  begin
+	  return 0
+	end getPos
+
+  proc writeByte*(buffer: integer; byte_: byte): boolean
+  begin
+	  return false
+	end writeByte
+	
+  proc readByte*(buffer: integer): byte
+  begin
+	  return 0h
+	end readByte
+	
+  proc nextKey*(): char 
+  begin
+	  return 0x
+	end nextKey
+	
+  type InputState* = record keys*: set; x*, y*: integer end
+  
+  proc getState*(var state: InputState) 
+	begin
+	end getState
+
+  proc processEvents*(sleep:integer): boolean 
+  begin
+	  return false
+  end processEvents
+
+  proc createRasterBuffer*(length: integer): Buffer 
+  begin
+	  return nil
+  end createRasterBuffer
+  
+  proc getTime*(): integer 
+  begin
+	  return 0
+	end getTime
+
+
+end PAL

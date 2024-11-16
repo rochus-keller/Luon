@@ -1,0 +1,45 @@
+MODULE Input; (*NW 5.10.86 / 15.11.90 Ceres-2; PDR 21.4.12 / NW 15.5.2013 Ceres-4*)
+  IMPORT PAL;
+
+  VAR kbdCode: CHAR; (*last keyboard code read*)
+    Recd: BOOLEAN;
+    MW, MH: INTEGER; (*mouse limits*)
+  
+  PROCEDURE Peek();
+  BEGIN
+    kbdCode := PAL.nextKey();
+    Recd := kbdCode # 0x
+  END Peek;
+  
+  PROCEDURE Available*(): INTEGER;
+  BEGIN Peek();
+    RETURN ORD(Recd)
+  END Available;
+
+  PROCEDURE Read*(VAR ch: CHAR);
+  BEGIN
+    WHILE ~Recd DO Peek() END ;
+    ch := kbdCode
+    Recd := FALSE
+  END Read;
+
+  PROCEDURE Mouse*(VAR keys: SET; VAR x, y: INTEGER);
+    VAR state: PAL.InputState;
+  BEGIN 
+	  PAL.getState(state);
+	  keys := state.keys;
+	  x := state.x; 
+	  y := state.y;
+	  IF y >= MH THEN y := MH-1 END
+  END Mouse;
+
+  PROCEDURE SetMouseLimits*(w, h: INTEGER);
+  BEGIN MW := w; MH := h
+  END SetMouseLimits;
+
+  PROCEDURE Init*;
+  BEGIN Recd := FALSE;
+  END Init;
+
+BEGIN Init
+END Input.

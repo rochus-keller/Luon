@@ -1715,6 +1715,10 @@ void Parser2::ProcedureDeclaration() {
         expect(Tok_EXTERN, true, "ProcedureDeclaration");
         if( procDecl->mode != 0 )
             error(cur, "not allowed for bound procedures");
+        else if( procDecl->outer->kind != Declaration::Module )
+            error(cur, "extern declarations only allowed on module level");
+        else if( !thisMod->data.value<ModuleData>().metaParams.isEmpty() )
+            error(cur, "extern declarations not allowed in generic modules");
         else
             procDecl->mode = Declaration::Extern;
         if( la.d_type == Tok_ident ) {

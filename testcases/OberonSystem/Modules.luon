@@ -1,0 +1,73 @@
+MODULE Modules;  (*Link and load on RISC; NW 20.10.2013 / 9.4.2016*)
+  IMPORT Files, PAL;
+  CONST versionkey = 1X; MT = 12; DescSize = 80;
+
+  TYPE Module* = ModDesc;
+    Command* = PROCEDURE;
+    ModuleName* = ARRAY 32 OF CHAR;
+
+    ModDesc* = RECORD
+        name*: ModuleName;
+        next*: Module;
+        key*, num*, size*, refcnt*: INTEGER;
+        data*, code*, imp*, cmd*, ent*, ptr*, unused: INTEGER  (*addresses*)
+      END ;
+
+  VAR root*, M: Module;
+    AllocPtr*, res*: INTEGER;
+    importing*, imported*: ModuleName;
+
+  PROCEDURE error(n: INTEGER; CONST name: ARRAY OF CHAR);
+  BEGIN res := n; COPY(importing,name)
+  END error;
+  
+  PROCEDURE Find(CONST name: ARRAY OF CHAR): Module;
+	  VAR cur: Module;
+  BEGIN
+	  cur := root;
+	  WHILE cur # NIL DO
+	    IF cur.name = name THEN RETURN cur END;
+	    cur := cur.next
+	  END;
+	  RETURN NIL
+  END Find;
+
+  PROCEDURE Load*(CONST name: ARRAY OF CHAR; VAR newmod: Module);
+    (*search module in list; if not found, load module.
+      res = 0: already present or loaded; res = 2: file not available; res = 3: key conflict;
+      res = 4: bad file version; res = 5: corrupted file; res = 7: no space*)
+    VAR mod_: Module;
+  BEGIN res := 0; 
+    COPY(importing,name);
+    mod_ := Find(name);
+    IF mod_ = NIL THEN  
+      IF ~PAL.LDMOD(name) THEN res := 2 
+      ELSE COPY(imported, name);
+        NEW(mod_);
+        COPY(mod_.name, name);
+        mod_.next := root;
+        root := mod_;
+      END
+    END
+    newmod := mod_;
+  END Load;
+
+  PROCEDURE ThisCommand*(mod_: Module; CONST name: ARRAY OF CHAR): Command;
+	 VAR p: PROCEDURE;
+  BEGIN
+    RETURN PAL.LDCMD(mod_.name,name)
+  END ThisCommand;
+
+  PROCEDURE Free*(CONST name: ARRAY OF CHAR);
+  BEGIN res := 0;
+    // NOP
+  END Free;
+
+  PROCEDURE Init*;
+  BEGIN Files.Init; 
+	  AllocPtr := 0
+  END Init;
+
+BEGIN Init; // Load("Oberon", M);
+    PAL.LED(res); // REPEAT UNTIL FALSE  (*only if load fails*)
+END Modules.

@@ -1,0 +1,274 @@
+MODULE Files;  (*NW 11.1.86 / 22.9.93 / 25.5.95 / 25.12.95 / 15.8.2013*)
+  IMPORT Kernel, FileDir, PAL;
+
+  (*A file consists of a sequence of pages. The first page
+    contains the header. Part of the header is the page table, an array
+    of disk addresses to the pages. A file is referenced through riders.
+    A rider indicates a current position and refers to a file*)
+
+  CONST MaxBufs    = 4;
+      HS        = FileDir.HeaderSize;
+      SS        = FileDir.SectorSize;
+      STS       = FileDir.SecTabSize;
+      XS        = FileDir.IndexSize;
+
+  TYPE  DiskAdr = INTEGER;
+      File*    = FileDesc;
+      Buffer  = BufferRecord;
+      Index   = IndexRecord;
+
+    Rider* =
+      RECORD eof*: BOOLEAN;
+        res*: INTEGER;
+        file: File;
+        apos, bpos: INTEGER;
+        buf: Buffer
+      END ;
+
+    FileDesc =
+      RECORD next: File; (*list of files invisible to the GC*)
+        nofbufs, aleng, bleng: INTEGER;
+        modH, registered: BOOLEAN;
+        firstbuf: Buffer;
+        sechint: DiskAdr;
+        name: FileDir.FileName;
+        date: INTEGER;
+        ext:  ARRAY FileDir.ExTabSize OF Index;
+        sec: FileDir.SectorTable
+      END ;
+
+    BufferRecord =
+      RECORD apos, lim: INTEGER;
+        mod_: BOOLEAN;
+        next: Buffer;
+        data: FileDir.DataSector
+      END ;
+
+    IndexRecord =
+      RECORD adr: DiskAdr;
+        mod_: BOOLEAN;
+        sec: FileDir.IndexSector
+      END ;
+
+    (*aleng * SS + bleng = length (including header)
+      apos * SS + bpos = current position
+      0 <= bpos <= lim <= SS
+      0 <= apos <= aleng < PgTabSize
+      (apos < aleng) & (lim = SS) OR (apos = aleng) *)
+
+
+  PROCEDURE Old*(CONST name: ARRAY OF CHAR): File;
+	  VAR f: File; fb: INTEGER
+  BEGIN
+    fb := PAL.openFile(name);
+    IF fb < 0 THEN RETURN NIL END;
+    NEW(f);
+    COPY(f.name, name);
+    f.sechint := fb;
+    RETURN f
+  END Old;
+
+  PROCEDURE New*(CONST name: ARRAY OF CHAR): File;
+	  VAR f: File; fb: INTEGER
+  BEGIN
+    fb := PAL.newFile();
+    NEW(f);
+    COPY(f.name,name);
+    f.sechint := fb;
+    RETURN f
+  END New;
+
+  PROCEDURE Register*(f: File);
+	  VAR res: BOOLEAN;
+  BEGIN
+	  res := PAL.saveFile(f.name, f.sechint);
+	  Close(f)
+  END Register;
+
+  PROCEDURE Close*(f: File);
+  BEGIN
+    PAL.freeFile(f.sechint);
+    f.sechint := -1
+  END Close;
+
+  PROCEDURE Purge*(f: File);
+  BEGIN
+    Close(f)
+  END Purge;
+
+  PROCEDURE Delete*(CONST name: ARRAY OF CHAR; VAR res: INTEGER);
+  BEGIN
+	  IF PAL.removeFile(name) THEN res := 0 ELSE res := 1 END
+  END Delete;
+
+  PROCEDURE Rename*(CONST old, new: ARRAY OF CHAR; VAR res: INTEGER);
+  BEGIN
+	  IF PAL.renameFile(old, new) THEN res := 0 ELSE res := 1 END
+  END Rename;
+
+  PROCEDURE Length*(f: File): INTEGER;
+  BEGIN
+    RETURN PAL.length(f.sechint)
+  END Length;
+
+  PROCEDURE Date*(f: File): INTEGER;
+  BEGIN RETURN f.date
+  END Date;
+
+  (*---------------------------Read---------------------------*)
+
+  PROCEDURE Set*(VAR r: Rider; f: File; pos: INTEGER);
+    VAR a, b: INTEGER;
+  BEGIN  r.eof := FALSE; r.res := 0;
+    IF f # NIL THEN
+      r.file := f; r.apos := pos
+    ELSE r.file:= NIL
+    END
+  END Set;
+
+  PROCEDURE Pos*(VAR r: Rider): INTEGER;
+  BEGIN RETURN r.apos
+  END Pos;
+
+  PROCEDURE Base*(VAR r: Rider): File;
+  BEGIN RETURN r.file
+  END Base;
+
+  PROCEDURE ReadByte*(VAR r: Rider; VAR x: BYTE);
+	  VAR pos: INTEGER;
+  BEGIN
+    x := 0;
+    IF r.file # NIL THEN
+      IF PAL.setPos(r.file.sechint, r.apos) THEN 
+	      r.res := 0; r.eof := FALSE;
+	      IF PAL.atEnd(r.file.sechint) THEN r.eof := TRUE; r.res := 1
+	      ELSE
+	        x := PAL.readByte(r.file.sechint)
+	        pos := PAL.getPos(r.file.sechint)
+	        IF pos = r.apos THEN r.res := 1 ELSE r.apos := pos END
+	      END
+	   ELSE r.res := 1 
+	   END
+    END
+  END ReadByte;
+
+  PROCEDURE ReadBytes*(VAR r: Rider; VAR x: ARRAY OF BYTE; n: INTEGER);
+    VAR i: INTEGER;
+  BEGIN i := 0;  (*this implementation is to be improved*)
+    WHILE i < n DO ReadByte(r, x[i]); INC(i) END
+  END ReadBytes;
+
+  PROCEDURE Read*(VAR r: Rider; VAR ch: CHAR);
+  VAR b: BYTE;
+  BEGIN
+    ReadByte(r, b); ch := CHR(b)
+  END Read;
+
+  PROCEDURE ReadInt*(VAR R: Rider; VAR x: INTEGER);
+    VAR x0, x1, x2, x3: BYTE;
+  BEGIN ReadByte(R, x0); ReadByte(R, x1); ReadByte(R, x2); ReadByte(R, x3);
+    x := ((x3 * 100H + x2) * 100H + x1) * 100H + x0
+  END ReadInt;
+
+  PROCEDURE ReadSet*(VAR R: Rider; VAR s: SET);
+    VAR n: INTEGER;
+  BEGIN ReadInt(R, n); s := BITS(n)
+  END ReadSet;
+
+  PROCEDURE ReadReal*(VAR R: Rider; VAR x: REAL);
+    VAR n: INTEGER;
+  BEGIN ReadInt(R, n); x := FLT(n) // TODO: requires verbatim binary converion
+  END ReadReal;
+
+  PROCEDURE ReadString*(VAR R: Rider; VAR x: ARRAY OF CHAR);
+    VAR i: INTEGER; ch: CHAR;
+  BEGIN i := 0; Read(R, ch);
+    WHILE ch # 0X DO
+      IF i < LEN(x)-1 THEN x[i] := ch; INC(i) END ;
+      Read(R, ch)
+    END ;
+    x[i] := 0X
+  END ReadString;
+
+  PROCEDURE ReadNum*(VAR R: Rider; VAR x: INTEGER);
+    VAR n, y: INTEGER; b: BYTE;
+  BEGIN n := 32; y := 0; ReadByte(R, b);
+    WHILE b >= 80H DO y := PAL.ROR(y + b-80H, 7); DEC(n, 7); ReadByte(R, b) END ;
+    IF n <= 4 THEN x := PAL.ROR(y + b MOD 10H, 4) ELSE x := BITASR(PAL.ROR(y + b, 7), n-7) END
+  END ReadNum;
+        
+  (*---------------------------Write---------------------------*)
+
+  PROCEDURE NewExt(f: File);
+    VAR i, k: INTEGER; ext: Index;
+  BEGIN k := (f.aleng - STS) DIV XS;
+    NEW(ext); ext.adr := 0; ext.mod_ := TRUE; f.ext[k] := ext; i := XS;
+    REPEAT DEC(i); ext.sec[i] := 0 UNTIL i = 0
+  END NewExt;
+
+  PROCEDURE WriteByte*(VAR r: Rider; x: BYTE);
+    VAR pos: INTEGER
+  BEGIN
+    IF r.file # NIL THEN
+      IF PAL.setPos(r.file.sechint, r.apos) THEN 
+	      r.res := 0; r.eof := FALSE;
+	      IF PAL.writeByte(r.file.sechint,x) THEN
+	        pos := PAL.getPos(r.file.sechint);
+	        IF pos = r.apos THEN r.res := r.res + 1 ELSE r.apos := pos END
+	      ELSE r.res := r.res + 1
+	      END
+	   ELSE r.res := r.res + 1 
+	   END
+    END
+  END WriteByte;
+
+  PROCEDURE WriteBytes*(VAR r: Rider; CONST x: ARRAY OF BYTE; n: INTEGER);
+    VAR i: INTEGER;
+  BEGIN i := 0; (*this implementation is to be improed*)
+    WHILE i < n DO WriteByte(r, x[i]); INC(i) END
+  END WriteBytes;
+
+  PROCEDURE Write*(VAR r: Rider; ch: CHAR);
+  BEGIN WriteByte(r,CLIP(ORD(ch)))
+  END Write;
+
+  PROCEDURE WriteInt*(VAR R: Rider; x: INTEGER);
+  BEGIN WriteByte(R, CLIP(x MOD 100H));
+    WriteByte(R, CLIP(x DIV 100H MOD 100H));
+    WriteByte(R, CLIP(x DIV 10000H MOD 100H));
+    WriteByte(R, CLIP(x DIV 1000000H MOD 100H))
+  END WriteInt;
+
+  PROCEDURE WriteSet*(VAR R: Rider; s: SET);
+  BEGIN WriteInt(R, ORD(s))
+  END WriteSet;
+
+  PROCEDURE WriteReal*(VAR R: Rider; x: REAL);
+  BEGIN  WriteInt(R, FLOOR(x)) // TODO: proper conversion on binary level
+  END WriteReal;
+
+  PROCEDURE WriteString*(VAR R: Rider; CONST x: ARRAY OF CHAR);
+    VAR i: INTEGER; ch: CHAR;
+  BEGIN i := 0;
+    REPEAT ch := x[i]; Write(R, ch); INC(i) UNTIL ch = 0X
+  END WriteString;
+
+  PROCEDURE WriteNum*(VAR R: Rider; x: INTEGER);
+  BEGIN
+    WHILE (x < -40H) OR (x >= 40H) DO WriteByte(R, CLIP(x MOD 80H + 80H)); 
+    x := BITASR(x, 7) END ;
+    WriteByte(R, CLIP(x MOD 80H))
+  END WriteNum;
+
+  (*---------------------------System use---------------------------*)
+
+  PROCEDURE Init*;
+  BEGIN Kernel.Init; FileDir.Init
+  END Init;
+
+  PROCEDURE RestoreList*; (*after mark phase of garbage collection*)
+  BEGIN
+    // NOP
+  END RestoreList;
+
+END Files.

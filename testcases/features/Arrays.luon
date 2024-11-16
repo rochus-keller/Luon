@@ -7,7 +7,7 @@ module Arrays
 	var a : array 20 of integer
 		c : array 10 of char
 		d : array 3 of R
-		e : array 10 of char
+		e : array 10 of byte
 		
 	proc sub
 		var b : array 10 of char

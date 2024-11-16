@@ -29,12 +29,12 @@
         <file>oakwood/Strings.luon</file>
         <file>oakwood/XYplane.luon</file>
         <file>runtime/LUON.lua</file>
-        <file>runtime/Files.lua</file>
-        <file>runtime/In.lua</file>
-        <file>runtime/Input.lua</file>
-        <file>runtime/Math.lua</file>
-        <file>runtime/Out.lua</file>
-        <file>runtime/Strings.lua</file>
-        <file>runtime/XYPlane.lua</file>
+        <file>runtime/_Files.lua</file>
+        <file>runtime/_In.lua</file>
+        <file>runtime/_Input.lua</file>
+        <file>runtime/_Math.lua</file>
+        <file>runtime/_Out.lua</file>
+        <file>runtime/_Strings.lua</file>
+        <file>runtime/_XYPlane.lua</file>
     </qresource>
 </RCC>

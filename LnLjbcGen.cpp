@@ -74,6 +74,7 @@ public:
     QList<Declaration*> deferred;
     QList<quint8> slotStack; // for expression evaluation
     QList <quint32> exitJumps; // TODO: must be a separate list for each (nested) LOOP
+    bool hasExterns;
 
     struct Lvalue
     {
@@ -86,7 +87,7 @@ public:
         Lvalue():kind(Invalid),disposeSlot(0),disposeIndex(0),slot(0),index(0){}
     };
 
-    Imp():modSlot(0),lnlj(0),thisMod(0) {}
+    Imp():modSlot(0),lnlj(0),thisMod(0),hasExterns(false) {}
 
     void createAllClassObjects(Declaration* scope)
     {
@@ -384,6 +385,13 @@ public:
             d = d->getNext();
         }
 
+        if( hasExterns )
+        {
+            const int tmp = ctx.back().buySlots(1);
+            emitImport("_" + md.path.join('_'), tmp, md.end);
+            ctx.back().sellSlots(tmp);
+        }
+
         if( begin )
         {
             const int tmp = ctx.back().buySlots(1,true);
@@ -453,6 +461,7 @@ public:
         case BasicType::STRING:
         case BasicType::BOOLEAN:
         case BasicType::CHAR:
+        case BasicType::BYTE:
         case BasicType::INTEGER:
         case BasicType::REAL:
         case BasicType::SET:
@@ -513,9 +522,12 @@ public:
 
         if( p->mode == Declaration::Extern )
         {
+            hasExterns = true;
             const int tmp = ctx.back().buySlots(pars+1,true);
-            bc.GGET(tmp, thisMod->name + "_" + p->name, p->pos.packed());
+            ModuleData md = thisMod->data.value<ModuleData>();
+            bc.GGET(tmp, md.path.join('_') + "_" + p->name, p->pos.packed());
             // we expec the EXTERN proc to be implemented under the name "<module>_<proc>", e.g Out_String
+            // whereas '_' is also used as the module path separator (to be compatible with Lua source code)
             for( int i = 0; i < pars; i++ )
                 bc.MOV(tmp+i+1, i, p->pos.packed());
             bc.CALL(tmp, 1+vpars,pars,p->pos.packed());
@@ -574,6 +586,12 @@ public:
         {
             Q_ASSERT(ctx.back().scope == thisMod);
             emitSetTableByIndex( tmp, modSlot, p->id, end );
+            if( p->mode != Declaration::Begin &&
+                    (p->type == 0 || p->type->form == BasicType::NoType) && params.size() == 0 )
+            {
+                // also store command procedures by name in the module table
+                bc.TSET(tmp, modSlot, p->name, end.packed());
+            }
         }
         ctx.back().sellSlots(tmp);
     }
@@ -625,7 +643,8 @@ public:
         const quint8 lhs = slotStack[slotStack.size()-2];
         const quint8 rhs = slotStack.back();
         const quint8 res = lhs;
-        if( lt->form == rt->form && ( lt->isNumber() || lt->form == BasicType::CHAR || lt->form == Type::ConstEnum ) )
+        if( ( lt->isNumber() || lt->form == BasicType::CHAR || lt->form == Type::ConstEnum ) &&
+                ( rt->isNumber() || rt->form == BasicType::CHAR || rt->form == Type::ConstEnum ) )
         {
             switch(e->kind)
             {
@@ -990,6 +1009,18 @@ public:
             bc.MOV(res,slotStack.back(),call->pos.packed() );
             releaseSlot();
             break;
+        case Builtin::CLIP: {
+                emitExpression(call->rhs);
+                const quint8 tmp = ctx.back().buySlots(3, true);
+                fetchLnlibMember(tmp,19,call->pos); // bit.band
+                bc.MOV(tmp+1, slotStack.back(), call->pos.packed() );
+                releaseSlot();
+                bc.KSET(tmp+2, 255, call->pos.packed());
+                bc.CALL(tmp, 1 ,2, call->pos.packed());
+                bc.MOV(res,tmp, call->pos.packed());
+                ctx.back().sellSlots(tmp,3);
+                break;
+            }
         case Builtin::DEFAULT:
             Q_ASSERT(false); // only called at compile time
             emitInitializer(res, call->rhs->type, call->pos);
@@ -1925,6 +1956,7 @@ public:
             bc.KSET(to,false,loc.packed());
             break;
         case BasicType::CHAR:
+        case BasicType::BYTE:
         case BasicType::INTEGER:
         case BasicType::SET:
         case Type::ConstEnum:
@@ -1949,6 +1981,7 @@ public:
         {
         case BasicType::BOOLEAN:
         case BasicType::CHAR:
+        case BasicType::BYTE:
         case BasicType::INTEGER:
         case BasicType::SET:
         case Type::ConstEnum:
@@ -1973,9 +2006,8 @@ public:
             bc.CALL(tmp,1,1,loc.packed());
             bc.MOV(slotStack.back(),tmp, loc.packed());
             ctx.back().sellSlots(tmp,2);
-        }else if( lhsT->isDerefCharArray() &&
-                  (rhsT->form == BasicType::StrLit || rhsT->form == BasicType::ByteArrayLit
-                   || rhsT->form == BasicType::STRING ) )
+        }else if( (lhsT->isDerefCharArray() && (rhsT->form == BasicType::StrLit || rhsT->form == BasicType::STRING ) )
+                  || ( lhsT->isDerefByteArray() && rhsT->form == BasicType::ByteArrayLit ) )
         {
             // convert string to CharArray
             const int tmp = ctx.back().buySlots(3,true);
@@ -2287,7 +2319,7 @@ public:
     void emitCreateArray( quint8 to, Type* array, int lenSlot, const RowCol& loc )
     {
         Type* baseType = deref(array->base);
-        if( baseType->form == BasicType::CHAR )
+        if( baseType->form == BasicType::CHAR || baseType->form == BasicType::BYTE )
         {
             const int tmp = ctx.back().buySlots(2,true);
             fetchLnlibMember(tmp,8,loc); // module.createCharArray

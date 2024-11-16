@@ -38,6 +38,7 @@ namespace Ln
                Nil,
                BOOLEAN,
                CHAR,
+               BYTE,
                INTEGER, // max. representable signed int in LuaJIT, use MAX and MIN
                REAL,    // double
                SET,     // cut at uint32
@@ -56,7 +57,7 @@ namespace Ln
         enum Type {
             // functions
             ABS, CAP, BITAND, BITASR, BITNOT, BITOR, BITS, BITSHL, BITSHR,
-            BITXOR, CAST, CHR, DEFAULT, FLOOR, FLT, GETENV, LEN, MAX,
+            BITXOR, CAST, CHR, CLIP, DEFAULT, FLOOR, FLT, GETENV, LEN, MAX,
             MIN, ODD, ORD, STRLEN, VARARG, VARARGS,
             // procedures
             ASSERT, COPY, DEC, EXCL, HALT, INC,
@@ -87,9 +88,9 @@ namespace Ln
         Declaration* decl; // if NameRef includes pos and name
         Expression* expr; // array len, hashmap key
 
-        bool isNumber() const { return form == BasicType::INTEGER || form == BasicType::REAL; }
+        bool isNumber() const { return form == BasicType::INTEGER || form == BasicType::REAL || form == BasicType::BYTE; }
         bool isReal() const { return form == BasicType::REAL; }
-        bool isInteger() const { return form == BasicType::INTEGER;  }
+        bool isInteger() const { return form == BasicType::INTEGER || form == BasicType::BYTE;  }
         bool isSet() const { return form == BasicType::SET; }
         bool isBoolean() const { return form == BasicType::BOOLEAN; }
         bool isSimple() const { return form >= BasicType::StrLit && form < BasicType::Max; }
@@ -99,6 +100,7 @@ namespace Ln
         static bool isSubtype(Type* super, Type* sub);
 
         bool isDerefCharArray() const;
+        bool isDerefByteArray() const;
         Type* deref() const;
 
         Declaration* find(const QByteArray& name, bool recursive = true) const;
@@ -134,6 +136,7 @@ namespace Ln
         uint ownstype : 1;
         uint inList : 1; // private
         uint validated : 1;
+        uint hasErrors : 1;
         uint hasSubs : 1;
         uint kind : 4;
         uint id : 16; // used for built-in code and local/param number
@@ -141,7 +144,7 @@ namespace Ln
         Expression* expr; // const decl, enum, meta actuals
 
         Declaration():next(0),link(0),type(0),body(0),id(0),kind(0),mode(0), visi(0),ownstype(false),expr(0),
-            outer(0),varParam(0),inList(0),validated(0), super(0), hasSubs(0){}
+            outer(0),varParam(0),inList(0),validated(0), super(0), hasSubs(0), hasErrors(0){}
 
         QList<Declaration*> getParams(bool skipReceiver = false) const;
         int getIndexOf(Declaration*) const;

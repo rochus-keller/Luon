@@ -572,13 +572,17 @@ void Validator::unaryOp(Expression* e)
     if( e->lhs->type == 0 )
         return; // already reported
     Type* lhsT = deref(e->lhs->type);
-    if( e->kind == Expression::Plus || e->kind == Expression::Minus )
+    if( e->kind == Expression::Plus )
     {
         if( !lhsT->isNumber() )
             return error(e->pos, "unary operator not applicable to this type");
+    }else if( e->kind == Expression::Minus )
+    {
+        if( !lhsT->isNumber() && !lhsT->isSet() )
+            return error(e->pos, "unary operator not applicable to this type");
     }else if( e->kind == Expression::Not )
     {
-        if( !lhsT->isBoolean() )
+        if( !lhsT->isBoolean()  )
             return error(e->pos, "unary '~' or 'NOT' not applicable to this type");
     }
     if( e->lhs == 0 )
@@ -604,7 +608,10 @@ void Validator::unaryOp(Expression* e)
     case Expression::Minus:
         if( e->lhs->isConst() )
         {
-            e->val = -e->lhs->val.toDouble();
+            if( lhsT->isNumber()  )
+                e->val = -e->lhs->val.toDouble();
+            else
+                e->val = ~e->lhs->val.toUInt();
             toConstVal(e);
         }
         break;
@@ -1101,6 +1108,7 @@ Statement*Validator::caseStat(Statement* s)
 {
     visitExpr(s->rhs);
     Expression* caseExp = s->rhs;
+    Type* caseExpT = deref(caseExp->type);
     QSet<qint64> labels;
     bool typecase = false;
     bool first = true;
@@ -1108,22 +1116,29 @@ Statement*Validator::caseStat(Statement* s)
     {
         s = s->getNext();
         visitExpr(s->rhs);
-        if( s->rhs->kind == Expression::DeclRef && s->rhs->val.value<Declaration*>()->kind == Declaration::TypeDecl )
+        if( s->rhs->val.canConvert<Declaration*>() && s->rhs->val.value<Declaration*>()->kind == Declaration::TypeDecl )
         {
             // labels for type case
             if( first )
             {
                 typecase = true;
                 s->kind = Statement::TypeCase;
-                if( deref(caseExp->type)->form != Type::Record )
+                if( caseExpT->form != Type::Record )
+                {
                     error(caseExp->pos, "type case only supported for record types");
+                    return s;
+                }else if( !caseExp->isLvalue() )
+                {
+                    error(caseExp->pos, "type case expression must be a variable, parameter or field designator");
+                    return s;
+                }
             }
             if( !typecase )
                 error(s->pos, "expecting integer, enumeration or char type label");
             else if( s->rhs->next )
                 error(s->rhs->next->pos,"only one case label supported per type case");
-            else if( !assigCompat(caseExp->type, s->rhs) )
-                error(s->rhs->next->pos,"case label type must be an extension of the case expression type");
+            else if( !Type::isSubtype(caseExpT,deref(s->rhs->type)) )
+                error(s->rhs->pos,"case label type must be an extension of the case expression type");
         }else
         {
             // labels for value case
@@ -1161,7 +1176,16 @@ Statement*Validator::caseStat(Statement* s)
                 l = l->next;
             }
         }
-        visitBody(s->body);
+        if( typecase )
+        {
+            Declaration* d = caseExp->val.value<Declaration*>();
+            Q_ASSERT(d);
+            Type* old = d->type;
+            d->type = s->rhs->type;
+            visitBody(s->body);
+            d->type = old;
+        }else
+            visitBody(s->body);
         first = false;
     }
     if( s->getNext() && s->getNext()->kind == Statement::Else )
@@ -1198,7 +1222,8 @@ Statement*Validator::forStat(Statement* s)
             if( !s->rhs->isConst() || !deref(s->rhs->type)->isInteger() )
                 error(s->lhs->pos, "expecting a constant integer expression");
         }
-    }
+    }else
+        Q_ASSERT(false);
     return s;
 }
 
@@ -1458,7 +1483,7 @@ void Validator::callOp(Expression* e)
             {
                 if( !paramCompat(formals[i],actuals[i]) )
                 {
-                    // paramCompat(formals[i],actuals[i]); // TEST
+                    paramCompat(formals[i],actuals[i]); // TEST
                     error(actuals[i]->pos, "actual argument not compatible with formal parameter");
                 }
             }
@@ -1683,10 +1708,10 @@ void Validator::constructor(Expression* constr, Type* hint)
                 if( a < 0 || a > 31 || b < 0 || b > 31 )
                     return error(c->pos,"set component out of range");
                 if( a <= b )
-                    for(int i = a; a <= b; i++ )
+                    for(int i = a; i <= b; i++ )
                         bits.set(i);
                 else
-                    for(int i = b; b <= a; i++ )
+                    for(int i = b; i <= a; i++ )
                         bits.set(i);
             }else
             {
@@ -1696,6 +1721,7 @@ void Validator::constructor(Expression* constr, Type* hint)
                 else
                     bits.set(n);
             }
+            c = c->next;
         }
         toConstVal(constr);
         constr->val = (qint64)bits.to_ulong();
@@ -1751,6 +1777,9 @@ bool Validator::assigCompat(Type* lhs, Type* rhs) const
     if( lhs->form == Type::Proc && rhs->form == Type::Proc )
         return matchFormals(lhs->subs, rhs->subs) && matchResultType(lhs->base,rhs->base);
 
+    if( lhs->form == BasicType::INTEGER && rhs->form == BasicType::BYTE )
+        return true;
+
 #if 0
     // no, we should use copy for this
     if( lhs->isDerefCharArray() && rhs->isDerefCharArray())
@@ -1762,7 +1791,7 @@ bool Validator::assigCompat(Type* lhs, Type* rhs) const
 
 bool Validator::assigCompat(Type* lhs, Declaration* rhs) const
 {
-    if( rhs->kind == Declaration::TypeDecl )
+    if( rhs == 0 || rhs->kind == Declaration::TypeDecl )
         return false;
 
     if( lhs == 0 )
@@ -1788,8 +1817,14 @@ bool Validator::assigCompat(Type* lhs, Declaration* rhs) const
 bool Validator::assigCompat(Type* lhs, const Expression* rhs) const
 {
     lhs = deref(lhs);
-    if( rhs == 0 || rhs->type == 0 )
+    if( rhs == 0 )
         return false;
+
+    if( lhs->form == BasicType::BYTE && deref(rhs->type)->form == BasicType::INTEGER && rhs->isConst() )
+    {
+        int i = rhs->val.toInt();
+        return i >= 0 && i <= 255;
+    }
 
     Type* rhsT = deref(rhs->type);
     if( rhs->kind == Expression::DeclRef || rhs->kind == Expression::Select )
@@ -1799,11 +1834,19 @@ bool Validator::assigCompat(Type* lhs, const Expression* rhs) const
     if( lhs->form == BasicType::CHAR && rhsT->form == BasicType::StrLit )
         return strlen(rhs->val.toByteArray().constData()) == 1;
 
-    if( lhs->isDerefCharArray() && (rhsT->form == BasicType::StrLit ||
-                                    rhsT->form == BasicType::STRING || rhsT->form == BasicType::ByteArrayLit ))
+    if( lhs->isDerefCharArray() && (rhsT->form == BasicType::StrLit || rhsT->form == BasicType::STRING))
     {
         // this is an abbreviation of COPY(lhs,rhs), i.e. an implicit copy operation
         if( lhs->len && rhsT->form == BasicType::StrLit && rhs->val.toByteArray().size() > lhs->len )
+            return false;
+        else
+            return true; // check len at runtime
+    }
+
+    if( lhs->isDerefByteArray() && rhsT->form == BasicType::ByteArrayLit )
+    {
+        // this is an abbreviation of COPY(lhs,rhs), i.e. an implicit copy operation
+        if( lhs->len && rhsT->form == BasicType::ByteArrayLit && rhs->val.toByteArray().size() >= lhs->len )
             return false;
         else
             return true; // check len at runtime
@@ -1820,7 +1863,11 @@ bool Validator::paramCompat(Declaration* lhs, const Expression* rhs) const
     Type* rhsT = deref(rhs->type);
     // a string literal (which is a STRING actually) is compatible with an const array of char formal param
     if( lhs->visi == Declaration::ReadOnly && lhsT->isDerefCharArray() && lhsT->len == 0 &&
-            (rhsT->form == BasicType::StrLit || rhsT->form == BasicType::ByteArrayLit  || rhsT->form == BasicType::STRING ) )
+            (rhsT->form == BasicType::StrLit || rhsT->form == BasicType::STRING ) )
+        return true;
+    // a byte array literal is compatible with a const array of byte formal param
+    if( lhs->visi == Declaration::ReadOnly && lhsT->isDerefByteArray() && lhsT->len == 0 &&
+            rhsT->form == BasicType::ByteArrayLit )
         return true;
 
     if( lhs->varParam && !rhs->isLvalue() )
@@ -1956,6 +2003,7 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
         break;
     case Builtin::BITS:
         expectingNArgs(args,1);
+        *ret = mdl->getType(BasicType::SET);
         break;
     case Builtin::BITSHL:
         checkBitArith(args, ret);
@@ -1979,6 +2027,13 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
         if( !expectingNArgs(args,1) )
             break;
         *ret = mdl->getType(BasicType::CHAR);
+        if( !deref(args.first()->type)->isInteger() )
+            throw "expecting integer argument";
+        break;
+    case Builtin::CLIP:
+        if( !expectingNArgs(args,1) )
+            break;
+        *ret = mdl->getType(BasicType::BYTE);
         if( !deref(args.first()->type)->isInteger() )
             throw "expecting integer argument";
         break;
@@ -2112,8 +2167,10 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
                 throw "expecting a structured first argument type";
             if( lt->isDerefCharArray() && rt->isDerefCharArray() )
                 break; // both char arrays, do string copy
-            if( lt->isDerefCharArray() && ( rt->form == BasicType::StrLit || rt->form == BasicType::ByteArrayLit
-                                            || rt->form == BasicType::STRING))
+            if( lt->isDerefCharArray() && ( rt->form == BasicType::StrLit || rt->form == BasicType::STRING))
+                break; // copy str literal or STRING to array of char
+            if( lt->isDerefByteArray() && rt->form == BasicType::ByteArrayLit )
+                break; // copy ba literal to array of byte
             if( !assigCompat(lt, rt) )
                 throw "type of second argument is not assignment compatible with first argument";
         }else if(args.size() == 1)
@@ -2210,6 +2267,7 @@ bool Validator::evalBuiltin(quint8 builtin, const ExpList& args, QVariant& ret, 
             break;
         case BasicType::CHAR:
         case BasicType::INTEGER:
+        case BasicType::BYTE:
         case BasicType::SET:
         case Type::ConstEnum:
             ret = (qint64)0;
@@ -2264,6 +2322,9 @@ bool Validator::evalBuiltin(quint8 builtin, const ExpList& args, QVariant& ret, 
         break;
     case Builtin::CHR:
         ret = args[0]->val.toUInt();
+        break;
+    case Builtin::CLIP:
+        ret = args[0]->val.toUInt() & 0xff;
         break;
     case Builtin::FLOOR:
         ret = (qint64)::floor(args[0]->val.toDouble());
