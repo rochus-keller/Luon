@@ -97,5 +97,6 @@ MODULE Kernel;  (*NW/PR  11.4.86 / 27.12.95 / 4.2.2014*)
     list1 := 0; list2 := 0; list3 := 0; list0 := heapOrg;
     allocated := 0; clock := 0; InitSecMap
   END Init;
-
+BEGIN
+  NEW(sectorMap);
 END Kernel.

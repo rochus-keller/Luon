@@ -80,6 +80,7 @@ LjRuntime::LjRuntime(QObject*p):QObject(p), d_jitEnabled(true),d_buildErrors(fal
 
 bool LjRuntime::compile(bool doGenerate)
 {
+    d_byteCode.clear();
     if( d_pro->useBuiltInOakwood() )
     {
         preloadLib(d_pro,"In");
@@ -126,24 +127,8 @@ bool LjRuntime::loadLibraries()
         loadLuaLib(d_lua,"_Strings");
     }
 
-    if( d_pro->useBuiltInObSysInner() )
-    {
-#ifdef QT_GUI_LIB_
-        loadLuaLib(d_lua,"Obs/Input", "Input");
-        loadLuaLib(d_lua,"Obs/Kernel", "Kernel");
-        loadLuaLib(d_lua,"Obs/Display", "Display");
-        loadLuaLib(d_lua,"Obs/Modules", "Modules");
-        loadLuaLib(d_lua,"Obs/FileDir", "FileDir");
-        loadLuaLib(d_lua,"Obs/Files", "Files");
-#else
-        qCritical() << "this version doesn't support the Oberon System backend modules";
-        return false;
-#endif
-    }
     const QString root = d_pro->getWorkingDir(true);
     // TODO Obs::Files::setFileSystemRoot(root);
-    if( d_pro->useBuiltInObSysInner() )
-        d_lua->print(QString("Oberon file system root: %1\n").arg(root).toUtf8().constData());
     return true;
 }
 
@@ -155,6 +140,7 @@ bool LjRuntime::loadBytecode()
         return true;
     }
 
+    Project::ModProc main = d_pro->getMain();
     bool hasErrors = false;
     try
     {
@@ -163,10 +149,12 @@ bool LjRuntime::loadBytecode()
             ModuleData md = d_byteCode[i].first->data.value<ModuleData>();
             const QByteArray name = md.fullName;
             qDebug() << "loading" << name;
-            if( md.metaActuals.isEmpty() )
+            if( md.metaActuals.isEmpty() && !d_byteCode[i].first->hasSubs && main.first.isEmpty() )
             {
-                // normal modules are directly loaded and executed; the order of
-                // d_byteCode reflects the import dependencies
+                // modules at the root of the import tree are directly loaded and executed, unless
+                // there is an explicit main module/procedure, in which case the latter is the root
+                // and all other modules are loaded via "require".
+                // the order of d_byteCode also reflects the import dependencies
                 if( !d_lua->addSourceLib( d_byteCode[i].second, name ) )
                 {
                     printLoadError(d_lua,name);
@@ -174,7 +162,7 @@ bool LjRuntime::loadBytecode()
                 }
             }else
             {
-                // generic module instances are just referenced so the client of the module
+                // generic module instances or imported modules are just referenced so the client of the module
                 // can load it via require and only then the instance is run for the first time.
                 // this assures that the module table of the client is present when the generic
                 // instance, which depends on this table, is run.

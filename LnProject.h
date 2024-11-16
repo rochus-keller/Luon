@@ -90,8 +90,6 @@ namespace Ln
         QString renderMain() const;
         void setUseBuiltInOakwood(bool);
         bool useBuiltInOakwood() const { return d_useBuiltInOakwood; }
-        void setUseBuiltInObSysInner(bool);
-        bool useBuiltInObSysInner() const { return d_useBuiltInObSysInner; }
         QString getWorkingDir(bool resolved = false) const;
         void setWorkingDir( const QString& );
         QString getBuildDir(bool resolved = false) const;
@@ -169,7 +167,6 @@ namespace Ln
         ModProc d_main;
         bool d_dirty;
         bool d_useBuiltInOakwood;
-        bool d_useBuiltInObSysInner;
     };
 }
 

@@ -740,8 +740,8 @@ void Ide::createMenu()
     pop->addCommand( "Remove Import Path...", this, SLOT(onRemoveDir()) );
     pop->addSeparator();
     pop->addCommand( "Built-in Oakwood", this, SLOT(onOakwood()) );
-    pop->addCommand( "Built-in Oberon Sys. Inner Mod.", this, SLOT(onObSysInner()) );
-    pop->addCommand( "Oberon File System Root...", this, SLOT( onWorkingDir() ) );
+    pop->addCommand( "Set Configuration Variables...", this, SLOT( onSetOptions()) );
+    pop->addCommand( "File System Root...", this, SLOT( onWorkingDir() ) );
     pop->addSeparator();
     pop->addCommand( "Compile", this, SLOT(onCompile()), tr("CTRL+T"), false );
     pop->addCommand( "Compile && Generate", this, SLOT(onGenerate()), tr("CTRL+SHIFT+T"), false );
@@ -812,8 +812,8 @@ void Ide::createMenuBar()
     pop->addCommand( "Remove Module...", this, SLOT(onRemoveFile()) );
     pop->addSeparator();
     pop->addCommand( "Built-in Oakwood", this, SLOT(onOakwood()) );
-    pop->addCommand( "Built-in Oberon System Inner Modules", this, SLOT(onObSysInner()) );
-    pop->addCommand( "Oberon File System Root...", this, SLOT( onWorkingDir() ) );
+    pop->addCommand( "Set Configuration Variables...", this, SLOT( onSetOptions()) );
+    pop->addCommand( "File System Root...", this, SLOT( onWorkingDir() ) );
 
     pop = new Gui::AutoMenu( tr("Build && Run"), this );
     pop->addCommand( "Compile", this, SLOT(onCompile()), tr("CTRL+T"), false );
@@ -854,6 +854,39 @@ void Ide::createMenuBar()
     Gui::AutoMenu* help = new Gui::AutoMenu( tr("Help"), this, true );
     help->addCommand( "&About this application...", this, SLOT(onAbout()) );
     help->addCommand( "&About Qt...", this, SLOT(onQt()) );
+}
+
+void Ide::onSetOptions()
+{
+    ENABLED_IF(true);
+
+    QByteArrayList l = d_rt->getPro()->getOptions();
+    qSort(l);
+
+    bool ok;
+    const QString options = QInputDialog::getMultiLineText(this,tr("Set Configuration Variables"),
+                                                           tr("Please enter a unique identifier per variable:"),
+                                                           l.join('\n'), &ok );
+    if( !ok )
+        return;
+
+    Lexer lex;
+    QList<Token> toks = lex.tokens(options);
+    l.clear();
+    QStringList errs;
+    foreach( const Token& t, toks )
+    {
+        if( t.d_type == Tok_ident )
+            l << t.d_val;
+        else
+            errs << QString::fromUtf8(t.d_val);
+    }
+
+    if( !errs.isEmpty() )
+        QMessageBox::warning(this,tr("Set Configuration Variables"),
+                             tr("The following entries are illegal and ignored: \n%1").arg(errs.join('\n')));
+
+    d_rt->getPro()->setOptions(l);
 }
 
 void Ide::onCompile()
@@ -1248,17 +1281,6 @@ void Ide::onOakwood()
     CHECKED_IF( true, d_rt->getPro()->useBuiltInOakwood() );
 
     d_rt->getPro()->setUseBuiltInOakwood( !d_rt->getPro()->useBuiltInOakwood() );
-    if( d_rt->getPro()->useBuiltInOakwood() )
-        d_rt->getPro()->setUseBuiltInObSysInner(false);
-}
-
-void Ide::onObSysInner()
-{
-    CHECKED_IF( true, d_rt->getPro()->useBuiltInObSysInner() );
-
-    d_rt->getPro()->setUseBuiltInObSysInner( !d_rt->getPro()->useBuiltInObSysInner() );
-    if( d_rt->getPro()->useBuiltInObSysInner() )
-        d_rt->getPro()->setUseBuiltInOakwood(false);
 }
 
 void Ide::onAddFiles()
@@ -3030,7 +3052,7 @@ void Ide::onRunCommand()
     ENABLED_IF(true);
 
     bool ok = false;
-    QString res = QInputDialog::getText(this,tr("Set Command"),tr("<module>.<command> to run at start of program:"),
+    QString res = QInputDialog::getText(this,tr("Set Command"),tr("<module>[.<command>] to run at start of program:"),
                              QLineEdit::Normal, d_rt->getPro()->renderMain(), &ok );
     if( !ok )
         return;
@@ -3042,7 +3064,8 @@ void Ide::onRunCommand()
     else
     {
         m.first = tmp.first().toUtf8();
-        m.second = tmp.last().toUtf8();
+        if( tmp.size() == 2 )
+            m.second = tmp.last().toUtf8();
         d_rt->getPro()->setMain(m);
     }
 }
@@ -3053,7 +3076,7 @@ int main(int argc, char *argv[])
     a.setOrganizationName("me@rochus-keller.ch");
     a.setOrganizationDomain("github.com/rochus-keller/Luon");
     a.setApplicationName("Luon IDE (LuaJIT)");
-    a.setApplicationVersion("0.6.1");
+    a.setApplicationVersion("0.6.2");
     a.setStyle("Fusion");    
     QFontDatabase::addApplicationFont(":/font/DejaVuSansMono.ttf"); // "DejaVu Sans Mono"
 

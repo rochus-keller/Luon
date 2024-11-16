@@ -74,7 +74,7 @@ public:
     QList<Declaration*> deferred;
     QList<quint8> slotStack; // for expression evaluation
     QList <quint32> exitJumps; // TODO: must be a separate list for each (nested) LOOP
-    bool hasExterns;
+    bool hasExterns, doDeferImports;
 
     struct Lvalue
     {
@@ -87,7 +87,7 @@ public:
         Lvalue():kind(Invalid),disposeSlot(0),disposeIndex(0),slot(0),index(0){}
     };
 
-    Imp():modSlot(0),lnlj(0),thisMod(0),hasExterns(false) {}
+    Imp():modSlot(0),lnlj(0),thisMod(0),hasExterns(false),doDeferImports(false) {}
 
     void createAllClassObjects(Declaration* scope)
     {
@@ -325,7 +325,7 @@ public:
         bc.openFunction(0,md.fullName,module->pos.packed(), md.end.packed() );
 
 #ifdef _DEBUG
-        // TEST emitPrint(QString("hello from %1").arg(md.fullName.constData()),module->pos);
+        //emitPrint(QString("start generating %1").arg(md.fullName.constData()),module->pos);
 #endif
 
         QHash<quint8,QByteArray> names;
@@ -351,14 +351,19 @@ public:
         // then make sure all modules are initialized this one depends on
         emitAllImports(module);
         connectAllClassObjects(module);
+
+        doDeferImports = true;
+        // collect implicit imports in all procedures, but execute them in top procedure
         emitAllProcedures(module);
-        // at this point, methods are not yet downcopied from their superclass
-        QSet<Type*> seen;
-        downcopyAllMethods(module, seen);
+        doDeferImports = false;
 
         foreach( Declaration* m, deferred )
             emitDeferredImports(m,md.end);
         deferred.clear();
+
+        // at this point, methods are not yet downcopied from their superclass
+        QSet<Type*> seen;
+        downcopyAllMethods(module, seen);
 
         Declaration* d = module->link;
         Declaration* begin = 0;
@@ -399,6 +404,10 @@ public:
             bc.CALL(tmp,0,0, begin->pos.packed());
             ctx.back().sellSlots(tmp);
         }
+
+#ifdef _DEBUG
+        //emitPrint(QString("finished generating %1").arg(md.fullName.constData()),module->pos);
+#endif
 
         bc.UCLO( 0, 0, md.end.packed() );
         bc.RET( modSlot, 1, md.end.packed() ); // return module
@@ -1418,7 +1427,7 @@ public:
             {
                 const int tmp = ctx.back().buySlots(4,true);
                 bc.MOV(tmp, addRangeToSet, c->lhs->pos.packed() );
-                bc.MOV(tmp+1, c->lhs->pos.packed() );
+                bc.MOV(tmp+1, res, c->lhs->pos.packed() );
                 emitExpression(c->lhs);
                 bc.MOV(tmp+2, slotStack.back(), c->lhs->pos.packed() );
                 releaseSlot();
@@ -2276,9 +2285,14 @@ public:
         const quint32 index = thisMod->id++;
         imports[module] = index;
 
-        // we have to defer the actual load of the module to the top (i.e. module setup) procedure
-        // because only there we can guarantee that the import is run first before the module is used
-        deferred.append(module);
+        if( doDeferImports )
+        {
+            // we have to defer the actual load of the module to the top (i.e. module setup) procedure
+            // because only there we can guarantee that the import is run first before the module is used
+            // if it is done in sub procedures, the load order and time is arbitrary
+            deferred.append(module);
+        }else
+            emitDeferredImports(module, loc);
 
         return index;
     }

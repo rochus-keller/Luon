@@ -137,7 +137,7 @@ namespace Ln
         uint inList : 1; // private
         uint validated : 1;
         uint hasErrors : 1;
-        uint hasSubs : 1;
+        uint hasSubs : 1; // class/method: has overrides; module: has clients
         uint kind : 4;
         uint id : 16; // used for built-in code and local/param number
         QVariant data; // value for Const and Enum, path for Import, name for Extern

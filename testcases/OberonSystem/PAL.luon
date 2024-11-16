@@ -1,7 +1,6 @@
 module PAL
 
   type 
-    Buffer* = ARRAY OF INTEGER
     String = ARRAY OF CHAR
 
   proc ROR*(x,n: integer):integer
@@ -99,10 +98,14 @@ module PAL
 	  return false
   end processEvents
 
-  proc createRasterBuffer*(length: integer): Buffer 
+  proc createRasterBuffer*(length: integer): boolean 
   begin
-	  return nil
+	  return true
   end createRasterBuffer
+  
+  proc GETS( a: INTEGER; var v: SET ) end
+  
+  proc PUTS( a: INTEGER; x: SET ) end
   
   proc getTime*(): integer 
   begin

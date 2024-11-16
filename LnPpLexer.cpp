@@ -185,7 +185,7 @@ bool PpLexer::ppterm()
 {
     bool res = ppfactor();
     Token t = d_lex.peekToken();
-    while( t.d_type == Tok_Amp )
+    while( t.d_type == Tok_Amp || t.d_type == Tok_AND )
     {
         t = d_lex.nextToken();
         res = ppfactor() && res;
@@ -210,6 +210,7 @@ bool PpLexer::ppfactor()
             return res;
         }
     case Tok_Tilde:
+    case Tok_NOT:
         return !ppfactor();
     }
     return false;

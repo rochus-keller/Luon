@@ -273,6 +273,7 @@ void Validator::visitImport(Declaration* import)
     if( mod )
     {
         // loadModule returns the module decl; we just need the list of module elements:
+        mod->hasSubs = true; // the module is used by at least this one
         import->link = mod->link;
         i.resolved = mod;
         import->data = QVariant::fromValue(i);
@@ -538,7 +539,7 @@ void Validator::resolve(Type* nameRef)
     nameRef->validated = true;
     nameRef->base = r.second->type;
     if( r.second->kind != Declaration::TypeDecl )
-        return error(nameRef->expr->pos,"identifier doesn't refer to a type declaration");
+        return error(nameRef->decl->pos,"identifier doesn't refer to a type declaration");
     resolve(r.second->type);
     if( r.second->type )
     {

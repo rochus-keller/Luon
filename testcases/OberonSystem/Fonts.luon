@@ -53,7 +53,7 @@ PROCEDURE This*(CONST name: ARRAY OF CHAR): Font;
   BEGIN Files.ReadByte(R, b0); Files.ReadByte(R, b1)
   END RdInt16;
 
-BEGIN F := root;
+BEGIN NEW(R); NEW(run); NEW(box); F := root;
   WHILE (F # NIL) & (name # F.name) DO F := F.next END;
   IF F = NIL THEN
     f := Files.Old(name);

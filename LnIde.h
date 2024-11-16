@@ -136,7 +136,7 @@ namespace Ln
         void onErrors();
         void onOpenFile();
         void onOakwood();
-        void onObSysInner();
+        void onSetOptions();
         void onAddFiles();
         void onNewModule();
         void onAddDir();
