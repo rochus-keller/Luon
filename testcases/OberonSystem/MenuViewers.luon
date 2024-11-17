@@ -61,7 +61,7 @@ MODULE MenuViewers; (*JG 26.8.90 / 16.9.93 / NW 10.3.2013*)
 
   PROCEDURE Adjust (F: Display.Frame; id, dY, Y, H: INTEGER);
     VAR M: ModifyMsg;
-  BEGIN M.id := id; M.dY := dY; M.Y := Y; M.H := H; F.handle(F, M); F.Y := Y; F.H := H
+  BEGIN NEW(M); M.id := id; M.dY := dY; M.Y := Y; M.H := H; F.handle(F, M); F.Y := Y; F.H := H
   END Adjust;
 
   PROCEDURE Restore (V: Viewer);

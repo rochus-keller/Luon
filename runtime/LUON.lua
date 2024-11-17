@@ -187,21 +187,6 @@ function module.min_size(lhs,rhs)
 		return r
 	end
 end
-local firstLock = true
-function module.ldmod(name)
-	if firstLock then
-		firstLock = false
-		return false
-	end
-	local m = require(ffi.string(name))
-	-- print("LDMOD "..ffi.string(name).." "..tostring(m ~= nil)) 
-	return m ~= nil
-end
-function module.ldcmd(mod,cmd)
-	local m = require(ffi.string(mod))
-	if m then return m[ffi.string(cmd)] end
-	return nil
-end
 function module.DIV(a,b)
     return math.floor(a/b)
 end
@@ -249,6 +234,21 @@ function module.assureNotNil(obj, txt)
     if obj == nil then error(txt) end
 end
 
+function module.require(name)
+    local m                   -- we cannot use require(name) here because it doesn't allow circular loads
+    m = package.loaded[name]
+    if m then return m end
+    local f = package.preload[name]
+    if f then m = f(name) end
+    package.loaded[name] = m
+    if m == nil then return m end
+    f = m["$begin"]
+    if f then f() end
+    return m
+end
+
+LUON_require = module.require
+
 -- Magic mumbers used by the compiler
 module[6] = module.assureNotNil
 module[7] = module.charToStringArray
@@ -293,8 +293,6 @@ module[49] = ffi.new
 module[50] = ffi.copy
 module[51] = module.min_size
 module[52] = jit.off
-module[53] = module.ldmod
-module[54] = module.ldcmd
 module[55] = string.char
 module[56] = module.print
 module[57] = bit.rshift
@@ -302,6 +300,7 @@ module[58] = module.arraylen
 module[59] = string.byte
 module[60] = module.clone
 module[61] = module.charArrayToString
+module[62] = module.require
 
 return module
 

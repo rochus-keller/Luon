@@ -109,7 +109,7 @@ MODULE Texts; (*JG 21.11.90 / NW 11.7.90 / 24.12.95 / 22.11.10 / 20.3.2017*)
   PROCEDURE Open* (T: Text; CONST name: ARRAY OF CHAR);
     VAR f: Files.File; R: Files.Rider; Q, q: Piece;
       tag: CHAR; len: INTEGER;
-  BEGIN f := Files.Old(name);
+  BEGIN NEW(R); f := Files.Old(name);
     IF f # NIL THEN
       Files.Set(R, f, 0); Files.Read(R, tag); 
       IF tag = TextTag THEN Load(R, T)
@@ -131,7 +131,7 @@ MODULE Texts; (*JG 21.11.90 / NW 11.7.90 / 24.12.95 / 22.11.10 / 20.3.2017*)
       N, n: INTEGER;
       ch: CHAR;
       Dict: ARRAY 32 OF ARRAY 32 OF CHAR;
-  BEGIN pos := Files.Pos(W); Files.WriteInt(W, 0); (*place holder*)
+  BEGIN NEW(R); pos := Files.Pos(W); Files.WriteInt(W, 0); (*place holder*)
     N := 1; p := T.trailer.next;
     WHILE p # T.trailer DO
       rlen := p.len; q := p.next;
@@ -160,7 +160,7 @@ MODULE Texts; (*JG 21.11.90 / NW 11.7.90 / 24.12.95 / 22.11.10 / 20.3.2017*)
 
   PROCEDURE Close*(T: Text; CONST name: ARRAY OF CHAR);
     VAR f: Files.File; w: Files.Rider;
-  BEGIN f := Files.New(name); Files.Set(w, f, 0);
+  BEGIN NEW(w); f := Files.New(name); Files.Set(w, f, 0);
     Files.Write(w, TextTag); Store(w, T); Files.Register(f)
   END Close;
 

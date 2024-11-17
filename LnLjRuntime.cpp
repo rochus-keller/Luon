@@ -29,6 +29,7 @@
 #include <QBuffer>
 #include <QtDebug>
 #include <QTime>
+#include <QApplication>
 #include <lua.hpp>
 using namespace Ln;
 
@@ -148,9 +149,9 @@ bool LjRuntime::loadBytecode()
         {
             ModuleData md = d_byteCode[i].first->data.value<ModuleData>();
             const QByteArray name = md.fullName;
-            qDebug() << "loading" << name;
             if( md.metaActuals.isEmpty() && !d_byteCode[i].first->hasSubs && main.first.isEmpty() )
             {
+                qDebug() << "running module" << name;
                 // modules at the root of the import tree are directly loaded and executed, unless
                 // there is an explicit main module/procedure, in which case the latter is the root
                 // and all other modules are loaded via "require".
@@ -162,6 +163,7 @@ bool LjRuntime::loadBytecode()
                 }
             }else
             {
+                qDebug() << "preloading module" << name;
                 // generic module instances or imported modules are just referenced so the client of the module
                 // can load it via require and only then the instance is run for the first time.
                 // this assures that the module table of the client is present when the generic
@@ -198,7 +200,8 @@ bool LjRuntime::executeMain()
     QByteArray src;
     QTextStream out(&src);
 
-    out << "local " << main.first << " = require '" << main.first << "'" << endl;
+    out << "require('LUON')" << endl;
+    out << "local " << main.first << " = LUON_require('" << main.first << "')" << endl;
     if( !main.second.isEmpty() )
         out << main.first << "." << main.second << "()" << endl;
     out.flush();
@@ -306,6 +309,17 @@ void LjRuntime::generate(Declaration* m)
     d_byteCode << qMakePair(m,buf.buffer());
 }
 
+extern "C" {
+void PAL_setIdle(void (*tick)() );
+
+static void tick()
+{
+    QApplication::processEvents(QEventLoop::AllEvents);
+    QApplication::flush();
+}
+
+}
+
 void LjRuntime::prepareEngine()
 {
     lua_pushcfunction( d_lua->getCtx(), Lua::Engine2::TRAP );
@@ -322,5 +336,7 @@ void LjRuntime::prepareEngine()
     d_lua->addLibrary(Lua::Engine2::OS);
     // d_lua->setJit(false); // must be called after addLibrary! doesn't have any effect otherwise
     loadLuaLib( d_lua, "LUON" );
+    QDir::setCurrent(QFileInfo(d_pro->getProjectPath()).path());
+    PAL_setIdle(tick);
 }
 

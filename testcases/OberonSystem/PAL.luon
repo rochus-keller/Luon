@@ -3,114 +3,61 @@ module PAL
   type 
     String = ARRAY OF CHAR
 
-  proc ROR*(x,n: integer):integer
-  begin
-  end ROR
+  proc ROR*(x,n: integer):integer extern
   
-  proc LED(x: integer) end
+  proc LED(x: integer) 
+  begin
+    print("LED ")println(x)
+  end LED
   
   type Command = PROCEDURE
-  proc LDCMD(a,b: array of char):Command end
+  proc LDCMD(a,b: array of char):Command extern
   
-  proc LDMOD(a: array of char):boolean end
+  proc LDMOD(a: array of char):boolean extern
   
-  proc listFiles*(): integer 
-  begin
-	  return 0
-	end listFiles
+  proc listFiles*(): integer extern
 
-  proc fileName*(i: integer; name: String; maxlen: integer)
-  begin
-	end fileName
+  proc fileName*(i: integer; name: String; maxlen: integer) extern
 	
-	proc openFile*(CONST filename: array of char): integer
-	begin
-	  return 0
-	end openFile
+	proc openFile*(CONST filename: array of char): integer extern
 	
-	proc newFile*(): integer
-	begin
-	  return 0
-	end newFile
+	proc newFile*(): integer extern
 
-  proc saveFile*(const filename: array of char; buffer: integer): boolean
-  begin
-	  return false
-	end saveFile
+  proc saveFile*(const filename: array of char; buffer: integer): boolean extern
 
-  proc freeFile*(buffer: integer)
-  begin
-	end freeFile
+  proc freeFile*(buffer: integer) extern
 
-  proc removeFile*(const filename: array of char): boolean
-  begin
-	  return false
-	end removeFile
+  proc removeFile*(const filename: array of char): boolean extern
 	
-  proc renameFile*(const oldName, newName: array of char): boolean
-  begin
-	  return false
-	end renameFile
+  proc renameFile*(const oldName, newName: array of char): boolean extern
 	
-  proc length*(buffer: integer): integer
-  begin
-	  return 0
-	end length
+  proc length*(buffer: integer): integer extern
 	
-  proc setPos*(buffer, pos: integer): boolean
-  begin
-	  return false
-	end setPos
+  proc setPos*(buffer, pos: integer): boolean extern
 	
-  proc atEnd*(buffer: integer): boolean
-  begin
-	  return false
-	end atEnd
+  proc atEnd*(buffer: integer): boolean extern
 
-  proc getPos*(buffer: integer): integer
-  begin
-	  return 0
-	end getPos
+  proc getPos*(buffer: integer): integer extern
 
-  proc writeByte*(buffer: integer; byte_: byte): boolean
-  begin
-	  return false
-	end writeByte
+  proc writeByte*(buffer: integer; byte_: byte): boolean extern
 	
-  proc readByte*(buffer: integer): byte
-  begin
-	  return 0h
-	end readByte
+  proc readByte*(buffer: integer): byte extern
 	
-  proc nextKey*(): char 
-  begin
-	  return 0x
-	end nextKey
+  proc nextKey*(): char extern
 	
   type InputState* = record keys*: set; x*, y*: integer end
   
-  proc getState*(var state: InputState) 
-	begin
-	end getState
+  proc getState*(state: InputState) extern
 
-  proc processEvents*(sleep:integer): boolean 
-  begin
-	  return false
-  end processEvents
+  proc processEvents*(sleep:integer): boolean extern
 
-  proc createRasterBuffer*(length: integer): boolean 
-  begin
-	  return true
-  end createRasterBuffer
+  proc initDisplay*(buflen, w, h: integer): boolean extern
   
-  proc GETS( a: INTEGER; var v: SET ) end
+  proc GETS( a: INTEGER; var v: SET ) extern
   
-  proc PUTS( a: INTEGER; x: SET ) end
+  proc PUTS( a: INTEGER; x: SET ) extern
   
-  proc getTime*(): integer 
-  begin
-	  return 0
-	end getTime
+  proc getTime*(): integer extern
 
 
 end PAL

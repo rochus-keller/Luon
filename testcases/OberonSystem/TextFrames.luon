@@ -590,7 +590,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
 
   PROCEDURE NotifyDisplay* (T: Texts.Text; op: INTEGER; beg, end_: INTEGER);
     VAR M: UpdateMsg;
-  BEGIN M.id := op; M.text := T; M.beg := beg; M.end_ := end_; Viewers.Broadcast(M)
+  BEGIN NEW(M); M.id := op; M.text := T; M.beg := beg; M.end_ := end_; Viewers.Broadcast(M)
   END NotifyDisplay;
 
   PROCEDURE Call* (F: Frame; pos: INTEGER; new: BOOLEAN);
@@ -841,7 +841,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
     Open(F, Handle, text, pos, Display.black, left, right, top, bot, lsp); RETURN F
   END NewText;
 
-BEGIN NEW(TBuf); NEW(DelBuf);
+BEGIN NEW(TBuf); NEW(DelBuf); NEW(ScrollMarker);
   Texts.OpenBuf(TBuf); Texts.OpenBuf(DelBuf);
   lsp := Fonts.Default.height; menuH := lsp + 2; barW := menuH;
   left := barW + lsp DIV 2;
@@ -852,5 +852,6 @@ BEGIN NEW(TBuf); NEW(DelBuf);
   selH := lsp; markW := lsp DIV 2;
   eolW := lsp DIV 2;
   ScrollMarker.Fade := FlipSM; ScrollMarker.Draw := FlipSM;
+  NEW(W); NEW(W.rider); NEW(KW); NEW(KW.rider);
   Texts.OpenWriter(W); Texts.OpenWriter(KW)
 END TextFrames.

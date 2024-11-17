@@ -53,7 +53,11 @@ PROCEDURE This*(CONST name: ARRAY OF CHAR): Font;
   BEGIN Files.ReadByte(R, b0); Files.ReadByte(R, b1)
   END RdInt16;
 
-BEGIN NEW(R); NEW(run); NEW(box); F := root;
+BEGIN 
+  NEW(R); 
+  NEW(run); FOR i := 0 TO LEN(run) - 1 DO NEW(run[i]) END
+  NEW(box); FOR i := 0 TO LEN(box) - 1 DO NEW(box[i]) END
+  F := root;
   WHILE (F # NIL) & (name # F.name) DO F := F.next END;
   IF F = NIL THEN
     f := Files.Old(name);
@@ -63,7 +67,8 @@ BEGIN NEW(R); NEW(run); NEW(box); F := root;
         Files.ReadByte(R, b); (*abstraction*)
         Files.ReadByte(R, b); (*family*)
         Files.ReadByte(R, b); (*variant*)
-        NEW(F); COPY(F.name,name);
+        NEW(F); NEW(F.T); NEW(F.raster);
+        COPY(F.name,name);
         RdInt16(R, height); RdInt16(R, minX); RdInt16(R, maxX); RdInt16(R, minY); RdInt16(R, maxY); RdInt16(R, NofRuns);
         NofBoxes := 0; k := 0;
         WHILE k # NofRuns DO
@@ -78,7 +83,8 @@ BEGIN NEW(R); NEW(run); NEW(box); F := root;
           NofBytes := NofBytes + 5 + (box[j].w + 7) DIV 8 * box[j].h;
           INC(j)
         END;
-        IF NofBytes < 2300 THEN NEW(F) ELSE NEW(LF); F := LF END ;
+        IF NofBytes < 2300 THEN NEW(F); NEW(F.T); NEW(F.raster);
+        ELSE NEW(LF); ; NEW(LF.T); NEW(LF.raster); NEW(LF.ext); F := LF END ;
         COPY(F.name,name);
         F.height := height; F.minX := minX; F.maxX := maxX; F.maxY := maxY;
         IF minY >= 80H THEN F.minY := minY - 100H ELSE F.minY := minY END ;

@@ -361,9 +361,11 @@ MODULE Oberon; (*JG 6.9.90 / 23.9.93 / 13.8.94 / NW 14.4.2013 / 22.12.2015*)
     VAR V: Viewers.Viewer; M: InputMsg; N: ControlMsg;
        prevX, prevY, X, Y, t: INTEGER; keys: SET; ch: CHAR;
   BEGIN
+    NEW(M); NEW(N);
     REPEAT
       Input.Mouse(keys, X, Y);
       IF Input.Available() > 0 THEN Input.Read(ch);
+        TRAP
         IF ch = ESC THEN
           N.id := neutralize; Viewers.Broadcast(N); FadeCursor(Pointer); PAL.LED(0)
         ELSIF ch = SETSTAR THEN
@@ -402,7 +404,7 @@ BEGIN NEW(User); User[0] := 0X;
   Arrow.Fade := FlipArrow; Arrow.Draw := FlipArrow;
   NEW(Star);
   Star.Fade := FlipStar; Star.Draw := FlipStar;
-  NEW(Mouse); NEW(Pointer);
+  NEW(Mouse);NEW(Mouse.marker); NEW(Pointer); NEW(Pointer.marker);
   OpenCursor(Mouse); OpenCursor(Pointer);
 
   DW := Display.Width; DH := Display.Height; CL := DW;

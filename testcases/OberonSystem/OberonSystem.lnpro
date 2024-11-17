@@ -2,8 +2,8 @@
 BuildDir=
 BuiltInOakwood=false
 BuiltInObSysInner=false
-MainModule=@ByteArray()
-MainProc=@ByteArray()
+MainModule=@ByteArray(Oberon)
+MainProc=@ByteArray(Loop)
 Options=@ByteArray()
 Suffixes=@Invalid()
 WorkingDir=

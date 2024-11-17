@@ -40,7 +40,8 @@ SOURCES += LnIde.cpp \
     ../LjTools/LjDisasm.cpp \ 
     LnLjRuntime.cpp \
     LnProject.cpp \
-    LnLjbcGen.cpp
+    LnLjbcGen.cpp \
+    LnPAL.c
 
 HEADERS  += LnIde.h \
     LnHighlighter.h \
@@ -70,6 +71,7 @@ linux {
     }
     QMAKE_LFLAGS += -rdynamic -ldl
     #rdynamic is required so that the LjLibFfi functions are visible to LuaJIT FFI
+    LIBS += -lSDL2
 }
 macx {
     include( ../LuaJIT/src/LuaJit.pri )

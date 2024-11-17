@@ -34,11 +34,11 @@ MODULE Viewers; (*JG 14.9.90 / NW 15.9.2013*)
       IF Y < v.Y + minH THEN Y := v.Y + minH END;
       IF (v.next.Y # 0) & (Y > v.Y + v.H - minH) THEN
         V.X := T.X; V.W := T.W; V.Y := v.Y; V.H := v.H;
-        M.id := suspend; M.state := 0;
+        NEW(M); M.id := suspend; M.state := 0;
         v.handle(v, M); v(Viewer).state := 0;
         V.next := v.next; u.next := V; V.state := 2
       ELSE V.X := T.X; V.W := T.W; V.Y := v.Y; V.H := Y - v.Y;
-        M.id := modify; M.Y := Y; M.H := v.Y + v.H - Y;
+        NEW(M); M.id := modify; M.Y := Y; M.H := v.Y + v.H - Y;
         v.handle(v, M); v.Y := M.Y; v.H := M.H;
         V.next := v; u.next := V; V.state := 2
       END
@@ -53,7 +53,7 @@ MODULE Viewers; (*JG 14.9.90 / NW 15.9.2013*)
       v := V.next;
       IF (v.next.Y # 0) & (Y > v.Y + v.H - minH) THEN Y := v.Y + v.H - minH END;
       IF Y >= V.Y + minH THEN
-        M.id := modify; M.Y := Y; M.H := v.Y + v.H - Y;
+        NEW(M); M.id := modify; M.Y := Y; M.H := v.Y + v.H - Y;
         v.handle(v, M); v.Y := M.Y; v.H := M.H; V.H := Y - V.Y
       END
     END
@@ -61,7 +61,7 @@ MODULE Viewers; (*JG 14.9.90 / NW 15.9.2013*)
 
   PROCEDURE RestoreTrack (S: Display.Frame);
     VAR T, t, v: Display.Frame; M: ViewerMsg;
-  BEGIN t := S.next;
+  BEGIN NEW(M); t := S.next;
     WHILE t.next # S DO t := t.next END;
     T := S(Track).under;
     WHILE T.next # NIL DO T := T.next END;
@@ -74,7 +74,7 @@ MODULE Viewers; (*JG 14.9.90 / NW 15.9.2013*)
 
   PROCEDURE Close* (V: Viewer);
     VAR T, U: Display.Frame; M: ViewerMsg;
-  BEGIN
+  BEGIN NEW(M); 
     IF V.state > 1 THEN
       U := V.next; T := FillerTrack;
       REPEAT T := T.next UNTIL V.X < T.X + T.W;
@@ -160,6 +160,7 @@ MODULE Viewers; (*JG 14.9.90 / NW 15.9.2013*)
       S := FillerTrack; T := S.next;
       WHILE X >= T.X + T.W DO S := T; T := S.next END;
       WHILE X + W > T.X + T.W DO T := T.next END;
+      NEW(M); 
       M.id := suspend; t := S;
       REPEAT t := t.next; v := t.dsc;
         REPEAT v := v.next; M.state := -v(Viewer).state; v.handle(v, M); v(Viewer).state := M.state
@@ -180,7 +181,7 @@ MODULE Viewers; (*JG 14.9.90 / NW 15.9.2013*)
       T := FillerTrack;
       REPEAT T := T.next UNTIL X < T.X + T.W;
       IF T(Track).under # NIL THEN
-        M.id := suspend; M.state := 0; V := T.dsc;
+        NEW(M); M.id := suspend; M.state := 0; V := T.dsc;
         REPEAT V := V.next; V.handle(V, M); V(Viewer).state := 0 UNTIL V = T.dsc;
         RestoreTrack(T)
       END

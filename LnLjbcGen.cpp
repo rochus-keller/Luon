@@ -336,7 +336,7 @@ public:
 
         bc.TNEW( modSlot, module->id, 0, module->pos.packed() );
 
-        emitImport("LUON", lnlj, module->pos, true );
+        emitImport("LUON", lnlj, module->pos, true, true );
 
         // make Module table a global variable (at the start to allow generic instances to access it
         bc.GSET( modSlot, md.fullName, md.end.packed() );
@@ -393,16 +393,21 @@ public:
         if( hasExterns )
         {
             const int tmp = ctx.back().buySlots(1);
-            emitImport("_" + md.path.join('_'), tmp, md.end);
+            emitImport("_" + md.path.join('_'), tmp, md.end, false, true);
             ctx.back().sellSlots(tmp);
         }
 
         if( begin )
         {
+#if 0
+            // we cannot directly call begin here, i.e. from the function run by require, because
+            // it might call a LDMOD which could depend on the currently loading module, which LuaJIT regards
+            // as an error; we therefore use LUON.require which calls begin after require and only once
             const int tmp = ctx.back().buySlots(1,true);
             emitGetTableByIndex(tmp, modSlot, begin->id, begin->pos);
             bc.CALL(tmp,0,0, begin->pos.packed());
             ctx.back().sellSlots(tmp);
+#endif
         }
 
 #ifdef _DEBUG
@@ -595,10 +600,10 @@ public:
         {
             Q_ASSERT(ctx.back().scope == thisMod);
             emitSetTableByIndex( tmp, modSlot, p->id, end );
-            if( p->mode != Declaration::Begin &&
-                    (p->type == 0 || p->type->form == BasicType::NoType) && params.size() == 0 )
+            if( ( p->type == 0 || p->type->form == BasicType::NoType) && params.size() == 0 )
             {
                 // also store command procedures by name in the module table
+                // this includes $begin if present
                 bc.TSET(tmp, modSlot, p->name, end.packed());
             }
         }
@@ -798,7 +803,7 @@ public:
                 break;
             case Expression::Div: {
                     const int tmp = ctx.back().buySlots(3,true);
-                    fetchLnlibMember(tmp,14,e->pos); // LnFfi_DIV
+                    fetchLnlibMember(tmp,14,e->pos); // module.DIV
                     bc.MOV(tmp+1, lhs, e->pos.packed() );
                     bc.MOV(tmp+2, rhs, e->pos.packed() );
                     bc.CALL(tmp,1,2,e->pos.packed());
@@ -813,7 +818,7 @@ public:
                 if( lt->isInteger() )
                 {
                     const int tmp = ctx.back().buySlots(3,true);
-                    fetchLnlibMember(tmp,15,e->pos); // LnFfi_MOD
+                    fetchLnlibMember(tmp,15,e->pos); // module.MOD
                     bc.MOV(tmp+1, lhs, e->pos.packed() );
                     bc.MOV(tmp+2, rhs, e->pos.packed() );
                     bc.CALL(tmp,1,2,e->pos.packed());
@@ -1011,6 +1016,22 @@ public:
             emitBuiltinN(proc->id, call, 1, res);
             break;
         case Builtin::ORD:
+            emitExpression(call->rhs);
+            if( deref(call->rhs->type)->form == BasicType::BOOLEAN )
+            {
+                bc.IST(slotStack.back(),call->pos.packed());
+                emitJMP(0,call->pos.packed());
+                const quint32 pc1 = bc.getCurPc();
+                bc.KSET(res, 0, call->pos.packed() );
+                emitJMP(0,call->pos.packed());
+                const quint32 pc2 = bc.getCurPc();
+                bc.patch(pc1);
+                bc.KSET(res, 1, call->pos.packed() );
+                bc.patch(pc2);
+            }else
+                bc.MOV(res,slotStack.back(),call->pos.packed() );
+            releaseSlot();
+            break;
         case Builtin::FLT:
         case Builtin::BITS:
         case Builtin::CHR:
@@ -2210,12 +2231,15 @@ public:
         imports[imp.resolved] = d->id;
     }
 
-    void emitImport( const QByteArray& modName, quint16 toIndex, const RowCol& loc, bool toLocal = false )
+    void emitImport( const QByteArray& modName, quint16 toIndex, const RowCol& loc, bool toLocal = false, bool useLuaRequire = false )
     {
         Q_ASSERT( !modName.isEmpty() );
         const int tmp = ctx.back().buySlots(2,true);
         // TEST emitPrint(QString("importing %1 by %2").arg(modName.constData()).arg(thisMod->name.constData()),loc);
-        bc.GGET( tmp, "require", loc.packed() );
+        if( useLuaRequire )
+            bc.GGET( tmp, "require", loc.packed() ); // cannot use this one for Luon modules
+        else
+            fetchLnlibMember(tmp, 62, loc); // module.require
         bc.KSET( tmp+1, modName, loc.packed() );
         bc.CALL( tmp, 1, 1, loc.packed() );
         if( toLocal )
