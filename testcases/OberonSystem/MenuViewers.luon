@@ -17,7 +17,7 @@ MODULE MenuViewers; (*JG 26.8.90 / 16.9.93 / NW 10.3.2013*)
   PROCEDURE Copy (V: Viewer; VAR V1: Viewer);
     VAR Menu, Main: Display.Frame; M: Oberon.CopyMsg;
   BEGIN Menu := V.dsc; Main := V.dsc.next;
-    NEW(V1); COPY(V1, V); V1.state := 0;
+    NEW(V1); COPY(V1, V); V1.state := 0; NEW(M);
     M.F := NIL; Menu.handle(Menu, M); V1.dsc := M.F;
     M.F := NIL; Main.handle(Main, M); V1.dsc.next := M.F
   END Copy;

@@ -16,7 +16,8 @@ MODULE Display;  (*NW 5.11.2013 / 3.7.2016*)
 
   VAR Base*, Width*, Height*, RasterLen: INTEGER;
     arrow*, star*, hook*, updown*, block*, cross*, grey*: Pattern;
-    (*a pattern is an array of bytes; the first is its width (< 32), the second its height, the rest the raster*)
+    (*a pattern is an array of bytes; the first is its width (< 32), the second its height, 
+      the rest the raster*)
 
   PROCEDURE Handle*(F: Frame; VAR M: FrameMsg);
   BEGIN
@@ -27,7 +28,8 @@ MODULE Display;  (*NW 5.11.2013 / 3.7.2016*)
     
   PROCEDURE Dot*(col, x, y, mode: INTEGER);
     VAR a: INTEGER; u, s: SET;
-  BEGIN a := base + (x DIV 32)*4 + y*128;
+  BEGIN 
+    a := base + (x DIV 32)*4 + y*128;
     s := {x MOD 32}; GETS(a, u);
     IF mode = paint THEN PUTS(a, u + s)
     ELSIF mode = invert THEN PUTS(a, u / s)
@@ -38,7 +40,8 @@ MODULE Display;  (*NW 5.11.2013 / 3.7.2016*)
 
   PROCEDURE ReplConst*(col, x, y, w, h, mode: INTEGER);
     VAR al, ar, a0, a1: INTEGER; left, right, mid, pix, pixl, pixr: SET;
-  BEGIN al := base + y*128;
+  BEGIN 
+    al := base + y*128;
     ar := ((x+w-1) DIV 32)*4 + al; al := (x DIV 32)*4 + al;
     IF ar = al THEN
       mid := {(x MOD 32) .. ((x+w-1) MOD 32)};
@@ -71,10 +74,12 @@ MODULE Display;  (*NW 5.11.2013 / 3.7.2016*)
     END
   END ReplConst;
 
-  PROCEDURE CopyPattern*(col: INTEGER; CONST patadr: ARRAY OF BYTE; x, y, mode: INTEGER);  (*only for modes = paint, invert*)
+  PROCEDURE CopyPattern*(col: INTEGER; CONST patadr: ARRAY OF BYTE; x, y, mode: INTEGER);  
+                                                      (*only for modes = paint, invert*)
     VAR a, a0, pwd, i: INTEGER;
       w, h, pbt: BYTE; pix: SET;
-  BEGIN w := patadr[0]; h := patadr[1]; i := 2;
+  BEGIN 
+    w := patadr[0]; h := patadr[1]; i := 2;
     a := base + (x DIV 32)*4 + y*128; 
     FOR a0 := a TO a + (h-1)*128 BY 128 DO
       (*build pattern line; w < 32*)

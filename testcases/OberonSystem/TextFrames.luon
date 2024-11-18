@@ -52,6 +52,13 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
     ScrollMarker: Oberon.Marker;
     W, KW: Texts.Writer; (*keyboard writer*)
 
+  PROCEDURE newFrame():Frame
+  VAR f: Frame
+  BEGIN
+    NEW(f); NEW(f.carloc); NEW(f.selbeg); NEW(f.selend); NEW(f.trailer);
+    RETURN f;
+  END newFrame
+  
   PROCEDURE Min (i, j: INTEGER): INTEGER;
   BEGIN IF i < j THEN j := i END ;
     RETURN j
@@ -126,7 +133,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
   BEGIN
     IF pos > T.len THEN pos := T.len
     ELSIF pos > 0 THEN
-      DEC(pos); Texts.OpenReader(R, T, pos);
+      DEC(pos); R := Texts.newReader(); Texts.OpenReader(R, T, pos);
       REPEAT Texts.Read(R, nextCh); INC(pos) UNTIL R.eot OR (nextCh = CR)
     ELSE pos := 0
     END
@@ -147,7 +154,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
       Display.ReplConst(Display.white, F.X + barW - 1, F.Y, 1, F.H, Display.invert)
     END;
     Validate(F.text, F.org);
-    botY := F.Y + F.bot + dsr;
+    botY := F.Y + F.bot + dsr; R := Texts.newReader();
     Texts.OpenReader(R, F.text, F.org); Texts.Read(R, nextCh);
     L := F.trailer; curY := F.Y + F.H - F.top - asr;
     WHILE ~L.eot & (curY >= botY) DO
@@ -176,7 +183,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
     WHILE (L.next # F.trailer) & (curY >= botY) DO
       L := L.next; org := org + L.len; curY := curY - lsp
     END;
-    botY := F.Y + F.bot + dsr;
+    botY := F.Y + F.bot + dsr; R := Texts.newReader();
     Texts.OpenReader(R, F.text, org); Texts.Read(R, nextCh);
     WHILE ~L.eot & (curY >= botY) DO
       NEW(l);
@@ -228,6 +235,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
           Display.ReplConst(F.col, F.X + F.left, F.Y, F.W - F.left, curY - dsr - F.Y, Display.replace);
           botY := F.Y + F.bot + dsr;
           org := org + L.len; curY := curY - lsp;
+          R := Texts.newReader();
           Texts.OpenReader(R, F.text, org); Texts.Read(R, nextCh);
           WHILE ~L.eot & (curY >= botY) DO
             NEW(L0); DisplayLine(F, L0, R, F.X + F.left, curY, 0);
@@ -262,6 +270,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
     lim := loc.org + loc.lin.len - 1;
     bpos := loc.org; bx := F.left;
     pos := loc.org; ox := F.left;
+    R := Texts.newReader();
     Texts.OpenReader(R, F.text, loc.org); Texts.Read(R, nextCh);
     REPEAT
       WHILE (pos # lim) & (nextCh > " ") DO (*scan string*)
@@ -290,6 +299,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
   BEGIN LocateLine(F, y, loc);
     lim := loc.org + loc.lin.len - 1;
     pos := loc.org; ox := F.left; dx := eolW;
+    R := Texts.newReader();
     Texts.OpenReader(R, F.text, loc.org);
     WHILE pos # lim DO
       Texts.Read(R, nextCh);
@@ -312,7 +322,8 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
     WHILE (L.next # F.trailer) & (pos >= org + L.len) DO
       org := org + L.len; L := L.next; cury := cury - lsp
     END;
-    IF pos >= org + L.len THEN pos := org + L.len - 1 END;    
+    IF pos >= org + L.len THEN pos := org + L.len - 1 END; 
+    R := Texts.newReader();   
     Texts.OpenReader(R, T, org); Texts.Read(R, nextCh);
     loc.org := org; loc.pos := pos; loc.lin := L;
     loc.x := F.left + Width(R, pos - org); loc.y := cury
@@ -340,6 +351,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
     IF F.trailer.next # F.trailer THEN
       LocateChar(F, X - F.X, Y - F.Y, F.carloc);
       FlipCaret(F); keysum := {};
+      NEW(loc);
       REPEAT Input.Mouse(keys, X, Y); keysum := keysum + keys;
         Oberon.DrawMouseArrow(X, Y); LocateChar(F, X - F.X, Y - F.Y, loc);
         IF loc.pos # F.carloc.pos THEN FlipCaret(F); F.carloc := loc; FlipCaret(F) END
@@ -381,6 +393,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
   BEGIN
     IF F.trailer.next # F.trailer THEN
       IF F.hasSel THEN FlipSelection(F, F.selbeg, F.selend) END;
+      NEW(loc);
       LocateChar(F, X - F.X, Y - F.Y, loc);
       IF F.hasSel & (loc.pos = F.selbeg.pos) & (F.selend.pos = F.selbeg.pos + 1) THEN
         LocateChar(F, F.left, Y - F.Y, F.selbeg)
@@ -411,9 +424,11 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
     VAR old, new: Location; keys: SET;
   BEGIN
     IF F.trailer.next # F.trailer THEN
+      NEW(old);
       LocateLine(F, Y - F.Y, old);
       ReplConst(Display.white, F, F.X + F.left, F.Y + old.y - dsr, old.lin.wid, 2, Display.invert);
       keysum := {};
+      NEW(new);
       REPEAT Input.Mouse(keys, X, Y);
         keysum := keysum + keys;
         Oberon.DrawMouse(ScrollMarker, X, Y);
@@ -434,9 +449,11 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
     VAR old, new: Location; keys: SET;
   BEGIN
     IF F.trailer.next # F.trailer THEN
+      NEW(old);
       LocateString(F, X - F.X, Y - F.Y, old);
       ReplConst(Display.white, F, F.X + old.x, F.Y + old.y - dsr, old.dx, 2, Display.invert);
       keysum := {};
+      NEW(new);
       REPEAT
         Input.Mouse(keys, X, Y); keysum := keysum + keys;
         Oberon.DrawMouseArrow(X, Y);
@@ -464,6 +481,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
         org := org + L.len; L := L.next; curY := curY - lsp
       END;
       IF L # F.trailer THEN
+        R := Texts.newReader();
         Texts.OpenReader(R, F.text, org); Texts.Read(R, nextCh);
         len := beg - org; wid := Width(R, len);
         ReplConst(F.col, F, F.X + F.left + wid, curY - dsr, L.wid - wid, lsp, Display.replace);
@@ -491,6 +509,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
       END;
       IF L # F.trailer THEN
         botY := F.Y + F.bot + dsr;
+        R := Texts.newReader();
         Texts.OpenReader(R, F.text, org); Texts.Read(R, nextCh);
         len := beg - org; wid := Width(R, len);
         ReplConst (F.col, F, F.X + F.left + wid, curY - dsr, L.wid - wid, lsp, Display.replace);
@@ -549,7 +568,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
         WHILE (L # F.trailer) & (org <= end_) DO
           org := org + L.len; L := L.next; curY := curY - lsp
         END;
-        Y1 := curY;
+        Y1 := curY; R := Texts.newReader();
         Texts.OpenReader(R, F.text, org0); Texts.Read(R, nextCh);
         len := beg - org0; wid := Width(R, len);
         ReplConst (F.col, F, F.X + F.left + wid, Y0 - dsr, L0.wid - wid, lsp, Display.replace);
@@ -595,7 +614,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
 
   PROCEDURE Call* (F: Frame; pos: INTEGER; new: BOOLEAN);
     VAR S: Texts.Scanner; res: INTEGER;
-  BEGIN
+  BEGIN S := Texts.newScanner();
     Texts.OpenScanner(S, F.text, pos); Texts.Scan(S);
     IF (S.class = Texts.Name) & (S.line = 0) THEN
       Oberon.SetPar(F, F.text, pos + S.len); Oberon.Call(S.s, res);
@@ -671,7 +690,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
   END Open;
 
   PROCEDURE Copy* (F: Frame; VAR F1: Frame);
-  BEGIN NEW(F1);
+  BEGIN F1 := newFrame();
     Open(F1, F.handle, F.text, F.org, F.col, F.left, F.right, F.top, F.bot, F.lsp)
   END Copy;
 
@@ -758,7 +777,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
             Oberon.PassFocus(Viewers.This(F.X, F.Y)); SetCaret(F, beg)
           ELSIF keysum = {0, 1} THEN  (*MR, MM: copy to caret*)
             Oberon.GetSelection(text, beg, end_, time);
-            M.text := text; M.beg := beg; M.end_ := end_;
+            NEW(M); M.text := text; M.beg := beg; M.end_ := end_;
             Oberon.FocusViewer.handle(Oberon.FocusViewer, M)
           END
         END
@@ -831,13 +850,13 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
 
   PROCEDURE NewMenu* (CONST name, commands: ARRAY OF CHAR): Frame;
     VAR F: Frame; T: Texts.Text;
-  BEGIN NEW(F); T := Menu(name, commands);
+  BEGIN F := newFrame(); T := Menu(name, commands);
     Open(F, Handle, T, 0, Display.white, left DIV 4, 0, 0, 0, lsp); RETURN F
   END NewMenu;
 
   PROCEDURE NewText* (text: Texts.Text; pos: INTEGER): Frame;
     VAR F: Frame;
-  BEGIN NEW(F);
+  BEGIN F := newFrame();
     Open(F, Handle, text, pos, Display.black, left, right, top, bot, lsp); RETURN F
   END NewText;
 
@@ -852,6 +871,6 @@ BEGIN NEW(TBuf); NEW(DelBuf); NEW(ScrollMarker);
   selH := lsp; markW := lsp DIV 2;
   eolW := lsp DIV 2;
   ScrollMarker.Fade := FlipSM; ScrollMarker.Draw := FlipSM;
-  NEW(W); NEW(W.rider); NEW(KW); NEW(KW.rider);
+  W := Texts.newWriter(); KW := Texts.newWriter();
   Texts.OpenWriter(W); Texts.OpenWriter(KW)
 END TextFrames.

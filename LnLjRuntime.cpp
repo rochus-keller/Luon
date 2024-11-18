@@ -47,15 +47,18 @@ static void printLoadError(Lua::Engine2* lua, const QByteArray& what)
     qCritical() << "error loading" << what << str.toUtf8().constData();
 }
 
-static void loadLuaLib( Lua::Engine2* lua, const QByteArray& path, QByteArray name = QByteArray() )
+static void loadLuaLib( Lua::Engine2* lua, const QByteArray& name, bool run = false )
 {
-    QFile lib( QString(":/runtime/%1.lua").arg(path.constData()) );
+    QFile lib( QString(":/runtime/%1.lua").arg(name.constData()) );
     if( !lib.open(QIODevice::ReadOnly) )
-        qCritical() << "cannot find" << path;
-    if( name.isEmpty() )
-        name = path;
-    if( !lua->addPreloadLib( lib.readAll(), name ) )
-        printLoadError( lua, path );
+        qCritical() << "cannot find" << name;
+    int res = 0;
+    if( run )
+        res = lua->addSourceLib( lib.readAll(), name );
+    else
+        res = lua->addPreloadLib( lib.readAll(), name );
+    if( !res )
+        printLoadError( lua, name );
 }
 
 static bool preloadLib( Project* pro, const QByteArray& name )
@@ -156,11 +159,16 @@ bool LjRuntime::loadBytecode()
                 // there is an explicit main module/procedure, in which case the latter is the root
                 // and all other modules are loaded via "require".
                 // the order of d_byteCode also reflects the import dependencies
-                if( !d_lua->addSourceLib( d_byteCode[i].second, name ) )
+                // we cannot just call addSourceLib here, because we also have to call "$begin";
+                // that's why we first preload the module and then load it using LUON_require
+                if( !d_lua->addPreloadLib( d_byteCode[i].second, name ) )
                 {
                     printLoadError(d_lua,name);
                     hasErrors = true;
                 }
+                const QByteArray code = "LUON_require('" + name + "')";
+                if( !d_lua->executeCmd(code, "loader") )
+                    hasErrors = true;
             }else
             {
                 qDebug() << "preloading module" << name;
@@ -200,7 +208,7 @@ bool LjRuntime::executeMain()
     QByteArray src;
     QTextStream out(&src);
 
-    out << "require('LUON')" << endl;
+    // out << "require('LUON')" << endl; // was already called at this time
     out << "local " << main.first << " = LUON_require('" << main.first << "')" << endl;
     if( !main.second.isEmpty() )
         out << main.first << "." << main.second << "()" << endl;
@@ -335,7 +343,7 @@ void LjRuntime::prepareEngine()
     d_lua->addLibrary(Lua::Engine2::FFI);
     d_lua->addLibrary(Lua::Engine2::OS);
     // d_lua->setJit(false); // must be called after addLibrary! doesn't have any effect otherwise
-    loadLuaLib( d_lua, "LUON" );
+    loadLuaLib( d_lua, "LUON", true );
     QDir::setCurrent(QFileInfo(d_pro->getProjectPath()).path());
     PAL_setIdle(tick);
 }

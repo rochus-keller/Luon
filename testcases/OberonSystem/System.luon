@@ -28,7 +28,7 @@ MODULE System; (*JG 3.10.90 / NW 12.10.93 / NW 20.6.2016*)
     VAR i: INTEGER; ch: CHAR;
       user: ARRAY 8 OF CHAR;
       password: ARRAY 16 OF CHAR;
-  BEGIN i := 0; Input.Read(ch);
+  BEGIN i := 0; Input.Read(ch); NEW(user); NEW(password);
     WHILE (ch # "/") & (i < 7) DO user[i] := ch; INC(i); Input.Read(ch) END;
     user[i] := 0X; i := 0; Input.Read(ch);
     WHILE (ch > " ") & (i < 15) DO password[i] := ch; INC(i); Input.Read(ch) END;
@@ -37,26 +37,26 @@ MODULE System; (*JG 3.10.90 / NW 12.10.93 / NW 20.6.2016*)
 
   PROCEDURE SetFont*;
     VAR S: Texts.Scanner;
-  BEGIN GetArg(S);
+  BEGIN NEW(S); GetArg(S);
     IF S.class = Texts.Name THEN Oberon.SetFont(Fonts.This(S.s)) END
   END SetFont;
 
   PROCEDURE SetColor*;
     VAR S: Texts.Scanner;
-  BEGIN GetArg(S);
+  BEGIN NEW(S); GetArg(S);
     IF S.class = Texts.Int THEN Oberon.SetColor(S.i) END
   END SetColor;
 
   PROCEDURE SetOffset*;
     VAR S: Texts.Scanner;
-  BEGIN GetArg(S);
+  BEGIN NEW(S); GetArg(S);
     IF S.class = Texts.Int THEN Oberon.SetOffset(S.i) END
   END SetOffset;
   
   PROCEDURE Date*;
     VAR S: Texts.Scanner;
       dt, hr, min, sec, yr, mo, day: INTEGER;
-  BEGIN Texts.OpenScanner(S, Oberon.Par.text, Oberon.Par.pos); Texts.Scan(S);
+  BEGIN NEW(S); Texts.OpenScanner(S, Oberon.Par.text, Oberon.Par.pos); Texts.Scan(S);
     IF S.class = Texts.Int THEN (*set clock*)
       day := S.i; Texts.Scan(S); mo := S.i; Texts.Scan(S); yr := S.i; Texts.Scan(S);
       hr := S.i; Texts.Scan(S); min := S.i; Texts.Scan(S); sec := S.i;
@@ -77,7 +77,7 @@ MODULE System; (*JG 3.10.90 / NW 12.10.93 / NW 20.6.2016*)
     VAR X, Y: INTEGER;
       V: Viewers.Viewer;
       S: Texts.Scanner;
-  BEGIN GetArg(S);
+  BEGIN NEW(S); GetArg(S);
     IF S.class = Texts.Name THEN
       Oberon.AllocateSystemViewer(Oberon.Par.vwr.X, X, Y);
       V := MenuViewers.New(
@@ -90,7 +90,8 @@ MODULE System; (*JG 3.10.90 / NW 12.10.93 / NW 20.6.2016*)
     VAR T: Texts.Text; F: Display.Frame; buf: Texts.Buffer;
   BEGIN F := Oberon.Par.frame;
     IF (F # NIL) & (F.next IS TextFrames.Frame) & (F = Oberon.Par.vwr.dsc) THEN
-      NEW(buf); Texts.OpenBuf(buf); T := F.next(TextFrames.Frame).text; Texts.Delete(T, 0, T.len, buf)
+      NEW(buf); Texts.OpenBuf(buf); T := F.next(TextFrames.Frame).text; 
+      Texts.Delete(T, 0, T.len, buf)
     END
   END Clear;
 
@@ -112,16 +113,16 @@ MODULE System; (*JG 3.10.90 / NW 12.10.93 / NW 20.6.2016*)
     VAR V: Viewers.Viewer; M: Viewers.ViewerMsg;
   BEGIN Viewers.Recall(V);
     IF (V#NIL) & (V.state = 0) THEN
-      Viewers.Open(V, V.X, V.Y + V.H); M.id := Viewers.restore; 
+      Viewers.Open(V, V.X, V.Y + V.H); NEW(M); M.id := Viewers.restore; 
       V.handle(V, M)
     END
   END Recall;
 
   PROCEDURE Copy*;
     VAR V, V1: Viewers.Viewer; M: Oberon.CopyMsg; N: Viewers.ViewerMsg;
-  BEGIN V := Oberon.Par.vwr; V.handle(V, M); V1 := M.F(Viewers.Viewer);
+  BEGIN V := Oberon.Par.vwr; NEW(M); V.handle(V, M); V1 := M.F(Viewers.Viewer);
     Viewers.Open(V1, V.X, V.Y + V.H DIV 2);
-    N.id := Viewers.restore; V1.handle(V1, N)
+    NEW(N); N.id := Viewers.restore; V1.handle(V1, N)
   END Copy;
 
   PROCEDURE Grow*;
@@ -133,9 +134,9 @@ MODULE System; (*JG 3.10.90 / NW 12.10.93 / NW 20.6.2016*)
     ELSIF V.W < DW THEN Oberon.OpenTrack(Oberon.UserTrack(V.X), DW)
     END;
     IF (V.H < DH - Viewers.minH) OR (V.W < DW) THEN
-      V.handle(V, M); V1 := M.F(Viewers.Viewer);
+      NEW(M); V.handle(V, M); V1 := M.F(Viewers.Viewer);
       Viewers.Open(V1, V.X, DH);;
-      N.id := Viewers.restore; V1.handle(V1, N)
+      NEW(N); N.id := Viewers.restore; V1.handle(V1, N)
     END
   END Grow;
 
@@ -152,7 +153,7 @@ MODULE System; (*JG 3.10.90 / NW 12.10.93 / NW 20.6.2016*)
     VAR T: Texts.Text;
       beg, end_, time: INTEGER;
       S: Texts.Scanner;
-  BEGIN Texts.WriteString(W, "System.Free"); EndLine;
+  BEGIN Texts.WriteString(W, "System.Free"); EndLine; NEW(S);
     Texts.OpenScanner(S, Oberon.Par.text, Oberon.Par.pos); Texts.Scan(S);
     IF (S.class = Texts.Char) & (S.c = "^") THEN
       Oberon.GetSelection(T, beg, end_, time);
@@ -193,7 +194,7 @@ MODULE System; (*JG 3.10.90 / NW 12.10.93 / NW 20.6.2016*)
       Texts.WriteString(W, name);
       IF pat[j0+1] = "!" THEN (*option*)
         // Kernel.GetSector(adr, hp);
-        Texts.Write(W, 9X); Texts.WriteClock(W, hp.date);
+        Texts.Write(W, 9X); NEW(hp); Texts.WriteClock(W, hp.date);
         Texts.WriteInt(W, hp.aleng*FileDir.SectorSize + hp.bleng - FileDir.HeaderSize, 8); (*length*)
         (*Texts.WriteHex(W, adr)*)
       END ;
@@ -208,7 +209,7 @@ MODULE System; (*JG 3.10.90 / NW 12.10.93 / NW 20.6.2016*)
       V: Viewers.Viewer;
       beg, end_, time: INTEGER;
       pre: ARRAY 32 OF CHAR;
-  BEGIN Texts.OpenReader(R, Oberon.Par.text, Oberon.Par.pos); Texts.Read(R, ch);
+  BEGIN NEW(R); Texts.OpenReader(R, Oberon.Par.text, Oberon.Par.pos); Texts.Read(R, ch);
     WHILE ch = " " DO Texts.Read(R, ch) END;
     IF (ch = "^") OR (ch = 0DX) THEN
       Oberon.GetSelection(T, beg, end_, time);
@@ -221,7 +222,7 @@ MODULE System; (*JG 3.10.90 / NW 12.10.93 / NW 20.6.2016*)
     WHILE ch > "!" DO pat[i] := ch; INC(i); Texts.Read(R, ch) END;
     pat[i] := 0X;
     IF ch = "!" THEN pat[i+1] := "!" END ;  (*directory option*)
-    i := 0;
+    i := 0; NEW(pre);
     WHILE pat[i] > "*" DO pre[i] := pat[i]; INC(i) END;
     pre[i] := 0X;
     Oberon.AllocateSystemViewer(Oberon.Par.vwr.X, X, Y); t := TextFrames.Text("");
@@ -235,7 +236,7 @@ MODULE System; (*JG 3.10.90 / NW 12.10.93 / NW 20.6.2016*)
     VAR f, g: Files.File; Rf, Rg: Files.Rider; ch: CHAR;
       name: ARRAY 32 OF CHAR;
       S: Texts.Scanner;
-  BEGIN GetArg(S);
+  BEGIN NEW(S); GetArg(S); NEW(name); NEW(Rf); NEW(Rg);
     Texts.WriteString(W, "System.CopyFiles"); EndLine;
     WHILE S.class = Texts.Name DO
       name := S.s; Texts.Scan(S);
@@ -263,7 +264,7 @@ MODULE System; (*JG 3.10.90 / NW 12.10.93 / NW 20.6.2016*)
     VAR res: INTEGER;
       name: ARRAY 32 OF CHAR;
       S: Texts.Scanner;
-  BEGIN GetArg(S);
+  BEGIN NEW(S); NEW(name); GetArg(S);
     Texts.WriteString(W, "System.RenameFiles"); EndLine;
     WHILE S.class = Texts.Name DO
       name := S.s; Texts.Scan(S);
@@ -283,7 +284,7 @@ MODULE System; (*JG 3.10.90 / NW 12.10.93 / NW 20.6.2016*)
 
   PROCEDURE DeleteFiles*;
     VAR res: INTEGER; S: Texts.Scanner;
-  BEGIN GetArg(S);
+  BEGIN NEW(S); GetArg(S);
     Texts.WriteString(W, "System.DeleteFiles"); EndLine;
     WHILE S.class = Texts.Name DO
       Texts.WriteString(W, S.s); Texts.WriteString(W, " deleting");
@@ -340,7 +341,7 @@ MODULE System; (*JG 3.10.90 / NW 12.10.93 / NW 20.6.2016*)
       S: Texts.Scanner;
       V: Viewers.Viewer;
       X, Y: INTEGER;
-  BEGIN GetArg(S);
+  BEGIN NEW(S); GetArg(S);
     IF S.class = Texts.Name THEN
       Modules.Load(S.s, M);
       IF M # NIL THEN
@@ -388,7 +389,7 @@ MODULE System; (*JG 3.10.90 / NW 12.10.93 / NW 20.6.2016*)
     VAR V: Viewers.Viewer;
       X, Y, DX, DW, DH: INTEGER;
       S: Texts.Scanner;
-  BEGIN GetArg(S);
+  BEGIN NEW(S); GetArg(S);
     IF S.class = Texts.Name THEN
       DX := Viewers.curW; DW := Oberon.DisplayWidth(DX); DH := Oberon.DisplayHeight(DX);
       Oberon.OpenDisplay(DW DIV 8 * 5, DW DIV 8 * 3, DH);
@@ -421,7 +422,7 @@ MODULE System; (*JG 3.10.90 / NW 12.10.93 / NW 20.6.2016*)
   END Abort;
     *)
 
-BEGIN NEW(W); NEW(W.rider);
+BEGIN W := Texts.newWriter(); NEW(pat);
   Texts.OpenWriter(W);
   Oberon.OpenLog(TextFrames.Text("")); OpenViewers;
   // Kernel.Install(ADR(Trap), 20H); Kernel.Install(ADR(Abort), 0);

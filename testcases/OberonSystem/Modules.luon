@@ -68,6 +68,7 @@ MODULE Modules;  (*Link and load on RISC; NW 20.10.2013 / 9.4.2016*)
 	  AllocPtr := 0
   END Init;
 
-BEGIN Init; // Load("Oberon", M);
+BEGIN NEW(importing); NEW(imported);
+    Init; // Load("Oberon", M);
     PAL.LED(res); // REPEAT UNTIL FALSE  (*only if load fails*)
 END Modules.

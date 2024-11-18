@@ -325,7 +325,7 @@ public:
         bc.openFunction(0,md.fullName,module->pos.packed(), md.end.packed() );
 
 #ifdef _DEBUG
-        //emitPrint(QString("start generating %1").arg(md.fullName.constData()),module->pos);
+        // emitPrint(QString("start generating %1").arg(md.fullName.constData()),module->pos);
 #endif
 
         QHash<quint8,QByteArray> names;
@@ -996,6 +996,17 @@ public:
         releaseLvalue(v);
     }
 
+    void emitClip(quint8 to, quint8 from, int bits, const RowCol& pos)
+    {
+        const quint8 tmp = ctx.back().buySlots(3, true);
+        fetchLnlibMember(tmp,19,pos); // bit.band
+        bc.MOV(tmp+1, from, pos.packed() );
+        bc.KSET(tmp+2, (1 << bits) - 1, pos.packed());
+        bc.CALL(tmp, 1 ,2, pos.packed());
+        bc.MOV(to,tmp, pos.packed());
+        ctx.back().sellSlots(tmp,3);
+    }
+
     void emitBuiltin(Declaration* proc, Expression* call, quint8 res)
     {
         switch( proc->id )
@@ -1032,25 +1043,22 @@ public:
                 bc.MOV(res,slotStack.back(),call->pos.packed() );
             releaseSlot();
             break;
-        case Builtin::FLT:
         case Builtin::BITS:
-        case Builtin::CHR:
+            emitExpression(call->rhs);
+            emitClip(res, slotStack.back(), 32, call->pos);
+            releaseSlot();
+            break;
+        case Builtin::FLT:
             emitExpression(call->rhs);
             bc.MOV(res,slotStack.back(),call->pos.packed() );
             releaseSlot();
             break;
-        case Builtin::CLIP: {
-                emitExpression(call->rhs);
-                const quint8 tmp = ctx.back().buySlots(3, true);
-                fetchLnlibMember(tmp,19,call->pos); // bit.band
-                bc.MOV(tmp+1, slotStack.back(), call->pos.packed() );
-                releaseSlot();
-                bc.KSET(tmp+2, 255, call->pos.packed());
-                bc.CALL(tmp, 1 ,2, call->pos.packed());
-                bc.MOV(res,tmp, call->pos.packed());
-                ctx.back().sellSlots(tmp,3);
-                break;
-            }
+        case Builtin::CLIP:
+        case Builtin::CHR:
+            emitExpression(call->rhs);
+            emitClip(res, slotStack.back(), 8, call->pos);
+            releaseSlot();
+            break;
         case Builtin::DEFAULT:
             Q_ASSERT(false); // only called at compile time
             emitInitializer(res, call->rhs->type, call->pos);

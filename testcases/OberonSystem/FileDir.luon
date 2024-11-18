@@ -73,7 +73,7 @@ MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013*)
     VAR n,i: INTEGER;
 	    b: BOOLEAN;
 	    str: ARRAY 64 OF CHAR;
-  BEGIN
+  BEGIN NEW(str);
 		n := PAL.listFiles();
 		FOR i := 0 TO n-1 DO
 		  PAL.fileName(i, str, len(str));
@@ -87,5 +87,5 @@ MODULE FileDir;   (*NW 12.1.86 / 23.8.90 / 15.8.2013*)
   BEGIN
 	 // NOP
   END Init; 
-  
+
 END FileDir.

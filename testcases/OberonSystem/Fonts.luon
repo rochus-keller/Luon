@@ -20,6 +20,14 @@ MODULE Fonts; (*JG 18.11.90; PDR 8.6.12; NW 25.3.2013*)
 
 VAR Default*, root*: Font;
 
+PROCEDURE newFont():Font
+VAR f: Font
+BEGIN
+  NEW(f); NEW(f.name); NEW(f.T); NEW(f.raster);
+  RETURN f;
+END newFont
+
+
 PROCEDURE GetPat*(fnt: Font; ch: CHAR; VAR dx, x, y, w, h: INTEGER; VAR patadr: Display.Pattern);
   VAR pa, i: INTEGER;  dxb, xb, yb, wb, hb: BYTE;
 BEGIN 
@@ -67,7 +75,7 @@ BEGIN
         Files.ReadByte(R, b); (*abstraction*)
         Files.ReadByte(R, b); (*family*)
         Files.ReadByte(R, b); (*variant*)
-        NEW(F); NEW(F.T); NEW(F.raster);
+        F := newFont();
         COPY(F.name,name);
         RdInt16(R, height); RdInt16(R, minX); RdInt16(R, maxX); RdInt16(R, minY); RdInt16(R, maxY); RdInt16(R, NofRuns);
         NofBoxes := 0; k := 0;
@@ -83,7 +91,7 @@ BEGIN
           NofBytes := NofBytes + 5 + (box[j].w + 7) DIV 8 * box[j].h;
           INC(j)
         END;
-        IF NofBytes < 2300 THEN NEW(F); NEW(F.T); NEW(F.raster);
+        IF NofBytes < 2300 THEN F := newFont();
         ELSE NEW(LF); ; NEW(LF.T); NEW(LF.raster); NEW(LF.ext); F := LF END ;
         COPY(F.name,name);
         F.height := height; F.minX := minX; F.maxX := maxX; F.maxY := maxY;

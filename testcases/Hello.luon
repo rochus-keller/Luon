@@ -1,6 +1,9 @@
 module Hello
 const txt = "Hello"
 var str : array 32 of char
+    b : byte
+    i : integer
+
 procedure test(a,b,c,d,e: integer)
    procedure test2( x,y: integer)
    begin
@@ -21,4 +24,7 @@ begin
 	print(" ")
 	println("World!")
 	test(1,2,3,4,5)
+	i := 123
+	b := clip(i)
+	println(b)
 end Hello

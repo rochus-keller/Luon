@@ -1725,7 +1725,7 @@ void Validator::constructor(Expression* constr, Type* hint)
             c = c->next;
         }
         toConstVal(constr);
-        constr->val = (qint64)bits.to_ulong();
+        constr->val = (quint64)bits.to_ulong();
     }
 }
 

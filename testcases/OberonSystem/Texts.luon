@@ -72,6 +72,27 @@ MODULE Texts; (*JG 21.11.90 / NW 11.7.90 / 24.12.95 / 22.11.10 / 20.3.2017*)
 
   VAR TrailerFile: Files.File;
 
+  PROCEDURE newReader():Reader
+  VAR r: Reader
+  BEGIN
+    NEW(r); NEW(r.rider);
+    RETURN r;
+  END newReader
+
+  PROCEDURE newWriter():Writer
+  VAR w: Writer
+  BEGIN
+    NEW(w); NEW(w.rider);
+    RETURN w;
+  END newWriter
+
+  PROCEDURE newScanner():Scanner
+  VAR s: Scanner
+  BEGIN
+    NEW(s); NEW(s.s);
+    RETURN s;
+  END newScanner
+ 
   (* -------------------- Filing ------------------------*)
 
   PROCEDURE Trailer(): Piece;
@@ -87,10 +108,11 @@ MODULE Texts; (*JG 21.11.90 / NW 11.7.90 / 24.12.95 / 22.11.10 / 20.3.2017*)
       f: Files.File;
       FName: ARRAY 32 OF CHAR;
       Dict: ARRAY 32 OF Fonts.Font;
-  BEGIN f := Files.Base(R); N := 1; Q := Trailer(); p := Q;
+  BEGIN NEW(Dict); f := Files.Base(R); N := 1; Q := Trailer(); p := Q;
     Files.ReadInt(R, off); Files.ReadByte(R, bt); fno := bt;
     WHILE fno # 0 DO
       IF fno = N THEN
+        NEW(FName);
         Files.ReadString(R, FName);
         Dict[N] := Fonts.This(FName); INC(N)
       END;
@@ -481,7 +503,7 @@ MODULE Texts; (*JG 21.11.90 / NW 11.7.90 / 24.12.95 / 22.11.10 / 20.3.2017*)
       e := (e - 127) * 77 DIV 256 - 6;  (*decimal exponent*)
       IF e >= 0 THEN x := x / Ten(e) ELSE x := Ten(-e) * x END ;
       m := FLOOR(x + 0.5); i := 0;
-      IF m >= 10000000 THEN INC(e); m := m DIV 10 END ;
+      IF m >= 10000000 THEN INC(e); m := m DIV 10 END ; NEW(d);
       REPEAT d[i] := CHR(m MOD 10 + 30H); m := m DIV 10; INC(i) UNTIL m = 0;
       DEC(i); Write(W, d[i]); Write(W, ".");
       IF i < n-7 THEN n := 0 ELSE n := 14 - n END ;
@@ -501,7 +523,7 @@ MODULE Texts; (*JG 21.11.90 / NW 11.7.90 / 24.12.95 / 22.11.10 / 20.3.2017*)
       IF x < 0.0 THEN x := -x; neg := TRUE ELSE neg := FALSE END ;
       IF k > 7 THEN k := 7 END ;
       x := Ten(k) * x; m := FLOOR(x + 0.5);
-      i := 0;
+      i := 0; NEW(d);
       REPEAT d[i] := CHR(m MOD 10 + 30H); m := m DIV 10; INC(i) UNTIL m = 0;
       Write(W, " ");
       WHILE n > i+3 DO  Write(W, " "); DEC(n) END ;

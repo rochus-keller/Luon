@@ -38,12 +38,16 @@ end
 
 function PAL_LDCMD(module,command) -- :Command 
 	local m = LUON_require(ffi.string(module))
-	if m ~= nil then return m[ffi.string(command)] end
-	return nil
+	-- print("LDCMD "..ffi.string(module).." module="..tostring(m))
+	local cmd
+	if m ~= nil then cmd = m[ffi.string(command)] end
+	-- print("LDCMD "..ffi.string(command).." command="..tostring(cmd))
+	return cmd
 end
 
 function PAL_LDMOD(module) -- :boolean 
 	local m = LUON_require(ffi.string(module))
+	-- print("LDMOD "..ffi.string(module).." res="..tostring(m))
 	return m ~= nil
 end
 
@@ -56,7 +60,9 @@ function PAL_fileName(i, name, maxlen)
 end
 
 function PAL_openFile(filename) -- : integer 
-	return C.PAL_openFile(filename)
+	local res = C.PAL_openFile(filename)
+	-- print("PAL_openFile "..ffi.string(filename).." res "..tostring(res))
+	return res
 end
 
 function PAL_newFile() -- : integer 

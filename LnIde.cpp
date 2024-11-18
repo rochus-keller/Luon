@@ -2331,7 +2331,7 @@ void Ide::printLocalVal(QTreeWidgetItem* item, Type* type, int depth)
     case Type::Array:
         {
             Type* a = type;
-            Type* at = a->base;
+            Type* at = derefed(a->base);
             Q_ASSERT( at );
             const int arr = lua_gettop(L);
             const int luatype = lua_type(L, arr );
@@ -3076,7 +3076,7 @@ int main(int argc, char *argv[])
     a.setOrganizationName("me@rochus-keller.ch");
     a.setOrganizationDomain("github.com/rochus-keller/Luon");
     a.setApplicationName("Luon IDE (LuaJIT)");
-    a.setApplicationVersion("0.6.3");
+    a.setApplicationVersion("0.6.4");
     a.setStyle("Fusion");    
     QFontDatabase::addApplicationFont(":/font/DejaVuSansMono.ttf"); // "DejaVu Sans Mono"
 

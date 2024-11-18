@@ -22,7 +22,8 @@ MODULE Edit; (*JG 2.11.90 / NW 28.11.2015*)
     V: Viewers.Viewer;
     X, Y: INTEGER;
     beg, end_, time: INTEGER;
-  BEGIN Texts.OpenScanner(S, Oberon.Par.text, Oberon.Par.pos); Texts.Scan(S);
+  BEGIN S := Texts.newScanner();
+    Texts.OpenScanner(S, Oberon.Par.text, Oberon.Par.pos); Texts.Scan(S);
     IF (S.class = Texts.Char) & (S.c = "^") OR (S.line # 0) THEN
       Oberon.GetSelection(T, beg, end_, time);
       IF time >= 0 THEN Texts.OpenScanner(S, T, beg); Texts.Scan(S) END
@@ -41,7 +42,7 @@ MODULE Edit; (*JG 2.11.90 / NW 28.11.2015*)
       Text: TextFrames.Frame;
       T: Texts.Text;
       S: Texts.Scanner;
-      f: Files.File; R: Files.Rider;
+      //f: Files.File; R: Files.Rider;
       beg, end_, time, len: INTEGER;
 
     PROCEDURE Backup (VAR name: ARRAY OF CHAR);
@@ -52,7 +53,8 @@ MODULE Edit; (*JG 2.11.90 / NW 28.11.2015*)
       Files.Rename(name, bak, res)
     END Backup;
 
-  BEGIN Texts.WriteString(W, "Edit.Store ");
+  BEGIN S := Texts.newScanner(); 
+    Texts.WriteString(W, "Edit.Store ");
     IF Oberon.Par.frame = Oberon.Par.vwr.dsc THEN
       V := Oberon.Par.vwr; Texts.OpenScanner(S, V.dsc(TextFrames.Frame).text, 0)
     ELSE V := Oberon.MarkedViewer(); Texts.OpenScanner(S, Oberon.Par.text, Oberon.Par.pos)
@@ -90,6 +92,7 @@ MODULE Edit; (*JG 2.11.90 / NW 28.11.2015*)
   PROCEDURE ChangeFont*;
     VAR S: Texts.Scanner; T: Texts.Text; beg, end_: INTEGER;
   BEGIN
+    S := Texts.newScanner();
     Oberon.GetSelection(T, beg, end_, time);
     IF time >= 0 THEN
       Texts.OpenScanner(S, Oberon.Par.text, Oberon.Par.pos); Texts.Scan(S);
@@ -104,7 +107,8 @@ MODULE Edit; (*JG 2.11.90 / NW 28.11.2015*)
       T: Texts.Text;
       col: INTEGER;
       beg, end_, time: INTEGER;
-  BEGIN Texts.OpenScanner(S, Oberon.Par.text, Oberon.Par.pos); Texts.Scan(S);
+  BEGIN S := Texts.newScanner();
+    Texts.OpenScanner(S, Oberon.Par.text, Oberon.Par.pos); Texts.Scan(S);
     IF S.class = Texts.Int THEN
       col := S.i; Oberon.GetSelection(T, beg, end_, time);
       IF time >= 0 THEN Texts.ChangeLooks(T, beg, end_, {1}, NIL, col, 0) END
@@ -116,7 +120,8 @@ MODULE Edit; (*JG 2.11.90 / NW 28.11.2015*)
       T: Texts.Text;
       voff: INTEGER; ch: CHAR;
       beg, end_, time: INTEGER;
-  BEGIN Texts.OpenScanner(S, Oberon.Par.text, Oberon.Par.pos); Texts.Scan(S);
+  BEGIN S := Texts.newScanner();
+    Texts.OpenScanner(S, Oberon.Par.text, Oberon.Par.pos); Texts.Scan(S);
     IF S.class = Texts.Int THEN
       voff := S.i; Oberon.GetSelection(T, beg, end_, time);
       IF time >= 0 THEN Texts.ChangeLooks(T, beg, end_, {2}, NIL, voff, 0) END
@@ -138,7 +143,8 @@ MODULE Edit; (*JG 2.11.90 / NW 28.11.2015*)
       WHILE j # M DO Texts.Read(R, buf[j]); INC(j) END
     END Forward;
 
-  BEGIN V := Oberon.Par.vwr;
+  BEGIN R := Texts.newReader(); NEW(buf);
+    V := Oberon.Par.vwr;
     IF Oberon.Par.frame # V.dsc THEN V := Oberon.FocusViewer END;
     IF (V.dsc # NIL) & (V.dsc.next IS TextFrames.Frame) THEN
       Text := V.dsc.next(TextFrames.Frame);
@@ -177,7 +183,7 @@ MODULE Edit; (*JG 2.11.90 / NW 28.11.2015*)
       T: Texts.Text; S: Texts.Scanner;
       V: Viewers.Viewer;
       beg, end_, time: INTEGER;
-  BEGIN
+  BEGIN S := Texts.newScanner();
     V := Oberon.FocusViewer;
     IF (V.dsc # NIL) & (V.dsc.next IS TextFrames.Frame) THEN
       Text := V.dsc.next(TextFrames.Frame);
@@ -226,7 +232,7 @@ MODULE Edit; (*JG 2.11.90 / NW 28.11.2015*)
     END
   END Recall;
 
-BEGIN Texts.OpenWriter(W)
+BEGIN NEW(pat); NEW(d); W := Texts.newWriter(); Texts.OpenWriter(W)
 END Edit.
 
 
