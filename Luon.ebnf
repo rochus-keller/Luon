@@ -173,8 +173,8 @@ DeclarationSequence ::=
 ReturnStatement ::= 'RETURN' 
 	[ expression ] // leads to LL(k) ambig with qualident statement; resolve by checking if proc has return type
 
-FormalParameters ::= '(' [ FPSection { \LA: 1:(ident|'IN'|'VAR') | (1:';' & 2:(ident|'IN'|'VAR'))\ 
-                                              [';'] FPSection } [ [';'] '..'] ]  ')' [ ':' ReturnType ]
+FormalParameters ::= '(' [ FPSection { \LA: 1:(ident|'CONST'|'VAR') | (1:';' & 2:(ident|'CONST'|'VAR'))\ 
+                                              [';'] FPSection } ]  ')' [ ':' ReturnType ]
 
 ReturnType ::= NamedType
 

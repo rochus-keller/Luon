@@ -1727,8 +1727,6 @@ void Parser2::ProcedureDeclaration() {
         }
     }else
     {
-#if 0
-        // INVAR and INLINE are not yet supported
         if( la.d_type == Tok_INLINE || la.d_type == Tok_INVAR ) {
             if( la.d_type == Tok_INLINE ) {
                 expect(Tok_INLINE, true, "ProcedureDeclaration");
@@ -1736,16 +1734,20 @@ void Parser2::ProcedureDeclaration() {
                     error(cur, "not allowed for bound procedures");
                 else
                     procDecl->mode = Declaration::Inline;
-            } else if( la.d_type == Tok_INVAR ) {
+            }
+#if 0
+        // INVAR not yet supported
+            else if( la.d_type == Tok_INVAR ) {
                 expect(Tok_INVAR, true, "ProcedureDeclaration");
                 if( procDecl->mode != 0 )
                     error(cur, "not allowed for bound procedures");
                 else
                     procDecl->mode = Declaration::Invar;
-            } else
+            }
+#endif
+            else
                 invalid("ProcedureDeclaration");
         }
-#endif
         if( la.d_type == Tok_Semi ) {
             expect(Tok_Semi, false, "ProcedureDeclaration");
         }
@@ -1854,6 +1856,8 @@ Type* Parser2::FormalParameters() {
 			}
 			FPSection();
 		}
+#if 0
+        // we don't support varargs
 		if( la.d_type == Tok_Semi || la.d_type == Tok_2Dot ) {
 			if( la.d_type == Tok_Semi ) {
 				expect(Tok_Semi, false, "FormalParameters");
@@ -1865,6 +1869,7 @@ Type* Parser2::FormalParameters() {
             d->outer = mdl->getTopScope();
             d->type = mdl->getType(BasicType::NoType);
         }
+#endif
 	}
 	expect(Tok_Rpar, false, "FormalParameters");
     Type* res = 0;

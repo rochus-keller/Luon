@@ -1477,14 +1477,14 @@ void Validator::callOp(Expression* e)
             }
         }else
         {
-            if( actuals.size() < formals.size() )
-                error(e->pos,"not enough actual arguments");
+            if( actuals.size() != formals.size() )
+                error(e->pos,"number of actual doesn't fit number of formal arguments");
 
             for( int i = 0; i < formals.size() && i < actuals.size(); i++ )
             {
                 if( !paramCompat(formals[i],actuals[i]) )
                 {
-                    paramCompat(formals[i],actuals[i]); // TEST
+                    //paramCompat(formals[i],actuals[i]); // TEST
                     error(actuals[i]->pos, "actual argument not compatible with formal parameter");
                 }
             }
@@ -2206,12 +2206,6 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
         break;
     case Builtin::SETENV:
         expectingNArgs(args,2);
-        break;
-    case Builtin::VARARG:
-        expectingNMArgs(args,2,3);
-        break;
-    case Builtin::VARARGS:
-        expectingNArgs(args,0);
         break;
     }
     }catch( const QString& err )

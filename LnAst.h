@@ -58,7 +58,7 @@ namespace Ln
             // functions
             ABS, CAP, BITAND, BITASR, BITNOT, BITOR, BITS, BITSHL, BITSHR,
             BITXOR, CAST, CHR, CLIP, DEFAULT, FLOOR, FLT, GETENV, LEN, MAX,
-            MIN, ODD, ORD, STRLEN, VARARG, VARARGS,
+            MIN, ODD, ORD, STRLEN,
             // procedures
             ASSERT, COPY, DEC, EXCL, HALT, INC,
             INCL, NEW, PCALL, PRINT, PRINTLN, RAISE, SETENV,

@@ -933,8 +933,6 @@ public:
         case Builtin::MAX:
         case Builtin::MIN:
         case Builtin::ORD:
-        case Builtin::VARARG:
-        case Builtin::VARARGS:
             break;
         case Builtin::COPY:
         case Builtin::DEC:
@@ -1209,9 +1207,6 @@ public:
             // TODO:
         case Builtin::CAP:
         case Builtin::GETENV:
-            break;
-        case Builtin::VARARG:
-        case Builtin::VARARGS:
             break;
         case Builtin::HALT:
         case Builtin::PCALL:
