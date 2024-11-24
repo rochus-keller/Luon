@@ -63,7 +63,7 @@ static void loadLuaLib( Lua::Engine2* lua, const QByteArray& name, bool run = fa
 
 static bool preloadLib( Project* pro, const QByteArray& name )
 {
-    QFile f( QString(":/oakwood/%1.luon" ).arg(name.constData() ) );
+    QFile f( QString(":/runtime/%1.luon" ).arg(name.constData() ) );
     if( !f.open(QIODevice::ReadOnly) )
     {
         qCritical() << "unknown preload" << name;
@@ -93,6 +93,7 @@ bool LjRuntime::compile(bool doGenerate)
         preloadLib(d_pro,"Input");
         preloadLib(d_pro,"Math");
         preloadLib(d_pro,"Strings");
+        preloadLib(d_pro,"DateTime");
         // preloadLib(d_pro,"XYPlane");
     }
     const quint32 errCount = d_pro->getErrors().size();
@@ -129,6 +130,7 @@ bool LjRuntime::loadLibraries()
         loadLuaLib(d_lua,"_Input");
         loadLuaLib(d_lua,"_Math");
         loadLuaLib(d_lua,"_Strings");
+        loadLuaLib(d_lua,"_DateTime");
     }
 
     const QString root = d_pro->getWorkingDir(true);

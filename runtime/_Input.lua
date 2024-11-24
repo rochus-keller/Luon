@@ -16,7 +16,7 @@ function Input_SetMouseLimits() -- (w, h: INTEGER)
 end
 
 function Input_Time()
-    return clock() * 1000.0 * 1000.0
+    return clock() * 1000.0 * 1000.0 -- microseconds
 end
 
 

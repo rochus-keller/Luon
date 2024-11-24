@@ -1,0 +1,11 @@
+module DateTime
+
+type
+	DateTime* = RECORD day*, month*, year*,hour*, minute*, second*: INTEGER END;
+	
+	PROCEDURE current*(): DateTime EXTERN;
+	
+	PROCEDURE diff*(from, to_: DateTime): INTEGER EXTERN; // seconds
+	
+	
+end DateTime

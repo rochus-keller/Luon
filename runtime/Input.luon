@@ -6,5 +6,5 @@ MODULE Input;
 	PROCEDURE Read (VAR ch: CHAR) EXTERN;
 	PROCEDURE Mouse (VAR keys: SET; VAR x, y: INTEGER) EXTERN;
 	PROCEDURE SetMouseLimits (w, h: INTEGER) EXTERN;
-	PROCEDURE Time (): INTEGER EXTERN;
+	PROCEDURE Time (): INTEGER EXTERN; // microseconds
 END Input.

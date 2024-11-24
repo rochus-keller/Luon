@@ -21,13 +21,13 @@
         <file>images/alias_priv.png</file>
         <file>images/alias.png</file>
         <file>fonts/DejaVuSansMono.ttf</file>
-        <file>oakwood/Files.luon</file>
-        <file>oakwood/In.luon</file>
-        <file>oakwood/Input.luon</file>
-        <file>oakwood/Math.luon</file>
-        <file>oakwood/Out.luon</file>
-        <file>oakwood/Strings.luon</file>
-        <file>oakwood/XYplane.luon</file>
+        <file>runtime/Files.luon</file>
+        <file>runtime/In.luon</file>
+        <file>runtime/Input.luon</file>
+        <file>runtime/Math.luon</file>
+        <file>runtime/Out.luon</file>
+        <file>runtime/Strings.luon</file>
+        <file>runtime/XYplane.luon</file>
         <file>runtime/LUON.lua</file>
         <file>runtime/_Files.lua</file>
         <file>runtime/_In.lua</file>
@@ -36,5 +36,7 @@
         <file>runtime/_Out.lua</file>
         <file>runtime/_Strings.lua</file>
         <file>runtime/_XYPlane.lua</file>
+        <file>runtime/_DateTime.lua</file>
+        <file>runtime/DateTime.luon</file>
     </qresource>
 </RCC>
