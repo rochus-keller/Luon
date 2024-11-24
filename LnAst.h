@@ -63,7 +63,7 @@ namespace Ln
             ASSERT, COPY, DEC, EXCL, HALT, INC,
             INCL, NEW, PCALL, PRINT, PRINTLN, RAISE, SETENV,
             // end
-            TRAP, TRAPIF,
+            TRAP, TRAPIF, TOSTRING,
             Max
             // NOTE: CAST is only used to convert integers to enums
         };
@@ -203,7 +203,6 @@ namespace Ln
         Expression* next; // for args, set elems, and caselabellist
 
         bool isConst() const;
-        DeclList getFormals() const;
         bool isLvalue() const; // true if result of expression is usually a ref to type; can be changed with byVal
         void setByVal();
         bool isCharLiteral();

@@ -96,28 +96,6 @@ function module.charArrayToString(array)
         return tostring(array)
     end
 end
-function module.joinStrings( lhs, rhs)
-        local lhslen = strlen(lhs)
-        local rhslen = strlen(rhs)
-	local count = lhslen + rhslen + 1
-	local res
-	res = ffi.new( CharArray, count )
-	local i
-	for i = 0,lhslen-1 do
-		res[i] = lhs[i]
-	end
-	for i = 0,rhslen-1 do
-		res[i+lhslen] = rhs[i]
-	end
-	res[lhslen+rhslen] = 0
-	return res
-end
-function module.charToString(ch)
-	local a = ffi.new( CharArray, 2 ) 
-	a[0] = ch
-	a[1] = 0
-	return a
-end
 function module.stringRelOp( lhs, rhs, op )
     local res = false
     if op == 1 then return lhs == rhs end -- EQ
@@ -158,34 +136,8 @@ function module.print( val )
         io.stdout:write(tostring(val));
     end
 end
-function module.strcpy( lhs, rhs )
-	local i = 0
-	while rhs[i] ~= 0 do
-		lhs[i] = rhs[i]
-		i = i + 1
-	end
-	lhs[i] = 0
-end
 function module.ODD(num)
 	return ( num % 2 ) == 1
-end
-function module.bool_to_number(value)
-  return value and 1 or 0
-end
-function module.UNPACK(value)
-	local x,n = frexp(value)
-	x = x + x
-	n = n - 1
-	return x, n
-end
-function module.min_size(lhs,rhs)
-	local l = bytesize(lhs)
-	local r = bytesize(rhs)
-	if l <= r then
-		return l
-	else
-		return r
-	end
 end
 function module.DIV(a,b)
     return math.floor(a/b)
@@ -247,6 +199,14 @@ function module.require(name)
     return m
 end
 
+function module.tostring(val)
+    if ffi.istype(CharArray,val) then
+        return ffi.string(val)
+    else
+        return tostring(val)
+    end
+end
+
 LUON_require = module.require
 
 -- Magic mumbers used by the compiler
@@ -257,10 +217,8 @@ module[9] = addElemToSet
 module[10] = module.addRangeToSet
 module[11] = bit.bnot
 module[12] = bit.bor
-module[13] = module.joinStrings
 module[14] = module.DIV
 module[15] = module.MOD
-module[16] = module.charToString
 module[17] = module.stringRelOp
 module[18] = module.setSub
 module[19] = bit.band
@@ -271,27 +229,17 @@ module[23] = module.is_a
 module[24] = strlen
 module[25] = module.println
 module[26] = ffi.sizeof -- bytesize
-module[27] = module.strcpy
 module[28] = TRAP
 module[29] = ASSERT
 module[30] = module.removeElemFromSet
-module[31] = math.ldexp
-module[32] = module.UNPACK
 module[33] = module.ODD
 module[34] = math.abs
 module[35] = bit.lshift
 module[36] = bit.arshift
 module[37] = bit.ror
 module[38] = math.floor
-module[39] = module.bool_to_number
 module[40] = getmetatable
 module[41] = bit.bxor
-module[42] = ADDRESSOF
-module[43] = module.createBoolArray
-module[44] = ABORT
-module[49] = ffi.new
-module[50] = ffi.copy
-module[51] = module.min_size
 module[52] = jit.off
 module[55] = string.char
 module[56] = module.print
@@ -301,6 +249,7 @@ module[59] = string.byte
 module[60] = module.clone
 module[61] = module.charArrayToString
 module[62] = module.require
+module[63] = module.tostring
 
 return module
 

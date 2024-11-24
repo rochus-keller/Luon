@@ -45,7 +45,7 @@ const char* Builtin::name[] = {
     "MIN", "ODD", "ORD", "STRLEN",
     "ASSERT", "COPY", "DEC", "EXCL", "HALT", "INC",
     "INCL", "NEW", "PCALL", "PRINT", "PRINTLN", "RAISE", "SETENV",
-    "TRAP", "TRAPIF"
+    "TRAP", "TRAPIF", "TOSTRING"
 };
 
 AstModel::AstModel():helper(0),helperId(0)
@@ -653,6 +653,8 @@ bool Expression::isConst() const
             case Builtin::GETENV:
             case Builtin::DEFAULT:
                 return true;
+            case Builtin::TOSTRING:
+                return false;
             case Builtin::CAST:
                 return getCount(args) == 2 && args->next->isConst();
             default:
@@ -669,20 +671,6 @@ bool Expression::isConst() const
     if( rhs && !rhs->isConst() )
         return false;
     return true;
-}
-
-DeclList Expression::getFormals() const
-{
-    Type* t = type ? type->deref() : 0;
-    if( kind == DeclRef )
-    {
-        Declaration* d = val.value<Declaration*>();
-        if( d && d->kind == Declaration::Procedure )
-            return d->getParams();
-    }else if( t && t->form == Type::Proc )
-        return t->subs;
-
-    return DeclList();
 }
 
 bool Expression::isLvalue() const

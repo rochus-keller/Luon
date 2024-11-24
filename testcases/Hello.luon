@@ -3,6 +3,8 @@ const txt = "Hello"
 var str : array 32 of char
     b : byte
     i : integer
+    s: string
+    r: real
 
 procedure test(a,b,c,d,e: integer)
    procedure test2( x,y: integer)
@@ -27,4 +29,7 @@ begin
 	i := 123
 	b := clip(i)
 	println(b)
+	r := 3.14159
+	s := "this is a number: " + tostring(r) + " " + tostring($454647$)
+	println(s)
 end Hello

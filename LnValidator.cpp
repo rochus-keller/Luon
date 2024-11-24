@@ -1054,7 +1054,7 @@ void Validator::assigOp(Statement* s)
     visitExpr(s->lhs);
     visitExpr(s->rhs, s->lhs->type);
     if( !assigCompat(s->lhs->type, s->rhs) ) {
-        // assigCompat(s->lhs->type, s->rhs); // TEST
+        //assigCompat(s->lhs->type, s->rhs); // TEST
         error(s->pos,"left side not assignment compatible with right side");
     }
 }
@@ -1401,17 +1401,14 @@ void Validator::callOp(Expression* e)
     if( lhs == 0 || lhs->type == 0 ) // e->rhs is null in case there are no args
         return;
 
-    Declaration* proc = 0;
-    if( lhs->kind == Expression::DeclRef ||
-            lhs->kind == Expression::Select ) // Select because of bound procedures
-    {
-        proc = lhs->val.value<Declaration*>();
-        if( proc && (proc->kind == Declaration::Field || proc->isLvalue()) )
-            proc = 0; // this must be a proc type field
-    }else if( lhs->kind == Expression::ConstVal && lhs->val.canConvert<Declaration*>() )
-        proc = lhs->val.value<Declaration*>(); // happens if a procedure is passed in via meta actual
+    Declaration* proc = lhs->val.value<Declaration*>();
+    if( proc && proc->kind != Declaration::Procedure && proc->kind != Declaration::Builtin )
+        proc = 0;
+    Type* procType = deref(lhs->type);
+    if( procType && procType->form != Type::Proc )
+        procType = 0;
 
-    const DeclList formals = lhs->getFormals();
+    const DeclList formals = proc ? proc->getParams(true) : procType ? procType->subs : DeclList();
     Expression* arg = e->rhs;
     for(int i = 0; arg != 0; i++, arg = arg->next )
     {
@@ -1484,7 +1481,7 @@ void Validator::callOp(Expression* e)
             {
                 if( !paramCompat(formals[i],actuals[i]) )
                 {
-                    //paramCompat(formals[i],actuals[i]); // TEST
+                    // paramCompat(formals[i],actuals[i]); // TEST
                     error(actuals[i]->pos, "actual argument not compatible with formal parameter");
                 }
             }
@@ -1766,6 +1763,9 @@ bool Validator::assigCompat(Type* lhs, Type* rhs) const
 
     if( lhs->form == BasicType::STRING && rhs->isDerefCharArray() )
         // this is an abbreviation of COPY(lhs,rhs), i.e. an implicit copy operation
+        return true;
+
+    if( lhs->form == BasicType::STRING && rhs->form == BasicType::StrLit )
         return true;
 
     if( ( lhs->form == Type::Record || lhs->form == Type::Array ||
@@ -2118,6 +2118,11 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
             throw "expecting an integer type first arument";
         if( args.size() == 2 && !deref(args[1]->type)->isInteger() )
             throw "expecting an integer type second arument";
+        break;
+    case Builtin::TOSTRING:
+        if( !expectingNArgs(args,1) )
+            break;
+        *ret = mdl->getType(BasicType::STRING);
         break;
     case Builtin::TRAPIF:
         if( !expectingNArgs(args,1) )

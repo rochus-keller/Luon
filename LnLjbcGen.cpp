@@ -857,10 +857,10 @@ public:
             }
         }else if( lt->form == BasicType::StrLit || lt->form == BasicType::CHAR || lt->form == BasicType::STRING )
         {
-            if( lt->form = BasicType::CHAR )
+            if( lt->form == BasicType::CHAR )
                 emitCharToStr(lhs, e->pos);
             Type* rt = deref(e->rhs->type);
-            if( rt->form = BasicType::CHAR )
+            if( rt->form == BasicType::CHAR )
                 emitCharToStr(rhs, e->pos);
             bc.CAT(res, lhs, rhs, e->pos.packed() );
         }
@@ -911,6 +911,8 @@ public:
             return 33; // module.ODD
         case Builtin::STRLEN:
             return 24; // module.strlen
+        case Builtin::TOSTRING:
+            return 63; // module.tostring
         case Builtin::ASSERT:
             return 29;
         case Builtin::EXCL:
@@ -1022,6 +1024,7 @@ public:
         case Builtin::FLOOR:
         case Builtin::BITNOT:
         case Builtin::STRLEN:
+        case Builtin::TOSTRING:
             emitBuiltinN(proc->id, call, 1, res);
             break;
         case Builtin::ORD:
@@ -1243,6 +1246,7 @@ public:
         Declaration* proc = lhs->val.value<Declaration*>();
 
         Type* returnType = deref(lhs->type);
+        Type* procType = 0;
         bool isDelegate = false;
         if( proc && proc->kind == Declaration::Builtin )
         {
@@ -1256,15 +1260,18 @@ public:
             // so it must be a proc type variable
             Q_ASSERT(returnType->form == Type::Proc);
             isDelegate = returnType->receiver;
+            procType = returnType;
             returnType = deref(returnType->base);
         }else if( proc == 0 )
         {
             Q_ASSERT(returnType->form == Type::Proc);
             isDelegate = returnType->receiver;
+            procType = returnType;
             returnType = deref(returnType->base);
         }
+        Q_ASSERT( proc || procType );
 
-        DeclList formals = lhs->getFormals();
+        DeclList formals = proc ? proc->getParams(true) : procType->subs;
         ExpList actuals = Expression::getList(e->rhs);
         Q_ASSERT( actuals.size() >= formals.size() );
 
