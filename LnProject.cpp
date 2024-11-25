@@ -585,10 +585,8 @@ static inline QByteArray failWhen(const Import& imp)
 
 Declaration*Project::loadModule(const Import& imp)
 {
-    ModuleSlot* ms = find(imp);
-    if( ms != 0 )
-        return ms->decl;
-
+    // toFile also finds modules with incomplete path, such as Interface instead of som.Interface
+    // we must thus look for the file first, so that we can complete the Import spec if necessary
     File* file = toFile(imp);
     if( file == 0 )
     {
@@ -600,8 +598,21 @@ Declaration*Project::loadModule(const Import& imp)
         return 0;
     }
 
+    Import fixedImp = imp;
+    if( file->d_group )
+    {
+        // Take care that the new module is in the package where it was actually found
+        // So that e.g. Interface is in som.Interface, even when imported from Vector
+        fixedImp.path = file->d_group->d_package;
+        fixedImp.path.append(imp.path.back());
+    }
+
+    ModuleSlot* ms = find(fixedImp);
+    if( ms != 0 )
+        return ms->decl;
+
     // immediately add it so that circular module refs lead to an error
-    modules.append(ModuleSlot(imp,file->d_filePath,0));
+    modules.append(ModuleSlot(fixedImp,file->d_filePath,0));
     ms = &modules.back();
 
     class Lex2 : public Scanner2
@@ -639,27 +650,19 @@ Declaration*Project::loadModule(const Import& imp)
     {
         foreach( const Parser2::Error& e, p.errors )
             errors << Error(e.msg, e.pos, e.path);
-        qDebug() << "### parser failed" << failWhen(imp).constData();
+        qDebug() << "### parser failed" << failWhen(fixedImp).constData();
     }else
     {
         module = p.takeResult();
         Validator v(&mdl, this, true);
-        Import imp2 = imp;
-        if( file->d_group )
-        {
-            // Take care that the new module is in the package where it was actually found
-            // So that e.g. Interface is in som.Interface, even when imported from Vector
-            imp2.path = file->d_group->d_package;
-            imp2.path.append(imp.path.back());
-        }
-        if( !v.validate(module, imp2) )
+        if( !v.validate(module, fixedImp) )
         {
             foreach( const Validator::Error& e, v.errors )
                 errors << Error(e.msg, e.pos, e.path);
-            qDebug() << "### validator failed" << failWhen(imp).constData();
+            qDebug() << "### validator failed" << failWhen(fixedImp).constData();
             module->hasErrors = true;
         }
-        if( imp.metaActuals.isEmpty() )
+        if( fixedImp.metaActuals.isEmpty() )
             file->d_mod = module; // in case of generic modules, file->d_mod points to the non-instantiated version
         ms->xref = v.takeXref();
         QHash<Declaration*,DeclList>::const_iterator i;
@@ -701,7 +704,7 @@ Project::ModuleSlot*Project::find(const Import& imp)
 {
     for(int i = 0; i < modules.size(); i++ )
     {
-        if( modules[i].imp == imp )
+        if( modules[i].imp.equals(imp) )
             return &modules[i];
     }
     return 0;

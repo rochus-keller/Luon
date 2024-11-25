@@ -66,8 +66,6 @@ bool Validator::validate(Declaration* module, const Import& import)
         md.fullName = Ln::Token::getSymbol(md.path.join('/'));
     module->data = QVariant::fromValue(md);
 
-    // TEST import.importedAt.d_row == 470 && import.importer.contains("Havlak"))
-
     scopeStack.push_back(module);
     for( int i = 0; i < md.metaParams.size(); i++ )
         visitDecl(md.metaParams[i]);
@@ -1481,7 +1479,7 @@ void Validator::callOp(Expression* e)
             {
                 if( !paramCompat(formals[i],actuals[i]) )
                 {
-                    // paramCompat(formals[i],actuals[i]); // TEST
+                    paramCompat(formals[i],actuals[i]); // TEST
                     error(actuals[i]->pos, "actual argument not compatible with formal parameter");
                 }
             }
@@ -1692,6 +1690,7 @@ void Validator::constructor(Expression* constr, Type* hint)
         a->base = deref(constrT->base);
         a->anonymous = true;
         addHelper(a);
+        constr->type = a;
     }else if( constrT->form == BasicType::SET && allConst )
     {
         Expression* c = constr->rhs;

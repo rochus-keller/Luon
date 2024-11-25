@@ -1161,7 +1161,7 @@ public:
                 const int tmp = ctx.back().buySlots(3,true);
                 if( rt->form < BasicType::Max ) // string, literals
                 {
-                    fetchLnlibMember(tmp, 7, call->pos ); // charToStringArray
+                    fetchLnlibMember(tmp, 7, call->pos ); // module.stringToCharArray
                     bc.MOV(tmp + 1, slotStack.back(), call->pos.packed() );
                     releaseSlot();
                     bc.KSET(tmp+2, lt ? lt->len : 0, call->pos.packed() );
@@ -1394,8 +1394,9 @@ public:
     {
         quint8 res = ctx.back().buySlots(1);
         // NOTE: the validator changes open to fix array types for constructors
-        emitCreateArray(res,e->type, -1,e->pos);
-        Q_ASSERT(deref(e->type)->len); // the validator converted all dynamic arrays to fix len
+        Type* array = deref(e->type);
+        emitCreateArray(res,array, -1,e->pos);
+        Q_ASSERT(array->len); // the validator converted all dynamic arrays to fix len
         int index = 0;
         Expression* c = e->rhs;
         while( c )
@@ -1910,11 +1911,14 @@ public:
                     ctx.back().sellSlots(b);
                 }else
                 {
-                    emitExpression(l);
-                    bc.ISEQ(exp, slotStack.back(), l->pos.packed() );
+                    // we cannot use emitExpression(l) because "x" would be pushed as string!
+                    const quint8 a = ctx.back().buySlots(1);
+                    const qint64 aa = l->getCaseValue();
+                    bc.KSET(a,aa,l->pos.packed());
+                    bc.ISEQ(exp, a, l->pos.packed() );
                     emitJMP(0, l->pos.packed() );
                     doit << bc.getCurPc();
-                    releaseSlot();
+                    ctx.back().sellSlots(a);
                 }
                 l = l->next;
             }
@@ -2037,21 +2041,26 @@ public:
         lhsT = deref(lhsT);
         Type* rhsT = deref(rhs->type);
 
-        if( lhsT->form == BasicType::CHAR && (rhsT->form == BasicType::StrLit || rhsT->form == BasicType::STRING) )
+        if( lhsT->form == BasicType::CHAR && rhsT->form == BasicType::StrLit )
         {
             // convert len-1-string to char
+#if 1
+            // there is already the string on the stack; replace it by the char
+            bc.KSET(slotStack.back(), (quint8)rhs->val.toByteArray()[0], loc.packed());
+#else
             const int tmp = ctx.back().buySlots(2,true);
             fetchLnlibMember(tmp, 59, loc ); // string.byte
             bc.MOV(tmp + 1, slotStack.back(), loc.packed() );
             bc.CALL(tmp,1,1,loc.packed());
             bc.MOV(slotStack.back(),tmp, loc.packed());
             ctx.back().sellSlots(tmp,2);
+#endif
         }else if( (lhsT->isDerefCharArray() && (rhsT->form == BasicType::StrLit || rhsT->form == BasicType::STRING ) )
                   || ( lhsT->isDerefByteArray() && rhsT->form == BasicType::ByteArrayLit ) )
         {
             // convert string to CharArray
             const int tmp = ctx.back().buySlots(3,true);
-            fetchLnlibMember(tmp, 7, loc ); // charToStringArray
+            fetchLnlibMember(tmp, 7, loc ); // module.stringToCharArray
             bc.MOV(tmp + 1, slotStack.back(), loc.packed() );
             bc.KSET(tmp+2, lhsT->len, loc.packed() );
             bc.CALL(tmp,1,1,loc.packed());

@@ -109,7 +109,7 @@ public:
     {
         for(int i = 0; i < modules.size(); i++ )
         {
-            if( modules[i].imp == imp )
+            if( modules[i].imp.equals(imp) )
                 return &modules[i];
         }
         return 0;

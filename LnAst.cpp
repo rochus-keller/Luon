@@ -913,3 +913,32 @@ void Symbol::deleteAll(Symbol* first)
     }
     delete first;
 }
+
+
+bool Import::equals(const Import& other) const
+{
+    if( path.size() != other.path.size() )
+        return false;
+    for( int i = 0; i < path.size(); i++ )
+    {
+        if( path[i].constData() != other.path[i].constData() )
+            return false;
+    }
+    if( metaActuals.size() != other.metaActuals.size() )
+        return false;
+    for( int i = 0; i < metaActuals.size(); i++ )
+    {
+        Type* lhs = metaActuals[i]->type;
+        lhs = lhs ? lhs->deref() : lhs;
+        Type* rhs = other.metaActuals[i]->type;
+        rhs = rhs ? rhs->deref() : rhs;
+        if( lhs != rhs )
+            return false;
+        if( metaActuals[i]->kind == Expression::ConstVal && other.metaActuals[i]->kind == Expression::ConstVal)
+        {
+            if( metaActuals[i]->val != other.metaActuals[i]->val )
+                return false;
+        }
+    }
+    return true;
+}

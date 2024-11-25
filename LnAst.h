@@ -230,6 +230,7 @@ namespace Ln
         RowCol importedAt;
         Declaration* resolved; // module
         Import():resolved(0),importer(0){}
+        bool equals( const Import& other) const;
     };
 
     class Statement {

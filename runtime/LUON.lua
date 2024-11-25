@@ -36,12 +36,12 @@ local CharArray = ffi.typeof("CharArray")
 local bytesize = ffi.sizeof
 local frexp = math.frexp
 
-function module.charToStringArray(str, len)
+function module.stringToCharArray(str, len)
         if str == nil then return nil end
-        local n = #str+1
-        if len == nil or len < n then len = n end
-	local a = ffi.new( CharArray, len ) 
-        ffi.copy(a, str, n)
+        local n = #str
+        if len == nil or len < n+1 then len = n+1 end
+        local a = ffi.new( CharArray, len )
+        ffi.copy(a, str)
 	return a
 end
 function module.createLuaArray(len)
@@ -165,7 +165,7 @@ function module.clone(obj, fieldcount)
             res[i] = obj[i]
         end
     elseif type(obj) == "string" then
-        return module.charToStringArray(obj)
+        return module.stringToCharArray(obj)
     else
         res = {}
         for k,v in pairs(obj) do
@@ -211,7 +211,7 @@ LUON_require = module.require
 
 -- Magic mumbers used by the compiler
 module[6] = module.assureNotNil
-module[7] = module.charToStringArray
+module[7] = module.stringToCharArray
 module[8] = module.createCharArray
 module[9] = addElemToSet
 module[10] = module.addRangeToSet
