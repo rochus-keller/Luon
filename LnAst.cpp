@@ -571,10 +571,25 @@ QByteArray Declaration::scopedName(bool withModule, bool withPath) const
         {
             ModuleData md = d->data.value<ModuleData>();
             res = md.fullName + "." + res;
-        }
-        res = d->name + "." + res;
+        }else
+            res = d->name + "." + res;
     }
     return res;
+}
+
+QByteArray Declaration::getModuleFullName(bool dots) const
+{
+    if( kind != Module )
+        return QByteArray();
+    // else
+    ModuleData md = data.value<ModuleData>();
+    if( dots )
+    {
+        QByteArray tmp = md.fullName;
+        tmp.replace('/','.');
+        return tmp;
+    }else
+        return md.fullName;
 }
 
 void Declaration::deleteAll(Declaration* d)

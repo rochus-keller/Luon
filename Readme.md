@@ -1,6 +1,6 @@
 This project implements a compiler and IDE for the Luon programming language.
 
-Luon is a high-level programming language with a syntax similar to Oberon+, aspiring to run on the LuaJIT VM and to be compatible with the Lua programming language. Luon can be regarded as a statically typed version of Lua. The name is thus a combination of "Lua" and "Oberon". 
+Luon is a high-level programming language with a syntax similar to Oberon+, Oberon-07 and Oberon-2, aspiring to run on the LuaJIT VM and to be compatible with the Lua programming language. Luon can be regarded as a statically typed version of Lua. The name is thus a combination of "Lua" and "Oberon". 
 
 The project is the result of the author's experience with the [Smalltalk-80](https://github.com/rochus-keller/Smalltalk/) and [SOM VM](https://github.com/rochus-keller/Som/) implementation, and the prospect to build a [LuaJIT based Interlisp VM](https://github.com/rochus-keller/Gingko/). 
 
@@ -16,12 +16,16 @@ In particular, Luon solves the following shortcomings recognized during the afor
 - locals can no longer be used before declaration
 - switch/case control statement to avoid writing the relation expressionall over again
 
-Here is a screenshot of the IDE (work in progress):
+Here is a screenshot of the IDE:
 
-![IDE Screenshot](http://software.rochus-keller.ch/luon-ide-screenshot-1.png)
+![IDE Screenshot 1](http://software.rochus-keller.ch/luon-ide-screenshot-0.7.0-1.png)
+
+And here is the source-level debugger of the IDE:
+
+![IDE Screenshot 2](http://software.rochus-keller.ch/luon-ide-screenshot-0.7.0-2.png)
 
 
-NOTE that this project is in an early stage and work-in-progress.
+NOTE that this project is work-in-progress.
 
 #### Planned features
 
@@ -31,6 +35,7 @@ NOTE that this project is in an early stage and work-in-progress.
 - [x] Implement a LuaJIT backend based on LjTools
 - [x] Implement an IDE similar to the Oberon+ IDE
 - [ ] Migrate the Smalltalk-80 VM to Luon as a proof-of-concept and to optimize the language
+- [ ] Document the language
 
 #### Status on October 14, 2024
 
@@ -71,6 +76,13 @@ to run the Luon Awfy suite.
 The Luon Are-we-fast-yet suite works up to Json; a significant refactoring of the code generator was necessary for this to properly intitialize all
 class objects up-front; the performance is currently slightly (1%) better than Lua, and there is room for improvement. Now after a calendar month 
 in the project, the compiler and IDE seem ready for implementing a Smalltalk VM, so let's go for it.
+
+#### Status on November 26, 2024
+
+All benchmarks of the Luon Are-we-fast-yet suite now work and show a performance equal to the Lua on LuaJIT version of the benchmark. The debugger has been significantly improved. The BYTE type and TOSTRING builtin have been added to the language.
+The Project Oberon System has been migrated to Luon; the code works so far, but for correct display output many changes would be required (maybe in future).
+The Smalltalk VM is work in progress and expected to be complete in a week. Both compiler and IDE are used to implement the Smalltalk VM and have proved to be useful so far.
+
 
 #### Precompiled versions
 

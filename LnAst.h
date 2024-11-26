@@ -121,6 +121,7 @@ namespace Ln
                     VarDecl, LocalDecl,
                     Procedure, ParamDecl,
                     Max };
+        enum { IdWidth = 16, NoSlot = (1 << IdWidth) - 1 };
         Declaration* link; // member list or imported module decl
         Declaration* outer; // the owning declaration to reconstruct the qualident
         Declaration* super; // super class or overridden method
@@ -139,11 +140,11 @@ namespace Ln
         uint hasErrors : 1;
         uint hasSubs : 1; // class/method: has overrides; module: has clients
         uint kind : 4;
-        uint id : 16; // used for built-in code and local/param number
+        uint id : IdWidth; // used for built-in code and local/param number
         QVariant data; // value for Const and Enum, path for Import, name for Extern
         Expression* expr; // const decl, enum, meta actuals
 
-        Declaration():next(0),link(0),type(0),body(0),id(0),kind(0),mode(0), visi(0),ownstype(false),expr(0),
+        Declaration():next(0),link(0),type(0),body(0),id(NoSlot),kind(0),mode(0), visi(0),ownstype(false),expr(0),
             outer(0),varParam(0),inList(0),validated(0), super(0), hasSubs(0), hasErrors(0){}
 
         QList<Declaration*> getParams(bool skipReceiver = false) const;
@@ -157,6 +158,7 @@ namespace Ln
         void appendMember(Declaration*);
         RowCol getEndPos() const;
         QByteArray scopedName(bool withModule = false, bool withPath = false) const;
+        QByteArray getModuleFullName(bool dots = false) const;
         static void deleteAll(Declaration*);
 
     private:

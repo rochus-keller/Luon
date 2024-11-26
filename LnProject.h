@@ -68,7 +68,7 @@ namespace Ln
         typedef QHash<QString,FileRef> FileHash; // FilePath -> File
         typedef QList<FileRef> FileList;
         typedef QPair<QByteArray,QByteArray> ModProc; // module.procedure or just module
-        typedef QHash<QByteArray,File*> FileByModuleName; // Module.fullName -> File
+        typedef QHash<QByteArray,QPair<File*,Declaration*> > FileByModuleName; // Module.fullName -> File, intance
 
         explicit Project(QObject *parent = 0);
         ~Project();
@@ -109,10 +109,12 @@ namespace Ln
         const FileGroup* getRootFileGroup() const;
         const FileGroup* findFileGroup(const QByteArrayList& package ) const;
         File* findFile( const QString& file ) const;
+        Declaration* findModule( const QByteArray& fullName ) const;
         void addPreload( const QByteArray& name, const QByteArray& code );
 
         Symbol* findSymbolBySourcePos(const QString& file, quint32 line, quint16 col, Declaration** = 0 ) const;
-        Symbol* findSymbolBySourcePos(Declaration*, quint32 line, quint16 col, Declaration** scopePtr) const;
+        Symbol* findSymbolByModule(Declaration*, quint32 line, quint16 col, Declaration** scopePtr = 0) const;
+        Symbol* findSymbolByModuleName(const QByteArray& fullName, quint32 line, quint16 col, Declaration** scopePtr = 0) const;
         typedef QList<QPair<Declaration*, SymList> > UsageByMod;
         UsageByMod getUsage( Declaration* ) const;
         Symbol* getSymbolsOfModule(Declaration*) const;

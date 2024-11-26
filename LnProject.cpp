@@ -237,12 +237,12 @@ Symbol* Project::findSymbolBySourcePos(const QString& file, quint32 line, quint1
     if( f == 0 || f->d_mod == 0 )
         return 0;
 
-    return findSymbolBySourcePos(f->d_mod,line,col, scopePtr);
+    return findSymbolByModule(f->d_mod,line,col, scopePtr);
 }
 
-Symbol* Project::findSymbolBySourcePos(Declaration* m, quint32 line, quint16 col, Declaration** scopePtr) const
+Symbol* Project::findSymbolByModule(Declaration* m, quint32 line, quint16 col, Declaration** scopePtr) const
 {
-    Q_ASSERT(m);
+    Q_ASSERT(m && m->kind == Declaration::Module);
     const ModuleSlot* module = findModule(m);
     if( module == 0 || module->xref.syms == 0 )
         return 0;
@@ -256,12 +256,26 @@ Symbol* Project::findSymbolBySourcePos(Declaration* m, quint32 line, quint16 col
     return 0;
 }
 
+Symbol*Project::findSymbolByModuleName(const QByteArray& fullName, quint32 line, quint16 col, Declaration** scopePtr) const
+{
+    Declaration* module = findModule(fullName);
+    if( module )
+        return findSymbolByModule(module, line, col, scopePtr);
+    else
+        return 0;
+}
+
 Project::File* Project::findFile(const QString& file) const
 {
     File* f = d_files.value(file).data();
     if( f == 0 )
-        f = d_byName.value(file.toUtf8()); // includes also generic instances
+        f = d_byName.value(file.toUtf8()).first; // includes also generic instances
     return f;
+}
+
+Declaration*Project::findModule(const QByteArray& fullName) const
+{
+    return d_byName.value(fullName).second;
 }
 
 void Project::addPreload(const QByteArray& name, const QByteArray& code)
@@ -673,7 +687,7 @@ Declaration*Project::loadModule(const Import& imp)
                 (md.metaParams.size() == md.metaActuals.size() && nonGeneric(md.metaActuals) ) )
         {
             dependencyOrder << module;
-            d_byName.insert(md.fullName,file);
+            d_byName.insert(md.fullName,qMakePair(file,module));
         }
     }
 

@@ -116,7 +116,7 @@ public:
                     bc.KSET(tmp, d->id, d->pos.packed() );
                     bc.TSET(tmp, curClass, "@cls", d->pos.packed() );
                     bc.TSET(modSlot, curClass, "@mod", d->pos.packed() );
-                    bc.KSET(tmp, d->scopedName(true), d->pos.packed());
+                    bc.KSET(tmp, d->scopedName(true, true), d->pos.packed());
                     bc.TSET(tmp, curClass, "@name", d->pos.packed() );
                     ctx.back().sellSlots(tmp);
                     ctx.back().sellSlots(curClass);
@@ -162,7 +162,7 @@ public:
                         fetchClass(baseClass, record->base, d->pos);
 #ifdef _DEBUG
                         emitAssureNotNil(curClass,QString("connectAllClassObjects metaclass of %1 is nil in %2")
-                                         .arg(d->scopedName(true).constData())
+                                         .arg(d->scopedName(true,true).constData())
                                          .arg(thisMod->name.constData()), d->pos);
 #endif
                         const int tmp = ctx.back().buySlots(3,true);
@@ -495,7 +495,7 @@ public:
         const RowCol end = p->getEndPos();
         DeclList params = p->getParams();
         ctx.push_back( Ctx(p) );
-        const int id = bc.openFunction( params.size(), p->scopedName(true), p->pos.packed(), end.packed() );
+        const int id = bc.openFunction( params.size(), p->scopedName(true,true), p->pos.packed(), end.packed() );
         Q_ASSERT( id >= 0 );
 
         QHash<quint8,QByteArray> names;

@@ -1084,7 +1084,7 @@ void Ide::onExportBc()
     LjRuntime::BytecodeList l = d_rt->findAllByteCodesOfPath(curPath);
     for( int i = 0; i < l.size(); i++ )
     {
-        QString path = dir.absoluteFilePath(l[i].first->name + ".lua");
+        QString path = dir.absoluteFilePath(l[i].first->getModuleFullName(true) + ".lua");
         QFile out(path);
         out.open(QIODevice::WriteOnly);
         out.write(l[i].second);
@@ -1994,8 +1994,7 @@ void Ide::fillStack()
             const int col = RowCol::unpackCol(l.d_line);
             const int row2 = RowCol::unpackRow(l.d_lineDefined);
             const int col2 = RowCol::unpackCol(l.d_lineDefined);
-            Project::File* f = d_rt->getPro()->findFile( l.d_source );
-            Symbol* e = d_rt->getPro()->findSymbolBySourcePos(l.d_source,row2,col2);
+            Symbol* e = d_rt->getPro()->findSymbolByModuleName(l.d_source,row2,col2);
             Declaration* ident = e ? e->decl : 0;
             if( ident )
             {
@@ -2008,8 +2007,8 @@ void Ide::fillStack()
             //qDebug() << "level" << level << ( d_scopes[level] ? d_scopes[level]->getModule()->name : QByteArray("???") );
             item->setText(2,QString("%1:%2").arg(row).arg(col));
             item->setData(2, Qt::UserRole, l.d_line );
-            if( f && f->d_mod )
-                item->setText(3, f->d_mod->name );
+            if( ident )
+                item->setText(3, ident->getModule()->getModuleFullName(true) );
             else
                 item->setText(3, QString("<unknown> %1").arg(l.d_source.constData()) );
             item->setData(3, Qt::UserRole, l.d_source );
@@ -2119,7 +2118,15 @@ static void fillRawLocals(QTreeWidget* locals, Lua::Engine2* lua)
         item->setText(0,name);
         if( v.d_value.canConvert<Lua::Engine2::VarAddress>() )
         {
-            typeAddr(item,v.d_value);
+            if( v.d_type == Lua::Engine2::LocalVar::CDATA )
+            {
+                Lua::Engine2::VarAddress addr = v.d_value.value<Lua::Engine2::VarAddress>();
+                char str[40];
+                memcpy(str,addr.d_addr,39);
+                str[39] = 0;
+                item->setText(1, QString("\"%1\"").arg(str).simplified());
+            }else
+                typeAddr(item,v.d_value);
         }else if( v.d_value.type() == QMetaType::QVariantMap )
         {
             typeAddr(item,v.d_value);
@@ -2193,14 +2200,14 @@ void Ide::fillLocals()
 #if 1
         Declaration* m = scope->getModule();
         QTreeWidgetItem* parent = new QTreeWidgetItem(d_locals);
-        QString name = m->name;
+        QString name = m->getModuleFullName(true);
         parent->setToolTip(0,name);
         if( name.size() > 20 )
             name = name.left(20) + "...";
         parent->setText(0,name);
         parent->setText(1,"<module>");
         const int before = lua_gettop(d_rt->getLua()->getCtx());
-        lua_getglobal( d_rt->getLua()->getCtx(), m->name );
+        lua_getglobal( d_rt->getLua()->getCtx(), m->getModuleFullName() );
         if( !lua_isnil( d_rt->getLua()->getCtx(), -1 ) )
         {
             const int mod = lua_gettop( d_rt->getLua()->getCtx() );
@@ -2275,6 +2282,21 @@ static QString nameOf( Type* r, bool frame = false )
     else
         name = "record";
     return name;
+}
+
+static Type* lookupType(Declaration* scope, const QByteArrayList& path)
+{
+    int i = 0;
+    while( i < path.size() && scope )
+    {
+        const QByteArray name = Token::getSymbol(path[i]);
+        scope = scope->find(name,false);
+        i++;
+    }
+    if( scope && scope->kind == Declaration::TypeDecl )
+        return scope->type;
+    else
+        return 0;
 }
 
 void Ide::printLocalVal(QTreeWidgetItem* item, Type* type, int depth)
@@ -2456,7 +2478,6 @@ void Ide::printLocalVal(QTreeWidgetItem* item, Type* type, int depth)
             }
 
             QByteArray className;
-            QByteArray superClassName;
             // look for the dynamic type
             if( lua_getmetatable(L,rec) )
             {
@@ -2464,40 +2485,31 @@ void Ide::printLocalVal(QTreeWidgetItem* item, Type* type, int depth)
                 if( !lua_isnil( L, -1 ) )
                     className = lua_tostring(L, -1);
                 lua_pop(L,1); // field
-                if( lua_getmetatable(L,-1) )
-                {
-                    lua_getfield(L, -1, "@name");
-                    if( !lua_isnil( L, -1 ) )
-                        superClassName = lua_tostring(L, -1);
-                    lua_pop(L,1); // field
-                    lua_pop(L,1); // metatable
-                }
                 lua_pop(L,1); // metatable
-#if 0
-                //lua_getfield(L, -1, "@mod");
-                lua_getfield(L, -1, "@cls");
-                if( !lua_isnil( L, -1 ) )
+
+                // show dynamic instead of static type
+                const QByteArrayList path = className.split('.');
+                Declaration* m = d_rt->getPro()->findModule(path.first());
+                if( m )
                 {
-                    // TODO show dynamic instead of static type
-                    Record* rd = r->findBySlot( lua_tointeger(L, -1) );
-                    if( rd )
-                        r = rd;
+                    const QByteArrayList path2 = path.last().split('$');
+                    Type* t = lookupType(m, path2);
+                    if( t )
+                        t = t->deref();
+                    if( t && t->form == Type::Record )
+                        r = t;
                 }
-                lua_pop(L,2); // meta + field
-#endif
             }
             if( className.isEmpty() )
                 className = QString("<no class, should be %1>").arg(nameOf(r,true)).toUtf8();
-
+            else
+                className.replace('/','.');
             item->setText(1,className);
-            if( !superClassName.isEmpty() )
+            QList<Declaration*> fields = r->fieldList();
+            foreach( Declaration* f, fields )
             {
-                QTreeWidgetItem* super = new QTreeWidgetItem(item);
-                super->setText(0,"<super>");
-                super->setText(1,superClassName);
-            }
-            foreach( Declaration* f, r->subs ) // TODO: inherited fields?
-            {
+                if( f->kind != Declaration::Field )
+                    continue;
                 QTreeWidgetItem* sub = new QTreeWidgetItem(item);
                 sub->setText(0,f->name);
                 lua_rawgeti( L, rec, f->id );
@@ -2953,7 +2965,8 @@ void Ide::showBc(const QByteArray& bc)
         QBuffer buf( &d_curBc );
         buf.open(QIODevice::ReadOnly);
         d_bcv->loadFrom(&buf);
-    }
+    }else
+        d_bcv->clear();
 }
 
 void Ide::onAbout()
@@ -2987,7 +3000,7 @@ void Ide::onExpMod()
     if( m == 0 || m->kind != Declaration::Module )
         return;
 
-    const QString path = QFileDialog::getSaveFileName( this, tr("Export Module"), m->name + ".luon" );
+    const QString path = QFileDialog::getSaveFileName( this, tr("Export Module"), m->getModuleFullName(true) + ".luon" );
 
     if( path.isEmpty() )
         return;
@@ -3076,7 +3089,7 @@ int main(int argc, char *argv[])
     a.setOrganizationName("me@rochus-keller.ch");
     a.setOrganizationDomain("github.com/rochus-keller/Luon");
     a.setApplicationName("Luon IDE (LuaJIT)");
-    a.setApplicationVersion("0.6.8");
+    a.setApplicationVersion("0.7.0");
     a.setStyle("Fusion");    
     QFontDatabase::addApplicationFont(":/font/DejaVuSansMono.ttf"); // "DejaVu Sans Mono"
 

@@ -241,7 +241,9 @@ QByteArray LjRuntime::findByteCode(const QByteArray& name) const
 {
     for( int i = 0; i < d_byteCode.size(); i++ )
     {
-        if( d_byteCode[i].first->name == name )
+        Declaration* d = d_byteCode[i].first;
+        ModuleData md = d->data.value<ModuleData>();
+        if( md.fullName == name )
             return d_byteCode[i].second;
     }
     return QByteArray();
