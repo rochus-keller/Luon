@@ -6,12 +6,12 @@ local ffi = require("ffi")
 -- File = RECORD END;
 local FileMeta = {}
 
--- Open (name: ARRAY OF CHAR): File EXTERN;
+-- Open (name: STRING): File EXTERN;
 function Files_Open(name)
 	local f = {}
 	setmetatable(f,FileMeta)
-	f.h = io.open(name,"rw")
-	if h == nil then return nil end
+        f.h = io.open(name,"rwb")
+        if f.h == nil then return nil end
 	return f
 end
 
@@ -23,12 +23,12 @@ function Files_Close(f)
 	end
 end
 
--- Delete (name: ARRAY OF CHAR):BOOLEAN EXTERN;
+-- Delete (name: STRING):BOOLEAN EXTERN;
 function Files_Delete(name)
 	-- TODO
 end
 
--- Rename (old, new: ARRAY OF CHAR;res: INTEGER):BOOLEAN EXTERN;
+-- Rename (old, new: STRING;res: INTEGER):BOOLEAN EXTERN;
 function Files_Rename(old, new)
 	-- TODO
 end
@@ -40,6 +40,7 @@ function Files_Length(f)
 	f.h:seek("end")
 	local len = f.h:seek("cur")
 	f.h:seek("set", pos)
+        return len
 end
 
 -- Seek (f: File; pos: INTEGER):BOOLEAN EXTERN;
@@ -62,7 +63,7 @@ function Files_Read(f)
 	return 0, string.byte(str,1)
 end
 
--- ReadBytes (f: File; x: ARRAY OF CHAR; n: INTEGER):INTEGER EXTERN;
+-- ReadBytes (f: File; x: ARRAY OF BYTE; n: INTEGER):INTEGER EXTERN;
 function Files_ReadBytes(f, x, n)
 	if f.h == nil then return end
 	local bytes = f.h:read(n)
@@ -76,7 +77,7 @@ function Files_Write(f, x)
 	f.h:write(string.char(x))
 end
 
--- WriteBytes (f: File; x: ARRAY OF CHAR) EXTERN;
+-- WriteBytes (f: File; x: ARRAY OF BYTE) EXTERN;
 function Files_WriteBytes(f, x, n)
 	if f.h == nil then return end
 	f.write(x)

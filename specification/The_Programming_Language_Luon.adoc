@@ -1,0 +1,1668 @@
+// This file may be used under the terms of the GNU General Public
+// License (GPL) versions 2.0 or 3.0 as published by the Free Software
+// Foundation, see http://www.gnu.org/copyleft/gpl.html for more information
+
+// missing in AsciiDoc:
+// - clear concept how to add line breaks to tables without physically breaking lines in the adoc source
+// - table in labeled list item
+// - referencable title id independent of text
+// - reference format as title number instead of name, or both combined
+
+= The Programming Language Luon
+:author: Rochus Keller 
+:email: me@rochus-keller.ch
+:revdate: 2024-11-29
+:revremark: work in progress
+:doctype: article 
+:listing-caption: Listing
+:sectnums:
+:toc: left
+
+[dedication]
+This work is based on the language reports of Oberon+, Oberon-07 and Oberon-2.
+
+== Introduction
+Luon is a general-purpose, procedural and object-oriented programming language in the tradition of Oberon+, Oberon-07 <<Wi16>> and Oberon-2 <<Mo91>>, with elements of Pascal <<Wi73>>. Even though Luon has many similarities with those languages, backward compatibility is not a goal.
+
+Luon is conceived as a statically typed alternative to scripting languages like e.g. Lua and targets the virtual machines of such dynamic languages. The name "Luon" is a combination of "Lua" and "Oberon".
+
+The most important features of Luon are block structure, modularity, separate compilation, static typing with strong type checking, generic programming footnote:[generic modules, inspired by <<Ada83>>], garbage collection, and type extension with type-bound procedures.
+ 
+The language allows several simplifications compared to previous Oberon versions: reserved words can be written in lower case, all semicolons are optional, and for some reserved words there are shorter variants; a declaration sequence can contain more than one CONST, TYPE and VAR section in arbitrary order, interleaved with procedures. 
+
+Furthermore, enumeration types, dictionary types, constructors, type-bound procedure types, explicit bit operations and exception handling have been added to the language. 
+
+This report is not intended as a programmer's tutorial. It is intentionally kept concise. Its function is to serve as a reference for programmers, implementors, and tutorial writers. What remains unsaid is mostly left so intentionally, either because it can be derived from stated rules of the language, or because it would require to commit the definition when a general commitment appears as unwise.
+
+.Luon example featuring syntactic simplifications and type parameters
+[[luon-generics-example]]
+[source,luon]
+----
+module Lists(T)
+  type
+    List* = record
+               value* : T
+               next*  : List
+             end
+
+  proc (l : List) Add* (v : T)
+  begin
+    new( l.next )
+    l.next.value := v
+  end Add
+
+  proc (l : List) Print*()
+  begin
+    println(l.value)
+  end Print
+end Lists
+
+module ListTest
+  import
+    L := Lists(integer)
+  var
+    l : L.List
+  begin
+    new(l)
+    l.value := 123
+    l.Add(456)
+    l.Print()
+    l.next.Print()
+end ListTest
+----
+
+See <<oberon-2-example, here>> for more examples.
+
+== Syntax
+An extended Backus-Naur Formalism (EBNF) is used to describe the syntax of Oberon+:
+
+ - Alternatives are separated by *|*. 
+ - Brackets *[* and *]* denote optionality of the enclosed expression.
+ - Braces *{* and *}* denote its repetition (possibly 0 times). 
+ - Syntactic entities (non-terminal symbols) are denoted by English words expressing their intuitive meaning. 
+ - Symbols of the language vocabulary (terminal symbols) are denoted by strings enclosed in quotation marks or by words in capital letters.
+
+== Vocabulary and Representation
+Luon source code is a string of characters encoded using the UTF-8 variable-width encoding as defined in ISO/IEC 10646. 
+Identifiers, numbers, operators, and delimiters are represented using the ASCII character set; strings and comments can be either represented in the ASCII or Latin-1 character set.
+
+The following lexical rules apply: blanks and line breaks must not occur within symbols (except in comments, and blanks in strings); they are ignored unless they are essential to separate two consecutive symbols. Capital and lower-case letters are considered as distinct.
+
+=== Identifiers
+Identifiers are sequences of letters, digits and underscore. The first character must be a letter or an underscore. 
+
+.Syntax:
+....
+ident  = ( letter | '_' ) { letter | digit | '_' }
+letter = 'A' ... 'Z' | 'a' ... 'z'
+digit  = '0' ... '9'
+....
+
+.Examples:
+....
+x
+Scan
+Oberon_2
+_y
+firstLetter
+....
+
+=== Numbers
+Number literals are integer or real constants. The type of an integer literal is the minimal type to which the constant value belongs (see <<Basic types>>). If the literal is specified with the suffix `H` (or `h`), the representation is hexadecimal. If the literal is specified with the suffix `O` (or `o`), the representation is octal. If the literal is specified with the suffix `B` (or `b`), the representation is binary. Otherwise the representation is decimal. Integer literals can be interspersed with underscores for better readability.
+
+A real number always contains a decimal point and at least one digit before the point. Optionally it may also contain a decimal scale factor. The letter `E` (or `e`) means _times ten to the power of_. 
+
+.Syntax:
+....
+number   = integer | real
+integer  = digit {hexDigit|'_'} ['O'|'B'|'H']
+real     = digit {digit|'_'} '.' {digit|'_'} [Exponent]
+Exponent = 'E' ['+' | '-'] digit {digit}
+hexDigit = digit | 'A' ... 'F' | 'a' ... 'f'
+digit    = '0' ... '9'
+....
+
+.Examples:
+....
+1234             
+0dh              0DH    
+12.3             
+4.567e8          4.567E8        
+0.57712566d-6    0.57712566E-6
+....
+
+=== Characters
+Character constants are denoted by the ordinal number of the character in hexadecimal notation followed by the letter `X` (or `x`).
+
+.Syntax:
+....
+character = digit {hexDigit} ('X' | 'x')
+....
+
+A character is encoded as a 8-bit code value using the ISO/IEC 8859-1 Latin-1 encoding scheme.
+
+=== Strings
+Strings are sequences of printable characters enclosed in single (') or double (") quote marks. The opening quote must be the same as the closing quote and must not occur within the string. A string must not extend over the end of a line. The number of characters in a string is called its length. A string of length 1 can be used wherever a character constant is allowed and vice versa.
+
+.Syntax:
+....
+string = ''' {character} ''' | '"' {character} '"'
+....
+
+.Examples:
+....
+'Oberon'
+"Don't worry!"
+'x'
+....
+
+==== Hex Strings
+Hex strings are sequences of bytes encoded in hexadecimal format and enclosed in dollar signs. The number of hex digits in the string must be even, two hex digits per byte. The number of bytes in a hex string is called its length. Line breaks and other white space between the dollar signs is ignored.
+
+.Syntax:
+....
+hexstring = '$' {hexDigit} '$'
+....
+
+.Examples:
+....
+const arrow = $0F0F 0060 0070 0038 001C 000E 0007 8003 
+			   C101 E300 7700 3F00 1F00 3F00 7F00 FF00$
+....
+
+[NOTE]
+Hex strings are not specified in <<Wi16>> but are used by the Project Oberon implementation, e.g. in Display.Mod. Hex strings are useful to represent all kinds of binary resources such as images and icons in the source code.
+
+=== Operators and Delimiters
+Operators and delimiters are the special characters, or character pairs listed below. 
+[cols="1,1,1,1,1,1"]
+|===
+|-    
+|, 
+|;    
+|:
+|:=    
+|.     
+|..    
+|(    
+|)
+|[    
+|]
+|{    
+|}
+|*    
+|/    
+|#     
+|^     
+|+    
+|\<=    
+|=     
+|>=    
+|\|     
+|~   
+|
+| 
+|===
+
+
+=== Reserved Words
+The reserved words consist of either all capital or all lower case letters and cannot be used as identifiers. All words listed below are reserved (only capital letter versions shown).
+[cols="1,1,1,1,1"]
+|===
+|AND
+|ARRAY    
+|BEGIN    
+|BY       
+|CASE     
+|CONST
+|DIV      
+|DO       
+|ELSE     
+|ELSIF    
+|END      
+|EXIT  
+|EXTERN 
+|FALSE     
+|FOR  
+|HASHMAP    
+|IF       
+|IMPORT       
+|IN  
+|INLINE  
+|INVAR       
+|IS          
+|LOOP    
+|MOD     
+|MODULE       
+|NIL  
+|NOT        
+|OF           
+|OR           
+|PROC
+|PROCEDURE
+|RECORD
+|REPEAT
+|RETURN
+|THEN
+|TO
+|TRUE
+|TYPE
+|UNTIL
+|VAR
+|WHILE
+|
+|
+|===
+
+[NOTE]
+TRUE and FALSE are Oberon-07, Oberon+ and Luon reserved words, but just predeclared identifiers in Oberon-2. INLINE, INVAR, AND, NOT, EXTERN, HASHMAP and PROC are Luon reserved words not present in previous Oberon versions. Both, all lower-case and upper-case versions are only reserved words in Luon. 
+
+=== Comments
+Comments are arbitrary character sequences opened by the bracket `(\*` and closed by `*)`. Comments may be nested. They do not affect the meaning of a program. Luon also supports line comments; text starting with `//` up to a line break is considered a comment.
+
+== Declarations and scope rules
+Every identifier occurring in a program must be introduced by a declaration, unless it is a predeclared identifier. Declarations also specify certain permanent properties of an object, such as whether it is a constant, a type, a variable, or a procedure. The identifier is then used to refer to the associated object.
+
+The scope of an object x is the whole block (module, procedure, or record) to which the declaration belongs and hence to which the object is local. It excludes the scopes of equally named objects which are declared in nested blocks. The scope rules are:
+
+1. No identifier may denote more than one object within a given scope (i.e. no identifier may be declared twice in a block);
+2. An object may only be referenced within its scope;
+3. The order of declaration is not significant; 
+4. Identifiers denoting record fields (see <<Record types>>) or type-bound procedures (see <<Type-bound procedures>>) are valid in record designators only. 
+
+An identifier declared in a module block may be followed by an export mark (`*` or `-`) in its declaration to indicate that it is exported. An identifier `x` exported by a module `M` may be used in other modules, if they import `M` (see <<Modules>>). The identifier is then denoted as `M.x` in these modules and is called a qualified identifier. Identifiers marked with `-` in their declaration are read-only in importing modules.
+
+.Syntax:
+....
+qualident = [ident '.'] ident
+identdef  = ident ['*' | '-']
+....
+
+The following identifiers are predeclared; their meaning is defined in the indicated sections; either all capital or all lower case identifiers are supported (only capital versions shown).
+[cols="1,1,1,1"]
+|===
+|ABS
+|ANYREC
+|ASSERT
+|BITAND
+|BITASR
+|BITNOT
+|BITOR
+|BITS
+|BITSHL
+|BITSHR
+|BITXOR
+|BOOLEAN
+|BYTE
+|CAP
+|CAST
+|CHAR
+|CHR
+|CLIP
+|COPY
+|DEC
+|DEFAULT
+|EXCL
+|FLOOR
+|FLT
+|GETENV
+|HALT
+|INC
+|INCL
+|INTEGER
+|LEN
+|MAX
+|MIN
+|NEW
+|ODD
+|ORD
+|PCALL
+|PRINT
+|PRINTLN
+|RAISE
+|REAL
+|SET
+|SETENV
+|STRING
+|STRLEN
+|TOSTRING
+|TRAP
+|TRAPIF
+|
+|
+|
+|===
+
+[NOTE]
+Both upper and lower-case versions are declare. 
+
+== Constant declarations
+A constant declaration associates an identifier with a constant value.
+
+.Syntax:
+....
+ConstDeclaration = identdef '=' ConstExpression
+ConstExpression  = expression
+....
+
+A constant expression is an expression that can be evaluated by a mere textual scan without actually executing the program. Its operands are constants (see <<Operands>>) or predeclared functions (see <<Predeclared function procedures>>) that can be evaluated at compile time. Examples of constant declarations are:
+
+.Examples:
+....
+N = 100
+limit = 2*N - 1
+fullSet = {min(set) .. max(set)}
+....
+
+[NOTE]
+For compile time calculations of values the same rules as for runtime calculation apply. The ConstExpression of ConstDeclaration behaves as if each use of the constant identifier was replaced by the ConstExpression. 
+
+== Type declarations
+A data type determines the set of values which variables of that type may assume, and the operators that are applicable. A type declaration associates an identifier with a type. In the case of structured types (arrays, dictionaries and records) it also defines the structure of variables of this type. In Luon, all structured types are allocated with NEW() or a constructor. Variables of structured types only contain a reference, not the value itself. 
+
+.Syntax:
+....
+TypeDeclaration = identdef '=' type
+type            = NamedType | ArrayType | DictType | RecordType  | ProcedureType | enumeration
+NamedType       = qualident
+....
+
+.Examples:
+....
+Table = array N of real
+Node = record
+  key: integer
+  left, right: Tree
+end
+CenterTree = CenterNode
+CenterNode = record (Node)
+  width: integer
+  subnode: Tree
+end
+Function = procedure(x: integer): integer
+....
+
+=== Basic types
+The basic types are denoted by predeclared identifiers. The associated operators are defined in <<Operators>> and the predeclared function procedures in <<Predeclared procedures>>. Either all capital or all lower case identifiers are supported (only capital versions shown). 
+
+The values of the given basic types are the following:
+
+[cols="2,1,5"]
+|====================================================
+| BOOLEAN   |  the truth values true and false
+| BYTE   	|  the integers between 0 and 255
+| CHAR      |  the characters of the Latin-1 set (0x .. 0ffx)
+| INTEGER   | the integers between MIN(INTEGER) and MAX(INTEGER)
+| REAL  	|  an IEEE 754 floating point number
+| SET       |  the sets of integers between 0 and MAX(SET)
+| STRING    | internalized, immutable strings which can be compared by reference for equality
+|====================================================
+
+INTEGER, and BYTE are integer types, REAL is a floating point type, and together they are called numeric types. The larger type includes (the values of) the smaller type according to the following relations:
+
+[[type-inclusion-relations]]
+....
+INTEGER >= BYTE
+....
+
+[NOTE]
+In contrast to Oberon+ and earlier Oberon versions, integer and floating point types are not compatible, but require explicit conversion using FLT() and FLOOR(). Type inclusion is unidirectional, i.e. INTEGER includes BYTE but not vice versa - the latter requires explicit conversion using CLIP(). 
+
+=== Array types
+An array is a structure consisting of a number of elements which are all of the same type, called the element type. The number of elements of an array is called its length. The length is a positive integer. The elements of the array are designated by indices, which are integers between 0 and the length minus 1. 
+
+.Syntax:
+....
+ArrayType  = ARRAY [ length ] OF type | '[' [ length ] ']' type
+length     = ConstExpression
+....
+
+Arrays declared without length are called _open arrays_. They can be created for any size.
+
+.Examples:
+....
+array 10 of integer
+array of char
+[N]T
+....
+
+=== Dictionary types
+A dictionary is a structure consisting of arbitrary key-value pairs. The keys and values are all of the same type, called the key and value types. New values are added to the dictionary by assigning the value to a given key. If the value is the default value of the value type, the key-value pair is removed. Accordingly, if the dictionary is indexed with a non-existing key, the default value of the value type is returned. No particular order of the keys is assumed.
+
+.Syntax
+....
+DictType = HASHMAP NamedType OF type
+....
+
+// TODO iterate dictionary
+
+=== Record types
+A record type is a structure consisting of a fixed number of elements, called fields, with possibly different types. The record type declaration specifies the name and type of each field. The scope of the field identifiers extends from the point of their declaration to the end of the record type, but they are also visible within designators referring to elements of record variables (see <<Operands>>). If a record type is exported, field identifiers that are to be visible outside the declaring module must be marked. They are called public fields; unmarked elements are called private fields.
+
+.Syntax:
+....
+RecordType = RECORD ['(' BaseType ')'] 
+             FieldList { [';'] FieldList} END
+BaseType   = NamedType
+FieldList  = [ IdentList ':' type ]
+IdentList  = identdef { [','] identdef }
+....
+
+Record types are extensible, i.e. a record type can be declared as an extension of another record type. In the example
+
+....
+T0 = record x: integer end
+T1 = record (T0) y: real end
+....
+
+T1 is a (direct) _extension_ of T0 and T0 is the (direct) base type of T1 (see <<Definition of terms>>). An extended type T1 consists of the fields of its base type and of the fields which are declared in T1. Fields declared in the extended record shadow equally named fields declared in a base type. 
+
+
+Each record is implicitly an extension of the predeclared record type ANYREC. ANYREC does not contain any fields and cannot be instantiated.
+
+.Examples:
+....
+record
+  day, month, year: integer
+end
+
+record
+  name, firstname: array 32 of char
+  age: integer
+  salary: real
+end
+....
+
+=== Dynamic allocation
+All structured types are dynamically allocated. Variables of structured types are automatically initialized with NIL.
+
+If p is a variable of a structured type, a call of the predeclared procedure `NEW(p)` (see <<Predeclared procedures>>) allocates a variable of type T on the heap. If T is a record type or an array type with fixed length, the allocation has to be done with `NEW(p)`; if T is an open array type the allocation has to be done with `NEW(p, e)` where T is allocated with length given by the expressions e. In either case a reference to the allocated instance is assigned to `p`. `p` is of type P. 
+
+
+=== Procedure types
+Variables of a procedure type T have a procedure (or NIL) as value. If a procedure P is assigned to a variable of type T, the formal parameter lists and result types (see <<Formal parameters>>) of P and T must _match_ (see <<Definition of terms>>). A procedure P assigned to a variable or a formal parameter must not be a predeclared, nor a type-bound procedure.
+
+.Syntax:
+....
+ProcedureType = PROCEDURE [FormalParameters]
+....
+
+=== Enumeration types
+An enumeration is a list of identifiers that denote the values which constitute a data type.
+These identifiers are used as constants in the program. They, and no other values, belong to
+this type. The values are ordered. and the ordering relation is defined by their sequence in
+the enumeration. The ordinal number of the first value is O, but can be explicitly set to any integer.
+
+.Syntax:
+....
+enumeration = '('  ident [ '=' ConstExpression ] { [','] ident } ')' 
+....
+
+.Examples:
+....
+(red, green, blue)
+(club, diamond, heart, spade)
+(Monday = 1, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday)
+....
+
+The ordinal number of an enumeration identifier can be obtained using the `ORD` predeclared function procedure, or by just assigning/passing to an integer type variable or parameter. `CAST` is the reverse operation. `MIN` returns the first and `MAX` the last ident of the enumeration. `INC` returns the next and `DEC` the previous ident. If T is an enumeration type then `INC(MAX(T))` and `DEC(MIN(T))` are undefined and terminate the program.
+
+== Variable declarations
+Variable declarations introduce variables by defining an identifier and a data type for them.
+
+.Syntax:
+....
+VariableDeclaration = IdentList ":" type
+....
+
+Record variables have both a static type (the type with which they are declared - simply called their type) and a dynamic type (the type of their value at run time). For variables and parameters of record type the dynamic type may be an extension of their static type. The static type determines which fields of a record are accessible. The dynamic type is used to call type-bound procedures (see <<Type-bound procedures>>).
+
+.Examples:
+....
+i, j, k: integer
+x, y: real
+p, q: bool
+s: set
+F: Function
+a: array 100 of real
+w: array 16 of record
+     name: arra 32 of char
+     count: integer
+   end
+t, c: Tree
+....
+
+== Expressions
+Expressions are constructs denoting rules of computation whereby constants and current values of variables are combined to compute other values by the application of operators and function procedures. Expressions consist of operands and operators. Parentheses may be used to express specific associations of operators and operands. 
+
+=== Operands
+With the exception of set constructors and literal constants (numbers, character constants, or strings), operands are denoted by designators. A designator consists of an identifier referring to a constant, variable, or procedure. This identifier may possibly be qualified by a module identifier (see <<Declarations and scope rules>> and <<Modules>>) and may be followed by selectors if the designated object is an element of a structure.
+
+.Syntax:
+....
+designator = qualident {selector}
+selector   = '.' ident ['^'] | '[' expression ']' | '(' [ ExpList ] ')'
+ExpList    = expression {',' expression}
+....
+
+If `a` designates an array, then `a[e]` denotes that element of `a` whose index is the current value of the expression `e`. The type of `e` must be an _integer type_. 
+
+If `r` designates a record, then `r.f` denotes the field `f` of `r` or the procedure `f` bound to the dynamic type of `r` (see <<Type-bound procedures>>). 
+
+If `a` or `r` are read-only, then also `a[e]` and `r.f` are read-only.
+
+A type guard `v(T)` asserts that the dynamic type of `v` is T (or an extension of T), i.e. program execution is aborted, if the dynamic type of `v` is not T (or an extension of T). Within the designator, `v` is then regarded as having the static type T. The guard is applicable, if
+
+. `v` is a variable or parameter of record type, and if
+. T is an extension of the static type of `v`. 
+
+If the designated object is a constant or a variable, then the designator refers to its current value. If it is a procedure, the designator refers to that procedure unless it is followed by a (possibly empty) parameter list in which case it implies an activation of that procedure and stands for the value resulting from its execution. The actual parameters must correspond to the formal parameters as in proper procedure calls (see <<Formal parameters>>).
+
+.Examples:
+....
+i                        // integer
+a[i]                     // real
+w[3].name[i]             // char
+t.left.right             // Tree
+t(CenterTree).subnode    // Tree
+....
+
+=== Operators
+Four classes of operators with different precedences (binding strengths) are syntactically distinguished in expressions. The operator `~` has the highest precedence, followed by multiplication operators, addition operators, and relations. Operators of the same precedence associate from left to right. For example, `x-y-z` stands for `(x-y)-z`. 
+
+.Syntax:
+....
+expression       = SimpleExpression [ relation SimpleExpression ]
+relation         = '=' | '#' | '<' | '<=' | '>' | '>=' | IN | IS
+SimpleExpression = ['+' | '-'] term { AddOperator term }
+AddOperator      = '+' | '-' | OR
+term             = factor {MulOperator factor}
+MulOperator      = '*' | '/' | DIV | MOD | '&' | AND
+literal          = number | string | hexstring | hexchar 
+                   | NIL | TRUE | FALSE | set 
+factor           = literal | designator [ActualParameters]  
+	               | '(' expression ')' | ['~' | NOT] factor
+ActualParameters = '(' [ ExpList ] ')'  
+set              = '{' [ element {',' element} ] '}'
+element          = expression ['..' expression]
+....
+
+
+==== Logical operators
+
+[cols="1,2,1,2"]
+|===
+| OR  |  logical disjunction  |  `p or q`  |  _if p then TRUE, else q_
+| &, AND  |  logical conjunction  |  `p & q`   |  _if p then q, else FALSE_
+| ~, NOT   |  negation             |  `~p`     |  _not p_
+|===
+
+These operators apply to BOOLEAN operands and yield a BOOLEAN result. 
+
+==== Arithmetic operators
+
+[width=50%,cols="1,3"]
+|===
+| +    |  sum
+| -    |  difference
+| *    |  product
+| /    |  real quotient
+| DIV  |  integer quotient
+| MOD  |  modulus
+|===
+
+The operators `+`, `-`, `*`, and `/` apply to operands of numeric types. The type of the result is the type of that operand which includes the type of the other operand, except for division (`/`), where the result is the smallest real type which includes both operand types. When used as monadic operators, `-` denotes sign inversion and `+` denotes the identity operation. The operators `DIV` and `MOD` apply to integer operands only. They are related by the following formulas defined for any `x` and positive divisors `y`:
+
+....
+x = (x DIV y) * y + (x MOD y)
+0 <= (x MOD y) < y
+....
+
+.Examples:
+....
+x    y    x DIV y    x MOD y
+5    3    1          2
+-5   3    -2         1
+....
+
+==== Set Operators
+
+[width=70%,cols="1,3"]
+|======================================
+| +   | union
+| -   | difference (x - y = x * (-y))
+| *   | intersection
+| /   | symmetric set difference (x / y = (x-y) + (y-x))
+|======================================
+
+
+Set operators apply to operands of type SET and yield a result of type SET. The monadic minus sign denotes the complement of `x`, i.e. `-x` denotes the set of integers between 0 and `MAX(SET)` which are not elements of `x`. Set operators are not associative (`(a+b)-c # a+(b-c)`).
+
+A set constructor defines the value of a set by listing its elements between curly brackets. The elements must be integers in the range `0..MAX(SET)`. A range `a..b` denotes all integers in the interval [a, b]. See also <<Constructors>>.
+
+==== Relations
+
+[width=50%,cols="1,3"]
+|======================================
+| =  |   equal
+| #  |   unequal
+| <  |   less
+| \<= |   less or equal
+| >  |   greater
+| >= |   greater or equal
+| IN |   set membership
+| IS |   type test
+|======================================
+
+Relations yield a BOOLEAN result. The relations `=`, `\#`, `<`, `\<=`, `>`, and `>=` apply to the numeric types, as well as enumerations, CHAR, strings, and CHAR arrays containing `0x` as a terminator. The relations `=` and `#` also apply to BOOLEAN and SET, as well as to structured and procedure types (including the value NIL). `x IN s` stands for _x is an element of s_. `x` must be of an integer type, and `s` of type SET. `v IS T` stands for _the dynamic type of `v` is T (or an extension of T )_ and is called a type test. It is applicable if
+
+. `v` is a variable or parameter of record type (which can be NIL), and if
+. T is an _extension_ of the static type of `v` (see <<Definition of terms>>).
+
+.Examples:
+....
+1991                   // integer
+i div 3                // integer
+~p or q                // boolean
+(i+j) * (i-j)          // integer
+s - {8, 9, 13}         // set
+i + x                  // real
+a[i+j] * a[i-j]        // real
+(0<=i) & (i<100)       // boolean
+t.key = 0              // boolean
+k in {i..j-1}          // boolean
+w[i].name <= "John"    // boolean
+t is CenterTree        // boolean
+....
+
+==== String operators
+
+[width=50%,cols="1,3"]
+|======================================
+| +  |   concatenation
+|======================================
+
+The concatenation operator applies to operands of string types (literals as well as char arrays and STRING types). The resulting string consists of the characters of the first operand followed by the characters of the second operand. 
+
+==== Constructors
+
+A constructor consists of an (optional) explicit type and a list of either named or anonymous components. Named and anonymous components cannot be mixed in the list. Constructors are used to create an instance of the given structured type.
+If NamedType is a record type, then there is either an anonymous component for each field of the record in the order of declaration, or there is a named component for each field in arbitrary order. If the record type has a variant part, only named component can be used, and only one option of the variant part can be initialized in the constructor.
+If NamedType is an array type, then there is an anonymous or index componend for each element of the array. The array type may be an open array in which case the number of elements is determined by the number of components.
+If NamedType is a dictionary, then there is an index component for each element to be added to the dictionary.
+For each field or element which is of record, array or dictionary type, an embedded constructor is required. Since the exact type of the field or element is known, the NamedType prefix can be left out.
+If NamedType is a SET type, then there is an anonymous or range component to specify the elements to be incuded in the set.
+If a constructor is used in an assigment or as an actual parameter, the NamedType prefix can be left out, and the type is inferred from the left side of the assignment or the formal parameter. For SET constructors, the NamedType can always be left out.
+
+.Syntax:
+....
+constructor = NamedType '{' [ component {[','] component} ] '}' 
+component = ident ':' expression | '[' expression ']' ':' expression | expression | expression '..' expression
+....
+
+.Example:
+....
+myVal := Rect{0,0,x1,y1};
+....
+
+==== Function Call
+A function call is a factor in an expression. In contrast to <<Procedure calls>> in a function call the actual parameter list is mandatory. Each expression in the actual parameters list (if any) is used to initialize a corresponding formal parameter. The number of expressions in the actual parameter list must correspond the number of formal parameters. See also <<Formal parameters>>.
+
+.Syntax:
+....
+FunctionCall           = designator ActualParameters
+ActualParameters = '(' [ ExpList ] ')'  
+....
+
+== Statements
+Statements denote actions. There are elementary and structured statements. Elementary statements are not composed of any parts that are themselves statements. They are the assignment, the procedure call, the return, and the `exit` statement. Structured statements are composed of parts that are themselves statements. They are used to express sequencing and conditional, selective, and repetitive execution. 
+
+.Syntax:
+....
+statement = [ assignment | ProcedureCall | IfStatement 
+            | CaseStatement  | LoopStatement 
+            | ExitStatement | ReturnStatement | WhileStatement
+	        | RepeatStatement | ForStatement ]
+....
+
+=== Statement sequences
+Statement sequences denote the sequence of actions specified by the component statements which are optionally separated by semicolons.
+
+.Syntax:
+....
+StatementSequence = statement { [";"] statement} 
+....
+
+=== Assignments
+Assignments replace the current value of a variable by a new value specified by an expression. The expression must be _assignment compatible_ with the variable (see <<Definition of terms>>). The assignment operator is written as `:=` and pronounced as _becomes_.
+
+.Syntax:
+....
+assignment = designator ':=' expression
+....
+
+If an expression `e` of type T~e~ is assigned to a variable `v` of type T~v~, the following happens:
+
+. if T~v~ and T~e~ are structured types, only the reference to the structured type instance is copied; 
+. if the dynamic type of `v` must be the same as the static type of `v` and is not changed by the assignment;
+. if T~v~ is `ARRAY n OF CHAR` and `e` is a string literal or STRING of length m < n, `v[i]` becomes e~i~ for i = 0..m-1 and `v[m]` becomes 0X; 
+. if T~v~ is an open CHAR array and `e` is a string literal or STRING, `v[i]` becomes `e[i]` for i = 0..STRLEN(e); if LEN(v) \<= STRLEN(e) or `e` is not terminated by 0X the program halts.
+
+.Examples:
+....
+i := 0
+p := i = j
+x := i + 1
+k := log2(i+j)
+F := log2	
+s := {2, 3, 5, 7, 11, 13}
+a[i] := (x+y) * (x-y)
+t.key := i
+w[i+1].name := "John"
+t := c
+....
+     
+=== Procedure calls
+A procedure call activates a procedure. It may contain a list of actual parameters which replace the corresponding formal parameter list defined in the procedure declaration (see <<Procedure declarations>>). The correspondence is established by the positions of the parameters in the actual and formal parameter lists. There are three kinds of parameters: _variable_ (VAR), CONST and _value_ parameters.
+
+If a formal parameter is a VAR parameter, the corresponding actual parameter must be a designator denoting a variable. If it denotes an element of a structured variable, the component selectors are evaluated when the formal/actual parameter substitution takes place, i.e. before the execution of the procedure. If the formal parameter is CONST, then the designated variable, element or field is read-only within the procedure. If a formal parameter is a value parameter, the corresponding actual parameter must be an expression. This expression is evaluated before the procedure activation, and the resulting value is assigned to the formal parameter (see also <<Formal parameters>>). 
+
+.Syntax:
+....
+ProcedureCall = designator [ ActualParameters ]
+....
+
+.Examples:
+....
+WriteInt(i*2+1)  
+inc(w[k].count)
+t.Insert("John")  
+....
+
+=== If statements
+If statements specify the conditional execution of guarded statement sequences. The boolean expression preceding a statement sequence is called its guard. The guards are evaluated in sequence of occurrence, until one evaluates to TRUE, whereafter its associated statement sequence is executed. If no guard is satisfied, the statement sequence following the symbol ELSE is executed, if there is one.
+
+.Syntax:
+....
+IfStatement    = IF expression THEN StatementSequence
+	             {ElsifStatement} [ElseStatement] END
+ElsifStatement = ELSIF expression THEN StatementSequence 
+ElseStatement  = ELSE StatementSequence
+....           
+
+.Example:
+....
+if (ch >= "A") & (ch <= "Z") then ReadIdentifier
+elsif (ch >= "0") AND (ch <= "9") then ReadNumber
+elsif (ch = "'") OR (ch = '"') then ReadString
+else SpecialCharacter
+end
+....
+
+=== Case statements
+Case statements specify the selection and execution of a statement sequence according to the value of an expression. First the case expression is evaluated, then that statement sequence is executed whose case label list contains the obtained value. The case expression must either be of an integer type that includes the types of all case labels, or an enumeration type with all case labels being valid members of this type, or both the case expression and the case labels must be of type CHAR. Case labels are constants, and no value must occur more than once. If the value of the expression does not occur as a label of any case, the statement sequence following the symbol ELSE is selected, if there is one, otherwise the program is aborted.
+
+The type T of the case expression (case variable) may also be a variable parameter of record type variable. Then each case consists of exactly one case label which must be an _extension_ of T (see <<Definition of terms>>), and in the statements S~i~ labelled by T~i~, the case variable is considered as of type T~i~. The evaluation order corresponds to the case label order; the first statement sequence is executed whose case label meets the condition.
+
+.Syntax:
+....
+CaseStatement = CASE expression OF ['|'] Case { '|' Case }
+	            [ ELSE StatementSequence ] END
+Case          = [ CaseLabelList ':' StatementSequence ]
+CaseLabelList = LabelRange { ',' LabelRange }
+LabelRange    = label [ '..' label ]
+label         = ConstExpression
+....
+
+.Examples:
+....
+case ch of
+  "A" .. "Z": ReadIdentifier
+| "0" .. "9": ReadNumber
+| "'", '"': ReadString
+else SpecialCharacter
+end
+
+type R  = record a: integer end
+	 R0 = record (R) b: integer end
+	 R1 = record (R) b: real end
+	 R2 = record (R) b: set end
+	 P  = R
+	 P0 = R0
+	 P1 = R1
+	 P2 = R2
+var p: P
+case p of
+	| P0: p.b := 10
+	| P1: p.b := 2.5
+	| P2: p.b := {0, 2}
+	| NIL: p.b := {}
+end
+....
+
+=== While statements
+While statements specify the repeated execution of a statement sequence while the Boolean expression (its guard) yields TRUE. The guard is checked before every execution of the statement sequence.
+
+.Syntax:
+....
+WhileStatement = WHILE expression DO StatementSequence END
+....
+
+.Examples:
+....
+while i > 0 do i := i div 2; k := k + 1 end
+
+while (t # nil) & (t.key # i) do t := t.left end
+
+....
+
+=== Repeat statements
+A repeat statement specifies the repeated execution of a statement sequence until a condition specified by a Boolean expression is satisfied. The statement sequence is executed at least once.
+
+.Syntax:
+....
+RepeatStatement = REPEAT StatementSequence UNTIL expression
+....
+
+=== For statements
+A for statement specifies the repeated execution of a statement sequence while a progression of values is assigned to a control variable of the for statement. Control variables can be of integer or enumeration types. An explicit BY expression is only supported for integer control variables. 
+
+.Syntax:
+....
+ForStatement = FOR ident ':=' expression TO expression 
+			   [BY ConstExpression]
+	           DO StatementSequence END
+....
+	
+The statement
+
+....
+for v := first to last by step do statements end
+....
+
+is equivalent to
+
+....
+temp := last; v := first
+if step > 0 then
+    while v <= temp do statements; INC(v,step) end
+else
+    while v >= temp do statements; DEC(v,-step) end
+end
+....
+
+temp has the same type as `v`. For integer control variables, step must be a nonzero constant expression; if step is not specified, it is assumed to be 1. For enumeration control variables, there is no explicit step, but the INC or DEC version of the while loop is used depending on ORD(first) <= ORD(last).
+
+.Examples:
+....
+for i := 0 to 79 do k := k + a[i] end
+for i := 79 to 1 by -1 do a[i] := a[i-1] end
+....
+
+=== Loop statements
+A loop statement specifies the repeated execution of a statement sequence. It is terminated upon execution of an exit statement within that sequence (see <<Return and exit statements>>).
+
+.Syntax:
+....
+LoopStatement = LOOP StatementSequence END
+ExitStatement = EXIT
+....
+
+.Example:
+....
+loop
+  ReadInt(i)
+  if i < 0 then exit end
+  WriteInt(i)
+end
+....
+
+Loop statements are useful to express repetitions with several exit points or cases where the exit condition is in the middle of the repeated statement sequence. 
+
+=== Return and exit statements
+A return statement indicates the termination of a procedure. It is denoted by the symbol RETURN, followed by an expression if the procedure is a function procedure. The type of the expression must be assignment compatible (see <<Definition of terms>>) with the result type specified in the procedure heading (see <<Procedure declarations>>).
+
+.Syntax:
+....
+ReturnStatement = RETURN [ expression ] 
+ExitStatement   = EXIT
+....
+
+Function procedures require the presence of a return statement indicating the result value. In proper procedures, a return statement is implied by the end of the procedure body. Any explicit return statement therefore appears as an additional (probably exceptional) termination point.
+
+[NOTE]
+The optional expression causes an LL(k) ambiguity which can be resolved in that the parser expects a return expression if the procedure has a return type and vice versa.
+
+An exit statement is denoted by the symbol EXIT. It specifies termination of the enclosing loop statement and continuation with the statement following that loop statement. Exit statements are contextually, although not syntactically associated with the loop statement which contains them. 
+
+=== Exception handling
+
+Exception handling is implemented using the predeclared procedures PCALL and RAISE (see <<Predeclared proper procedures>>), without any special syntax. There are no predefined exceptions. 
+
+An exception is a record. This record is passed as an actual argument to RAISE. If the argument is nil instead, the program execution aborts. RAISE may be called without an argument in which case the compiler provides an allocated record the exact type of which is not relevant. RAISE never returns, but control is transferred from the place where RAISE is called to the nearest dynamically-enclosing call of PCALL. When calling RAISE without a dynamically-enclosing call of PCALL the program execution is aborted.
+
+PCALL executes a protected call of the procedure or procedure type P. P is passed as the second argument to PCALL. P cannot have a return type. P can be a type-bound procedure type. P can be a nested procedure, even if it accesses local variables or parameters of an outer procedure. If P has formal parameters the corresponding actual parameters are passed to PCALL immediately after P. The actual parameters must be _parameter compatible_ with the formal parameters of P (see <<Definition of terms>>). The first parameter R of PCALL is of type ANYREC; if RAISE(E) is called in the course of P, then R is set to E; otherwise R is set to NIL. The state of VAR parameters of P or local variables or parameters of an outer procedure accessed by P is non-deterministic in case RAISE is called in the course of P.
+
+
+.Example:
+----
+module ExceptionExample
+  type Exception = record end
+  proc Print(in str: array of char)
+    var e: Exception 
+  begin
+    println(str)
+    new(e)
+    raise(e)
+    println("this is not printed")
+  end Print
+  var res: anyrec
+begin
+  pcall(res, Print, "Hello World")
+  case res of
+  | Exception: println("got Exception")
+  | anyrec: println("got anyrec")
+  | nil: println("no exception")
+  else
+    println("unknown exception")
+    // could call raise(res) here to propagate the exception
+  end
+end ExceptionExample
+----
+
+
+== Procedure declarations
+A procedure declaration consists of a procedure heading and a procedure body. The heading specifies the procedure identifier and the formal parameters (see <<Formal Parameters>>). For type-bound procedures it also specifies the receiver parameter. The body contains declarations and statements. The procedure identifier must be repeated at the end of the procedure declaration unless it has no body.
+
+There are two kinds of procedures: proper procedures and function procedures. The latter are activated by a function designator as a constituent of an expression and yield a result that is an operand of the expression. Proper procedures are activated by a procedure call. A procedure is a function procedure if its formal parameters specify a result type. Each control path of a function procedure must return a value.
+
+All constants, variables, types, and procedures declared within a procedure body are local to the procedure. Since procedures may be declared as local objects too, procedure declarations may be nested. The call of a procedure within its declaration implies recursive activation.
+
+Nested procedures can access the constant, type and procedure declarations of the surrounding procedures, but neither their local variables or parameter. 
+
+
+A procedure body may have no statements in which case the ident after the END reserved word can also be left out; in a function procedure with no statements a return statement with a default value is assumed.
+
+.Syntax:
+....
+ProcedureDeclaration = ProcedureHeading ( 
+						[ ';' ] 'EXTERN 
+						| [INLINE] [ ';' ] (ProcedureBody | END )
+ProcedureHeading     = ( PROCEDURE | PROC ) 
+					   [Receiver] identdef [ FormalParameters ]
+ProcedureBody        = DeclarationSequence block END ident
+block 				= BEGIN StatementSequence
+Receiver             = '(' ident ':' ident ')'
+DeclarationSequence  = { CONST { ConstDeclaration [';'] } 
+					   | TYPE { TypeDeclaration [';'] } 
+					   | VAR { VariableDeclaration [';'] } 
+					   | ProcedureDeclaration [';'] }
+....
+
+If a procedure declaration specifies a receiver parameter, the procedure is considered to be bound to a type (see <<Type-bound procedures>>). 
+
+
+=== Formal parameters
+Formal parameters are identifiers declared in the formal parameter list of a procedure. They correspond to actual parameters specified in the procedure call. The correspondence between formal and actual parameters is established when the procedure is called. There are three kinds of parameters, value, variable (VAR) and CONST parameters, indicated in the formal parameter list by the absence or presence of the reserved words VAR and CONST. 
+
+Value parameters are local variables to which the value of the corresponding actual parameter is assigned as an initial value. VAR parameters correspond to actual parameters that are variables, and they stand for these variables. 
+
+CONST parameters are like value parameters, but they are read-only in the procedure body. If a CONST parameters is of structured type, then also the elements or fields are transitively read-only in the procedure body.
+
+The scope of a formal parameter extends from its declaration to the end of the procedure block in which it is declared. A function procedure without parameters must have an empty parameter list. It must be called by a function designator whose actual parameter list is empty too. 
+
+[NOTE]
+The return type of a procedure may also be a structured type, and it is possible to ignore the return value of a function procedure call.
+
+.Syntax:
+....
+FormalParameters = '(' [ FPSection { [';'] FPSection } ] ')' 
+                   [ ':' ReturnType ]
+ReturnType       = NamedType
+FPSection        = [ VAR | CONST ] ident { [','] ident } 
+                   ':' FormalType 
+FormalType       = type
+....
+
+.Examples:
+....
+proc ReadInt(var x: integer)
+  var i: integer; ch: char
+begin i := 0; Read(ch)
+  while ("0" <= ch) & (ch <= "9") do
+    i := 10*i + (ord(ch)-ord("0")); Read(ch)
+  end
+  x := i
+end ReadInt
+
+proc WriteInt(x: integer) // 0 <= x <100000
+var i: integer; buf: [5]integer
+begin i := 0
+  repeat buf[i] := x mod 10; x := x div 10; inc(i) until x = 0
+  repeat dec(i); Write(chr(buf[i] + ord("0"))) until i = 0
+end WriteInt
+
+proc WriteString(s: []char)
+  var i: integer
+begin i := 0
+  while (i < len(s)) & (s[i] # 0x) do Write(s[i]); inc(i) end
+end WriteString
+
+proc log2(x: integer): integer
+  var y: integer // assume x>0
+begin
+  y := 0; while x > 1 do x := x div 2; inc(y) end
+  return y
+end log2
+....
+
+=== Type-bound procedures
+Procedures may be associated with a record type declared in the same scope. The procedures are said to be bound to the record type. The binding is expressed by the type of the receiver in the heading of a procedure declaration. The procedure is bound to the type T and is considered local to it.
+
+.Syntax:
+....
+ProcedureHeading = ( PROCEDURE | PROC ) 
+				   [Receiver] identdef [ FormalParameters ]
+Receiver         = '(' ident ':' ident ')'
+....
+
+If a procedure P is bound to a type T0, it is implicitly also bound to any type T1 which is an extension of T0. However, a procedure P' (with the same name as P) may be explicitly bound to T1 in which case it overrides the binding of P. P' is considered a redefinition of P for T1. The formal parameters of P and P' must _match_ (see <<Definition of terms>>). If P and T1 are exported (see <<Declarations and scope rules>>), P' must be exported too.
+
+[NOTE]
+The name of a type-bound procedure must be unique within the type to which it is bound, not within the scope in which it is declared.
+
+If `v` is a designator and `P` is a type-bound procedure, then `v.P` denotes that procedure `P` which is bound to the dynamic type of `v`. Note, that this may be a different procedure than the one bound to the static type of `v`. `v` is passed to `P`'s receiver according to the parameter passing rules specified in Chapter <<Formal parameters>>.
+
+If `r` is the receiver parameter of P declared with type T, `r.P^` denotes the (redefined, sometimes calles _super_) procedure P bound to a base type of T. 
+
+.Examples:
+....
+proc (t: Tree) Insert (node: Tree)
+  var p, father: Tree
+begin p := t
+  repeat father := p
+    if node.key = p.key then return end
+    if node.key < p.key then
+      p := p.left
+    else
+      p := p.right
+    end
+  until p = nil
+  if node.key < father.key then
+    father.left := node
+  else
+    father.right := node
+  end
+  node.left := nil; node.right := nil
+end Insert
+
+proc (t: CenterTree) Insert (node: Tree) // redefinition
+begin
+  WriteInt(node(CenterTree).width)
+  t.Insert^(node)  // calls the Insert procedure bound to Tree
+end Insert
+....
+
+Type-bound procedure declarations may be nested and have access to constants, types and procedures declared in the environment of the type-bound procedure (unless concealed by a local declaration), but they don’t have access to the parameters or local variables of outer procedures.
+
+=== Type-bound procedure types
+Variables of a type-bound procedure type T have a type-bound procedure or NIL as value. To assign a type-bound procedure P to a variable of a type-bound procedure type T, the right side of the assignment must be a designator of the form `v.P`, where `v` is a record and `P` is a procedure bound to this record. Note, that the dynamic type of `v` determines which procedure is assigned; this may be a different procedure than the one bound to the static type of `v`. The formal parameter lists and result types (see <<Formal parameters>>) of P and T must _match_ (see <<Definition of terms>>). The same rules apply when passing a type-bound procedure to a formal argument of a type-bound procedure type.
+
+.Syntax:
+....
+ProcedureType = PROCEDURE '^' [FormalParameters]
+....
+
+
+=== Predeclared procedures
+The following table lists the predeclared procedures. Some are generic procedures, i.e. they apply to several types of operands. `v` stands for a variable, `x` and `n` for expressions, and T for a type.
+
+==== Predeclared function procedures
+
+[%header,cols="1,2,2,3"] 
+|===
+|Name        |Argument type        |Result type    |Function
+|ABS(x)      |numeric type         |type of x      |absolute value
+|CAP(x)      |CHAR                 |CHAR           |corresponding capital letter (only for the ASCII subset of the CHAR type)
+|BITAND(x,y) |x, y: INTEGER        |INTEGER        |bitwise AND; all bit operations support at least MAX(SET)+1 bits resolution
+|BITASR(x,n) |x, n: INTEGER        |INTEGER        |arithmetic shift right by n bits, where n >= 0 and n <= MAX(SET)
+|BITNOT(x)   |x: INTEGER           |INTEGER        |bitwise NOT
+|BITOR(x,y)  |x, y: INTEGER        |INTEGER        |bitwise OR
+|BITS(x)	 |x: INTEGER		   |SET			   |set corresponding to the integer; the first element corresponds to the least significant digit of the integer and the last element to the most significant digit. x is clipped to MAX(SET)+1 bits. 
+|BITSHL(x,n) |x, n: INTEGER        |INTEGER        |logical shift left by n bits, where n >= 0 and <= MAX(SET)
+|BITSHR(x,n) |x, n: INTEGER        |INTEGER        |logical shift right by n bits, where n >= 0 and n <= MAX(SET)
+|BITXOR(x,y) |x, y: INTEGER        |INTEGER        |bitwise XOR
+|CAST(T,x)	 |T:enumeration type x:ordinal number|enumeration type|the enum item with the ordinal number x; halt if no match
+|CHR(x)      |x: INTEGER           |CHAR           |Latin-1 character with ordinal number x; x is clipped to 8 bits
+|CLIP(x)     |x: INTEGER		   |BYTE           |clips x to 8 bits
+|DEFAULT(T)  |T = basic type       |T              |zero for numeric and character types, false for boolean, empty set
+|            |T = enumeration type |T              |same as MIN(T)
+|            |T = proc type        |T              |nil
+|            |T = structured type  |T              |nil
+|FLOOR(x)    |x: REAL              |INTEGER        |largest integer not greater than x
+|FLT(x)      |x: INTEGER           |REAL           |Convert integer to real type; accepting potential loss of information
+|LEN(v)      |v: array             |INTEGER        |allocated length of the array
+|            |v: STRING            |INTEGER        |length of STRING (including the terminating 0X)
+|MAX(T)      |T = basic type       |T              |maximum value of type T
+|            |T = SET              |INTEGER        |maximum element of a set
+|            |T = enumeration type |T              |last element of the enumeration
+|MAX(x,y)    |x,y: numeric type    |numeric type   |greater of x and y, returns smallest numeric type including both arguments
+|MIN(T)      |T = basic type       |T              |minimum value of type T
+|            |T = SET              |INTEGER        |0
+|            |T = enumeration type |T              |first element of the enumeration
+|MIN(x,y)    |x,y: numeric type    |numeric type   |smaller of x and y, returns smallest numeric type including both arguments
+|ODD(x)      |x: INTEGER           |BOOLEAN        |x MOD 2 = 1
+|ORD(x)      |x: CHAR              |INTEGER        |ordinal number of x
+|            |x: enumeration type  |INTEGER        |ordinal number of the given identifier
+|            |x: BOOLEAN           |INTE           |TRUE = 1, FALSE = 0
+|            |x: set type		   |INTEGER		   |number representing the set; the first element corresponds to the least significant digit of the number and the last element to the most significant digit. 
+|STRLEN(s)   |s: array of char     |INTEGER        |dynamic length of the string up to and not including the terminating 0X
+|            |s: STRING            |               |
+|TOSTRING(x) |x: any type	       |STRING		   |returns a STRING representation of x
+|===  
+
+
+.Exampes:
+....
+FLOOR(1.5) = 1; FLOOR(-1.5) = -2
+....
+
+
+==== Predeclared proper procedures
+
+[%header,cols="1,2,3"] 
+|===
+|Name               |Argument types                |Function
+|ASSERT(x)          |x: Boolean expression         |terminate program execution if not x
+|COPY(x, y)         |x, y: structured types        |creates a (shallow) copy of the y instance and assigns it to x
+|					|x: ARRAY OF CHAR; y: STRING   |creates an open CHAR array of length STRLEN(y)+1 and copies all characters including terminating 0x
+|DEC(v)             |integer type                  |v := v - 1
+|                   |enumeration type              |previous ident in enumeration
+|DEC(v, n)          |v, n: integer type            |v := v - n
+|EXCL(v, x)         |v: SET; x: integer type       |v := v - {x}
+|HALT(n)            |integer constant              |terminate program execution
+|INC(v)             |integer type                  |v := v + 1
+|                   |enumeration type              |next ident in enumeration
+|INC(v, n)          |v, n: integer type            |v := v + n
+|INCL(v, x)         |v: SET; x: integer type       |v := v + {x}
+|NEW(v)             |record, fixed array, dictionary |allocates a new instance initialized with default values and sets v to the reference
+|NEW(v, x)   		|open array  					|like NEW(v) for a fixed array of length x
+|PCALL(e,p,a~0~,...,a~n~)|VAR e: anyrec; p: proper procedure type; a~i~: actual parameters |call procedure type p with arguments a~0~...a~n~ corresponding to the parameter list of p; e becomes nil in normal case and gets the record passed to RAISE() otherwise
+|PRINT(v)			|v: any type					|prints a representation of v to the terminal
+|PRINTLN(v)			|v: any type                    |like PRINT, but adds a new line afterwards
+|RAISE(e)			|e: anyrec		   |terminates the last protected function called and returns e as the exception value; RAISE() never returns
+|===
+
+In `HALT(n)`, the interpretation of `n` is left to the underlying system implementation. 
+
+A compiler can add the TRAP and TRAPIF(cond) procedures to trigger a break in the debugger at the position, with an optional condition
+
+The predeclared procedure NEW is used to allocate data blocks in free memory. There is, however, no way to explicitly dispose an allocated block. Rather, the Luon runtime uses a garbage collector to find the blocks that are not used any more and to make them available for allocation again. A block is in use as long as it can be reached from a variable via a reference chain. Cutting this chain (e.g., setting a variable to NIL) makes the block collectable.
+
+
+== Modules
+A module is a collection of declarations of constants, types, variables, and procedures, together with a sequence of statements for the purpose of assigning initial values to the variables. A module constitutes a text that is compilable as a unit (compilation unit).
+
+.Syntax:
+....
+module     = MODULE ident [ MetaParams ] [';'] 
+             { ImportList | DeclarationSequence }
+	         [ BEGIN StatementSequence ] END ident ['.']
+ImportList = IMPORT import { [','] import } [';']
+import     = [ ident ':=' ] ImportPath ident [ MetaActuals ] 
+ImportPath = { ident '.' } 
+....
+
+The import list specifies the names of the imported modules. If a module A is imported by a module M and A exports an identifier `x`, then `x` is referred to as `A.x` within M. 
+
+If A is imported as `B := A`, the object `x` must be referenced as `B.x`. This allows short alias names in qualified identifiers. 
+
+In Luon the import can refer to a module by means of a module name optionally prefixed with an import path. There is no requirement that the import path actually exists in the file system, or that the source files corresponding to an import path are in the same file system directory. It is up to the compiler, how source files are mapped to import paths. An imported module with no import path is first looked up in the import path of the importing module.
+
+A module must not import itself. 
+
+Identifiers that are to be exported (i.e. that are to be visible in client modules) must be marked by an export mark in their declaration (see Chapter <<Declarations and scope rules>>).
+
+
+The statement sequence following the symbol BEGIN is executed when the module is loaded, which is done after the imported modules have been loaded. It follows that cyclic import of modules is illegal. 
+
+.Example with more traditional syntax
+[[oberon-2-example]]
+[source,oberon]
+----
+MODULE Lists;
+	IMPORT Out;
+    TYPE
+        List*    = ListNode;
+        ListNode = RECORD
+            value : INTEGER;
+            next  : List;
+        END;
+
+    PROCEDURE (l : List) Add* (v : INTEGER);
+    BEGIN
+        IF l = NIL THEN
+            NEW(l);           (* create record instance *)  
+            l.value := v
+        ELSE
+            l.next.Add(v)      
+        END
+    END Add;
+    
+    PROCEDURE (t: List) Write*;
+    BEGIN
+    	Out.Int(t.value,8); Out.Ln;
+    	IF t.next # NIL THEN t.next.Write END;
+    END Write;
+END Lists.
+----
+
+.<<oberon-2-example, Same example>> with syntactic simplifications
+[source,oberon]
+----
+module Lists2
+	import Out
+    type
+        List*     = record
+            value : integer
+            next  : List
+        end
+
+    proc (l : List) Add* (v : integer) 
+    begin
+        if l = nil then
+            new(l)           // create record instance
+            l.value := v
+        else
+            l.next.Add(v)      
+        end
+    end Add
+    
+    proc (t: List) Write*
+    begin
+    	Out.Int(t.value,8); Out.Ln
+    	if t.next # nil then t.next.Write end
+    end Write
+end Lists2
+----
+
+=== Generics
+Modules can be made generic by adding formal meta parameters. Meta parameters represent types or constants; the latter include procedures. Meta parameters default to types, but can be explicitly prefixed with the TYPE reserved word; the CONST prefix designates a constant meta parameter. A meta parameter can be constrained with a named type, in which case the actual meta parameter must correspond to this type; the correspondence is established when the generic module is instantiated; the type of the actual meta parameter must be assignment compatible with the constraint type (see <<Definition of terms>>).
+
+Generic modules can be instantiated with different sets of meta actuals which enables the design of reusable algorithms and data structures. The instantiation of a generic module occurs when importing it. A generic module can be instantiated more than once in the same module with different actual meta parameters. See also <<Modules>>.
+
+.Syntax:
+....
+MetaParams       = '(' MetaSection { [';'] MetaSection } ')'
+MetaSection      = [ TYPE | CONST ] ident { [','] ident } [ ':' TypeConstraint ]
+TypeConstraint   = NamedType
+MetaActuals      = '(' ConstExpression { [','] ConstExpression } ')' 
+module = MODULE ident [ MetaParams ] [';'] { ImportList | DeclarationSequence }
+	[ BEGIN StatementSequence ] END ident ['.']
+ImportList = IMPORT import { [','] import } [';']
+import = [ ident ':=' ] ImportPath ident [ MetaActuals ] 
+....
+
+
+Meta parameters can be used within the generic module like normal types or constants. If no type constraint is present, the types and constants can be used wherever no information about the actual type is required; otherwise the type constraint determines the permitted operations. The rules for _same types_ and _equal types_ apply analogously to meta parameters, and subsequently also the corresponding assignment, parameter and array compatibility rules. 
+
+[NOTE]
+It follows that a type meta parameter can only be the base type of a record, if a record constraint is present(because in absence of the type constraint we don't know before instantiation whether the type parameter represents e.g. a record or not); but it is e.g. possible to use a record declared in the same or another generic module as a base type.
+
+See also <<obx-generics-example, this example>>.
+
+== Source code directives
+Source code directives are used to set configuration variables in the source text and to select specific pieces of the source text to be compiled (conditional compilation). Luon uses the syntax recommended in <<Oak95>>.
+
+=== Configuration Variables
+
+Configuration variables can be set or unset in the source code using the following syntax: 
+
+.Syntax:
+....
+directive = '<*' ident ( '+' | '-' ) '*>'
+....
+
+Each variable is named by an ident which follows the syntax specified in <<Identifiers>>. Variable names have compilation unit scope which is separate from all other scopes of the program. Configuration variable directives can be placed anywhere in the source code. The directive only affects the present compilation unit, starting from its position in the source code. 
+
+.Example:
+....
+<* WIN32+ *>
+<* WIN64- *>
+....
+
+[NOTE]
+Usually the compiler provides the possibility to set configuration variables, e.g. via command line interface.
+
+=== Conditional compilation
+
+Conditional compilation directives can be placed anywhere in the source code. The following syntax applies:
+
+.Syntax:
+....
+directive = '<*' [ scIf | scElsif | scElse | scEnd ] '*>'
+scIf   	  = IF scExpr THEN 
+scElsif   = ELSIF condition THEN 
+scElse 	  = ELSE
+scEnd 	  = END
+condition = scTerm { OR scTerm }
+scTerm 	  = scFactor {'&' scFactor}
+scFactor  = ident | '(' condition ')' | '~' scFactor
+....
+
+An ELSIF or ELSE directive must be preceded by an IF or another ELSIF directive. Each IF directive must be ended by an END directive. The directives form sections of the source code. Only the section the condition of which is TRUE (or the section framed by ELSE and END directive otherwise) is visible to the compiler. Conditions are boolean expressions. Ident refers to a configuration variable. When a configuration variable is not explicitly set it is assumed to be FALSE. Each section can contain nested conditional compilation directives. 
+
+.Example:
+....
+<* if A then *>
+  println("A")
+<* elsif B & ~C then *> 
+  println("B & ~C")
+<* else *> 
+  println("D")
+<* end *> 
+....
+
+[appendix]
+== Definition of terms
+
+Integer types::
+    BYTE, INTEGER 
+    
+Real types::
+    REAL
+    
+Numeric types::
+    integer types, real types 
+    
+Same types::
+    Two variables a and b with types T~a~ and T~b~ are of the same type if
+
+    1. T~a~ and T~b~ are both denoted by the same type identifier, or
+    2. T~a~ is declared to equal T~b~ in a type declaration of the form T~a~ = T~b~, or
+    3. a and b appear in the same identifier list in a variable, record field, or formal parameter declaration. 
+
+Equal types::
+    Two types T~a~ and T~b~ are equal if
+
+    1. T~a~ and T~b~ are the _same type_, or
+    2. T~a~ and T~b~ are open array types with _equal element types_, or
+    3. T~a~ and T~b~ are procedure types whose formal parameters _match_.
+
+Type inclusion::
+    Numeric types include (the values of) smaller numeric types. See <<type-inclusion-relations, here>> for more information.
+	
+Type extension::
+    Given a type declaration T~b~ = RECORD(T~a~)...END, T~b~ is a direct extension of T~a~, and T~a~ is a direct base type of T~b~. A type T~b~ is an extension of a type T~a~ (T~a~ is a base type of T~b~) if
+
+    1. T~a~ and T~b~ are the _same types_, or
+    2. T~b~ is a direct extension of T~a~.
+    3. T~a~ is of type ANYREC.
+    
+    
+Assignment compatible::
+    An expression e of type T~e~ is assignment compatible with a variable v of type T~v~ if one of the following conditions hold:
+
+    . T~e~ and T~v~ are the _same type_;
+    . T~e~ and T~v~ are numeric types and T~v~ _includes_ T~e~;
+    . T~e~ and T~v~ are record types and T~e~ is a _type extension_ of T~v~ and the dynamic type of v is T~v~;
+    . T~v~ is a structured or a procedure type and `e` is NIL;
+    . T~e~ is an open array and T~v~ is an array of _equal_ base type;
+    . T~v~ is an array of CHAR, T~e~ is a Latin-1 string literal or STRING, and STRLEN(e) < LEN(v);
+    . T~v~ is a procedure type and `e` is the name of a procedure whose formal parameters _match_ those of T~v~. 
+
+
+Parameter compatible::
+	An actual parameter `a` of type T~a~ is parameter compatible with a formal parameter `f` of type T~f~ if
+	
+	1.  T~f~ and T~a~ are _equal_ types, or
+	2.  `f` is a value parameter and T~a~ is _assignment compatible_ with T~f~, or
+	3.  `f` must be the _same type_ as T~f~, or T~f~ must be a record type and T~a~ an _extension_ of T~f~.
+
+
+
+Expression compatible::
+    For a given operator, the types of its operands are expression compatible if they conform to the following table (which shows also the result type of the expression). CHAR arrays that are to be compared must contain 0X as a terminator. Type T1 must be an extension of type T0:
+
+[%header,cols="1,2,2,3"] 
+|===
+|operator  |first operand       |second operand      |result type
+|+ - *     |numeric             |numeric             |smallest numeric type including both operands
+|/         |numeric             |numeric             |smallest real type type including both operands
+|+ - * /   |SET                 |SET                 |SET
+|DIV MOD   |integer             |integer             |smallest integer type type including both operands
+|OR AND & NOT ~    |BOOLEAN             |BOOLEAN             |BOOLEAN
+|= # <  \<= > >= |numeric             |numeric             |BOOLEAN
+|          |CHAR                |CHAR                |BOOLEAN
+|          |CHAR array, string   |CHAR array, string   |BOOLEAN
+|= #       |BOOLEAN             |BOOLEAN             |BOOLEAN
+|          |SET                 |SET                 |BOOLEAN
+|          |NIL, structured type T0 or T1   |NIL, structured type T0 or T1    |BOOLEAN
+|          |procedure type T, NIL   |procedure type T, NIL  |BOOLEAN
+|IN        |integer             |SET                 |BOOLEAN
+|IS        |type T0             |type T1             |BOOLEAN
+|===
+
+Matching formal parameter lists::
+    Two formal parameter lists match if
+
+    . they have the same number of parameters, and
+    . parameters at corresponding positions have _equal types_, and
+    . parameters at corresponding positions are both either value, VAR or CONST parameters. 
+    
+Matching result types::
+    The result types of two procedures match if they are either the _same type_ or none. 
+
+[appendix]
+== Syntax of Luon
+
+....
+qualident = [ ident '.' ] ident  
+identdef = ident [ '*' | '-' ] 
+ConstDeclaration = identdef  '=' ConstExpression 
+ConstExpression = expression
+TypeDeclaration = identdef 	'=' type
+type = NamedType | ArrayType | DictType | RecordType | ProcedureType | enumeration
+NamedType = qualident
+ArrayType = ARRAY [ length ] 'OF' type | '[' [ length ] ']' type
+length = ConstExpression 
+DictType = HASHMAP NamedType OF type
+RecordType = RECORD ['(' BaseType ')'] { FieldList [ ';' ] } END
+BaseType = NamedType
+FieldList = IdentList ':' type 
+IdentList = identdef { [','] identdef}
+enumeration = '(' constEnum ')'                       
+constEnum = ident [ '=' ConstExpression ] { [','] ident }
+VariableDeclaration = IdentList ':' type
+designator = qualident {selector}
+selector = '.' ident ['^'] | '[' expression ']' | '(' [ ExpList ] ')' 
+ExpList = expression { [','] expression }
+expression = SimpleExpression [ relation SimpleExpression ]
+relation = '=' | '#' | '<' | '<=' | '>' | '>=' | IN | IS
+SimpleExpression = ['+' | '-'] term { AddOperator term }
+AddOperator = '+' | '-' | OR
+term = factor {MulOperator factor}
+MulOperator = '*' | '/' | DIV | MOD | '&' | AND
+literal = number | string | hexstring | hexchar | NIL | TRUE | FALSE
+constructor = [NamedType] '{' [ component {[','] component} ] '}'  
+component =  ident ':' expression 
+        | '[' expression ']' ':' expression 
+        | expression ['..' expression] 
+factor = constructor
+        | literal
+		| designator [ActualParameters]
+		| '(' expression ')' 
+		| ('~'| NOT) factor 
+statement =  designator [ActualParameters]
+		| designator  [ ':=' expression ]
+		| IfStatement | CaseStatement | LoopStatement 
+		| ExitStatement | ReturnStatement 
+		| WhileStatement | RepeatStatement | ForStatement
+StatementSequence =  { statement { ';' } } 
+IfStatement = IF expression THEN StatementSequence { ElsifStatement } [ ElseStatement ] END
+ElsifStatement = ELSIF expression THEN StatementSequence 
+ElseStatement = ELSE StatementSequence
+CaseStatement = CASE expression OF [Case] { '|' Case } [ELSE StatementSequence] END
+Case = CaseLabelList ':' StatementSequence
+CaseLabelList = LabelRange { [','] LabelRange }
+LabelRange = label [ '..' label ]
+label = ConstExpression
+WhileStatement = WHILE expression DO StatementSequence END
+RepeatStatement = REPEAT StatementSequence UNTIL expression
+ForStatement = FOR ident ':=' expression TO expression [BY ConstExpression] DO StatementSequence END
+LoopStatement = LOOP StatementSequence END
+ExitStatement = EXIT
+procedure = PROCEDURE | PROC
+ProcedureType = procedure ['^'] [FormalParameters]  
+ProcedureDeclaration =  ProcedureHeading ( 
+             	[ ';' ] EXTERN [ident]  
+            	| [INLINE] [ ';' ] ( ProcedureBody | END ) )
+ProcedureHeading = procedure [Receiver] identdef [ FormalParameters ]  
+Receiver = '(' ident ':' ident ')'
+block = BEGIN StatementSequence
+ProcedureBody = DeclarationSequence block END ident
+DeclarationSequence = 
+			{ CONST { ConstDeclaration [';'] } 
+			| TYPE { TypeDeclaration [';'] } 
+			| VAR { VariableDeclaration [';'] } 
+			| ProcedureDeclaration [';'] }
+ReturnStatement = RETURN [ expression ] 
+FormalParameters = '(' [ FPSection { [';'] FPSection } ] ')' [ ':' ReturnType ]
+ReturnType = NamedType
+FPSection = [VAR|CONST] ident { [','] ident } ':' FormalType 
+FormalType = type
+module = MODULE ident [ MetaParams ] [';'] { ImportList | DeclarationSequence } [ block ] 'END' ident ['.'] 
+ImportList = IMPORT import { [ ',' ] import } [';']
+import = [ ident ':=' ] ident  { '.' ident }  [ MetaActuals ] 
+MetaActuals = '(' ConstExpression { [','] ConstExpression } ')' 
+MetaParams = '(' MetaSection { [';'] MetaSection } ')'
+MetaSection = [ TYPE | CONST ] ident { \LL:2\ [','] ident } [ ':' NamedType ]
+....
+
+
+[appendix]
+== More Code Examples
+
+.Procedural programming
+[source,oberon]
+----
+module Fibonacci
+  proc calc*(n : integer): integer
+    var a, b: integer // comma is optional
+  begin
+    if n > 1 then 
+      a := calc(n - 1)
+      b := calc(n - 2)
+      return a + b
+    elsif n = 0 then 
+      return 0
+    else 
+      return 1
+    end
+  end calc
+  var res: integer
+begin
+  res := calc(21)
+  assert(res = 10946)
+end Fibonacci
+----
+
+.Generic programming
+[source,oberon]
+----
+module Collections(T)
+  type Deque* = record
+                      data: array of T
+                      size: integer end
+  proc createDeque*(): Deque 
+    const initial_len = 50
+    var this: Deque  // this is initialized to nil
+  begin 
+    new(this); new(this.data,initial_len) 
+             // semicolon is optional
+    return this 
+    // this and data will be garbage collected
+  end createDeque
+  
+  proc (this: Deque) append*(const element: T)
+  begin 
+    if this.size = len(this.data) then assert(false) end
+    this.data[this.size] := element inc(this.size) 
+  end append
+  
+  type Iterator* = record end
+  proc (this: Iterator) apply*(const element: T) end
+  
+  proc (this: Deque) forEach*(var iter: Iterator)
+    var i: integer
+  begin 
+    for i := 0 to this.size-1 do 
+      iter.apply(this.data[i]) 
+    end
+  end forEach
+end Collections
+----
+
+.Object-oriented programming
+[source,oberon]
+----
+module Drawing
+  import F := Fibonacci
+         C := Collections(Figure)
+  
+  type Figure* = record
+                   position: record 
+                     x,y: integer end end  
+  proc (this: Figure) draw*() end
+    
+  type
+     Circle* = record (Figure) 
+                          diameter: integer end
+     Square* = record (Figure) 
+                          width: integer end 
+  proc (this: Circle) draw*() end
+  proc (this: Square) draw*() end
+        
+  var figures: C.Deque
+       circle: Circle
+       square: Square
+    
+  proc drawAll()
+    type I = record(C.Iterator) count: integer end
+    proc (this: I) apply( in figure: Figure ) 
+    begin 
+      figure.draw(); inc(this.count) 
+    end apply
+    var i: I // count is initialized to zero
+  begin
+  	new(i)
+    figures.forEach(i)
+    assert(i.count = 2)
+  end drawAll
+begin 
+  figures := C.createDeque()
+  new(circle); new(circle.position)
+  circle.position.x := F.calc(3)
+  circle.position.y := F.calc(4)
+  circle.diameter := 3
+  figures.append(circle)
+  new(square); new(square.position)
+  square.position.x := F.calc(5)
+  square.position.y := F.calc(6)
+  square.width := 4
+  figures.append(square)
+  drawAll()
+end Drawing  
+----
+
+[appendix]
+// [bibliography]
+== References
+- [[[Ada83]]] ISO 8652:1987 Programming languages — Ada. International Organization for Standardization.
+- [[[Mo91]]] Mössenböck, H.; Wirth, N. (1991). The Programming Language Oberon-2. Structured Programming, 12(4):179-195, 1991. http://www.ssw.uni-linz.ac.at/Research/Papers/Oberon2.pdf (accessed 2020-11-16).
+- [[[Oak95]]] Kirk, B. et al. (1995). The Oakwood Guidelines for Oberon-2 Compiler Developers. Revision 1A. https://web.archive.org/web/20171226172235/https://www.math.bas.bg/bantchev/place/oberon/oakwood-guidelines.pdf (accessed 2022-04-26).
+- [[[Wi16]]] Wirth, N. (2016). The Programming Language Oberon. https://people.inf.ethz.ch/wirth/Oberon/Oberon07.Report.pdf (accessed 2020-11-16).
+- [[[Wi73]]] Wirth, N. (1973). The Programming Language Pascal (Revised Report). ETH Report. https://doi.org/10.3929/ethz-a-000814158 (accessed 2020-11-16).
+- [[[Wi87]]] Wirth, N. (1987). From Modula to Oberon and the programming language Oberon. ETH Report. https://doi.org/10.3929/ethz-a-005363226 (accessed 2020-11-16).
+
+

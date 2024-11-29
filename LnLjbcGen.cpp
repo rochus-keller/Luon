@@ -1074,10 +1074,12 @@ public:
         case Builtin::MAX:
             Q_ASSERT(false); // only called at compile time
             bc.KSET(res, BasicType::getMax(deref(call->rhs->type)->form), call->pos.packed());
+            // TODO: version with two numeric args
             break;
         case Builtin::MIN:
             Q_ASSERT(false); // only called at compile time
             bc.KSET(res, BasicType::getMin(deref(call->rhs->type)->form), call->pos.packed());
+            // TODO: version with two numeric args
             break;
         case Builtin::EXCL:
         case Builtin::INCL:  {
