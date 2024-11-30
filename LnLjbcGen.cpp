@@ -392,9 +392,11 @@ public:
 
         if( hasExterns )
         {
-            const int tmp = ctx.back().buySlots(1);
-            emitImport("_" + md.path.join('_'), tmp, md.end, false, true);
-            ctx.back().sellSlots(tmp);
+            const int tmp = ctx.back().buySlots(2,true);
+            bc.GGET( tmp, "require", md.end.packed() ); // just load the module so globals are created
+            bc.KSET( tmp+1, "_" + md.path.join('_'), md.end.packed() );
+            bc.CALL( tmp, 1, 1, md.end.packed() );
+            ctx.back().sellSlots(tmp, 2);
         }
 
         if( begin )

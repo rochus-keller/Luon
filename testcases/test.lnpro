@@ -8,11 +8,17 @@ Options=@ByteArray()
 Suffixes=@Invalid()
 WorkingDir=
 
+[.]
+size=0
+
 [Modules]
 1\AbsPath=/home/me/Entwicklung/Modules/Luon/testcases/Hello.luon
 1\RelPath=Hello.luon
-size=1
+2\AbsPath=/home/me/Entwicklung/Modules/Luon/testcases/Convert.luon
+2\RelPath=Convert.luon
+size=2
 
 [Packages]
 1\Name=@ByteArray()
-size=1
+2\Name=@ByteArray()
+size=2

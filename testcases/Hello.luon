@@ -1,4 +1,5 @@
 module Hello
+import Convert
 const txt = "Hello"
 var str : array 32 of char
     b : byte
@@ -29,7 +30,13 @@ begin
 	i := 123
 	b := clip(i)
 	println(b)
-	r := 3.14159
+
+	r := 3.14159265358979323846
 	s := "this is a number: " + tostring(r) + " " + tostring($454647$)
 	println(s)
+	println(r)
+	i := Convert.realToInt(r)
+	print("to int: ")println(i)
+	r := Convert.intToReal(i)
+	print("and back: ")println(r)
 end Hello

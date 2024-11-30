@@ -1,0 +1,6 @@
+module Convert
+
+procedure realToInt*(x: real): integer extern
+procedure intToReal*(x: integer): real extern
+
+end Convert

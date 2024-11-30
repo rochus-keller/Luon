@@ -34,8 +34,8 @@ NOTE that this project is work-in-progress.
 - [x] Implement semantic validator 
 - [x] Implement a LuaJIT backend based on LjTools
 - [x] Implement an IDE similar to the Oberon+ IDE
-- [ ] Migrate the Smalltalk-80 VM to Luon as a proof-of-concept and to optimize the language
-- [ ] Document the language
+- [x] Document the language (specification is available)
+- [ ] Migrate the Smalltalk-80 VM to Luon as a proof-of-concept and to optimize the language (WIP)
 
 #### Status on October 14, 2024
 
