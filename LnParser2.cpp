@@ -802,10 +802,11 @@ Type* Parser2::DictType() {
     Type* etype = type();
     Type* dict = new Type();
     dict->form = Type::HashMap;
-    dict->expr = key->expr;
-    key->expr = 0;
-    // is deleted via temporaries: delete key;
     dict->base = etype;
+    dict->expr = new Expression(Expression::NameRef, key->decl->pos);
+    dict->expr->val = key->decl->data;
+    dict->expr->type = key;
+    // is deleted via temporaries: delete key;
     return dict;
 }
 

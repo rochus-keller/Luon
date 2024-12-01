@@ -114,10 +114,10 @@ public:
                     // store the record slot number and module reference in each class object
                     const int tmp = ctx.back().buySlots(1);
                     bc.KSET(tmp, d->id, d->pos.packed() );
-                    bc.TSET(tmp, curClass, "@cls", d->pos.packed() );
-                    bc.TSET(modSlot, curClass, "@mod", d->pos.packed() );
+                    emitSetTableByName(tmp, curClass, "@cls", d->pos );
+                    emitSetTableByName(modSlot, curClass, "@mod", d->pos );
                     bc.KSET(tmp, d->scopedName(true, true), d->pos.packed());
-                    bc.TSET(tmp, curClass, "@name", d->pos.packed() );
+                    emitSetTableByName(tmp, curClass, "@name", d->pos );
                     ctx.back().sellSlots(tmp);
                     ctx.back().sellSlots(curClass);
 
@@ -343,7 +343,7 @@ public:
         const int tmp = ctx.back().buySlots(1);
         // save the module path in the module table under the name "@mod"
         bc.KSET(tmp, md.fullName, md.end.packed() );
-        bc.TSET(tmp,modSlot,"@mod", md.end.packed() );
+        emitSetTableByName(tmp,modSlot,"@mod", md.end );
         ctx.back().sellSlots(tmp);
 
         // first create all class objects, because imported generic instances need them
@@ -606,7 +606,7 @@ public:
             {
                 // also store command procedures by name in the module table
                 // this includes $begin if present
-                bc.TSET(tmp, modSlot, p->name, end.packed());
+                emitSetTableByName(tmp, modSlot, p->name, end );
             }
         }
         ctx.back().sellSlots(tmp);
@@ -2402,7 +2402,7 @@ public:
                 // fix length arrays
                 const int tmp = ctx.back().buySlots(1);
                 bc.KSET( tmp, array->len, loc.packed() );
-                bc.TSET(tmp,to,"count",loc.packed());
+                emitSetTableByName(tmp,to,"count",loc);
                 if( needsInitializer(array->base) )
                 {
                     emitInitializer(tmp, array->base, loc);
@@ -2415,7 +2415,7 @@ public:
                 // dynamic length arrays
                 const int tmp = ctx.back().buySlots(1);
                 emitInitializer(tmp, array->base, loc);
-                bc.TSET(lenSlot,to,"count",loc.packed());
+                emitSetTableByName(lenSlot,to,"count",loc);
                 if( needsInitializer(array->base) )
                 {
                     const quint8 base = ctx.back().buySlots(4);
@@ -2456,6 +2456,18 @@ public:
             ctx.back().sellSlots(tmp);
         }else
             bc.TSETi( value, table, index, loc.packed() );
+    }
+
+    void emitSetTableByName( quint8 value, quint8 table, const QByteArray& name, const RowCol& loc)
+    {
+        if( bc.getConstSlot(name) > 255 )
+        {
+            const int tmp = ctx.back().buySlots(1);
+            bc.KSET(tmp, name, loc.packed());
+            bc.TSET(value, table, tmp, loc.packed());
+            ctx.back().sellSlots(tmp);
+        }else
+            bc.TSET(value, table, name, loc.packed());
     }
 
     void emitGetTableByIndex( quint8 res, quint8 table, quint32 index, const RowCol& loc)
