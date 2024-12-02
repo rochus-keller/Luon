@@ -41,7 +41,8 @@ SOURCES += LnIde.cpp \
     LnLjRuntime.cpp \
     LnProject.cpp \
     LnLjbcGen.cpp \
-    LnPAL.c
+    LnPAL.c \
+    LnPAL2.c
 
 HEADERS  += LnIde.h \
     LnHighlighter.h \

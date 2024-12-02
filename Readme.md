@@ -36,6 +36,7 @@ NOTE that this project is work-in-progress.
 - [x] Implement an IDE similar to the Oberon+ IDE
 - [x] Document the language (specification is available)
 - [ ] Migrate the Smalltalk-80 VM to Luon as a proof-of-concept and to optimize the language (WIP)
+- [ ] Complete the language implementation according to the specification
 
 #### Status on October 14, 2024
 
@@ -82,6 +83,12 @@ in the project, the compiler and IDE seem ready for implementing a Smalltalk VM,
 All benchmarks of the Luon Are-we-fast-yet suite now work and show a performance equal to the Lua on LuaJIT version of the benchmark. The debugger has been significantly improved. The BYTE type and TOSTRING builtin have been added to the language.
 The Project Oberon System has been migrated to Luon; the code works so far, but for correct display output many changes would be required (maybe in future).
 The Smalltalk VM is work in progress and expected to be complete in a week. Both compiler and IDE are used to implement the Smalltalk VM and have proved to be useful so far.
+
+#### Status on December 1. 2024
+
+The migration of the Smalltalk VM (C++ to Luon) is complete. In contrast to the C++ version which uses Qt, this version uses SDL2 via LuaJIT FFI. It is also an example how the EXTERN keyword works, i.e. how the external implementations are provided. Now the debugging starts; wish me luck ;-)
+
+Meanwhile also the Luon specification is available, though not all features are yet implemented.
 
 
 #### Precompiled versions
