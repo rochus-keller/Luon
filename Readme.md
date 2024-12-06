@@ -86,9 +86,9 @@ The Smalltalk VM is work in progress and expected to be complete in a week. Both
 
 #### Status on December 1. 2024
 
-The migration of the Smalltalk VM (C++ to Luon) is complete. In contrast to the C++ version which uses Qt, this version uses SDL2 via LuaJIT FFI. It is also an example how the EXTERN keyword works, i.e. how the external implementations are provided. Now the debugging starts; wish me luck ;-)
+The migration of [the Luon implementation of the Smalltalk VM](https://github.com/rochus-keller/Smalltalk/blob/master/Smalltalk.lnpro) (see for *.luon and *.lnpro) is complete. I migrated the C++ version with a few architectural changes. In contrast to the C++ version which uses Qt, this version uses SDL2 via LuaJIT FFI. It is also an example how the EXTERN keyword works, i.e. how the external implementations are provided. Now the debugging starts; wish me luck ;-)
 
-Meanwhile also the Luon specification is available, though not all features are yet implemented.
+Meanwhile also [the Luon specification](https://github.com/rochus-keller/Luon/tree/master/specification) is available, though not all features are yet implemented.
 
 
 #### Precompiled versions

@@ -329,7 +329,8 @@ public:
         d_ide->fillStack();
         d_ide->fillLocals();
 
-        msg = msg.mid(1,msg.size()-2); // remove ""
+        if( msg.startsWith('"') )
+            msg = msg.mid(1,msg.size()-2); // remove ""
         if( !lua->isBreakHit() )
         {
             if( source == "=[C]" && !msg.startsWith('[') )
@@ -2003,14 +2004,15 @@ void Ide::fillStack()
                     item->setText(1,ident->name );
                     d_scopes[level] = ident;
                 }
-            }
+            }else
+                item->setText(1,"<unknown>" );
             //qDebug() << "level" << level << ( d_scopes[level] ? d_scopes[level]->getModule()->name : QByteArray("???") );
             item->setText(2,QString("%1:%2").arg(row).arg(col));
             item->setData(2, Qt::UserRole, l.d_line );
             if( ident )
                 item->setText(3, ident->getModule()->getModuleFullName(true) );
             else
-                item->setText(3, QString("<unknown> %1").arg(l.d_source.constData()) );
+                item->setText(3, l.d_source );
             item->setData(3, Qt::UserRole, l.d_source );
             item->setToolTip(3, l.d_source );
             if( !opened )
@@ -2387,8 +2389,10 @@ void Ide::printLocalVal(QTreeWidgetItem* item, Type* type, int depth)
                     case BasicType::BOOLEAN:
                         createArrayElems<quint8>( item, ptr, bytesize, numOfFetchedElems, 'b');
                         break;
-                    case BasicType::INTEGER:
                     case BasicType::BYTE:
+                        createArrayElems<quint8>( item, ptr, bytesize, numOfFetchedElems);
+                        break;
+                    case BasicType::INTEGER:
                         createArrayElems<qint32>( item, ptr, bytesize, numOfFetchedElems);
                         break;
                     case BasicType::REAL:
@@ -3089,7 +3093,7 @@ int main(int argc, char *argv[])
     a.setOrganizationName("me@rochus-keller.ch");
     a.setOrganizationDomain("github.com/rochus-keller/Luon");
     a.setApplicationName("Luon IDE (LuaJIT)");
-    a.setApplicationVersion("0.7.3");
+    a.setApplicationVersion("0.7.4");
     a.setStyle("Fusion");    
     QFontDatabase::addApplicationFont(":/font/DejaVuSansMono.ttf"); // "DejaVu Sans Mono"
 

@@ -5,14 +5,22 @@ local ffi = require("ffi")
 
 -- File = RECORD END;
 local FileMeta = {}
+local err = ""
 
 -- Open (name: STRING): File EXTERN;
 function Files_Open(name)
 	local f = {}
 	setmetatable(f,FileMeta)
-        f.h = io.open(name,"rwb")
-        if f.h == nil then return nil end
-	return f
+    f.h, err = io.open(name,"r+")
+    if f.h then 
+    	return f
+   	else
+    	f.h, err = io.open(name,"w+")
+    	if f.h then 
+		 	return f
+	   	end
+   	end
+	return nil
 end
 
 -- Close (f: File) EXTERN;
@@ -82,4 +90,18 @@ function Files_WriteBytes(f, x, n)
 	if f.h == nil then return end
 	f.write(x)
 end	
+
+function Files_WriteString(f, str)
+	if f.h == nil then return end
+	f.h:write(str)
+	f.h:flush()
+end
+
+function Files_LastError()
+	if err == nil then 
+		return ""
+	else
+		return err
+	end
+end
 	

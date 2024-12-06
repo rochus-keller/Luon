@@ -2,7 +2,7 @@
 MODULE Files;
 TYPE
 	File = RECORD END;
-
+	
 	PROCEDURE Open (name: STRING): File EXTERN;
 	PROCEDURE Close (f: File) EXTERN;
 	PROCEDURE Delete (name: STRING):BOOLEAN EXTERN;
@@ -14,4 +14,6 @@ TYPE
 	PROCEDURE ReadBytes (f: File; x: ARRAY OF BYTE; n: INTEGER):INTEGER EXTERN;
 	PROCEDURE Write (f: File; x: CHAR) EXTERN;
 	PROCEDURE WriteBytes (f: File; x: ARRAY OF BYTE) EXTERN;
+	PROCEDURE WriteString(f: File; str: STRING) EXTERN;
+	PROCEDURE LastError(): STRING EXTERN
 END Files.

@@ -125,16 +125,37 @@ function module.is_a( obj, class )
         end
 	return meta == class
 end
+local function containsNonPrintable(str)
+    -- Pattern to match non-printable characters (excluding \0, but including tabs and newlines)
+    local pattern = "[\x01-\x1F\x7F-\xFF]"
+    return str:match(pattern) ~= nil
+end
+local function toHex(str)
+    local hexStr = ""
+    for i = 1, #str do
+        local byte = string.format("%02x", str:byte(i, i))
+        hexStr = hexStr .. byte
+    end
+    return hexStr
+end
 function module.println( val )
         module.print(val)
         io.stdout:write("\n")
 end
-function module.print( val )
+function module.tostring(val)
+    local str
     if ffi.istype(CharArray,val) then
-        io.stdout:write(ffi.string(val))
+        str = ffi.string(val)
     else
-        io.stdout:write(tostring(val));
+        str = tostring(val)
     end
+    if containsNonPrintable(str) then
+        str = "$"..toHex(str).."$"
+    end
+    return str
+end
+function module.print( val )
+    io.stdout:write(module.tostring(val))
 end
 function module.ODD(num)
 	return ( num % 2 ) == 1
@@ -197,14 +218,6 @@ function module.require(name)
     f = m["$begin"]
     if f then f() end
     return m
-end
-
-function module.tostring(val)
-    if ffi.istype(CharArray,val) then
-        return ffi.string(val)
-    else
-        return tostring(val)
-    end
 end
 
 LUON_require = module.require

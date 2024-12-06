@@ -21,7 +21,7 @@ QT       += core gui widgets
 TARGET = LuonIDE
 TEMPLATE = app
 
-INCLUDEPATH += .. ../LuaJIT/src
+INCLUDEPATH += .. ../LuaJIT_811e448/src
 
 DEFINES += _LJTOOLS_DONT_CREATE_TAIL_CALLS
 
@@ -62,20 +62,20 @@ HEADERS  += LnIde.h \
     LnLjbcGen.h
 
 win32 {
-    LIBS += -L../LuaJIT/src -llua51
+    LIBS += -L../LuaJIT_811e448/src -llua51
 }
 linux {
-    include( ../LuaJIT/src/LuaJit.pri ){
+    include( ../LuaJIT_811e448/src/LuaJit.pri ){
         LIBS += -ldl
     } else {
         LIBS += -lluajit
     }
     QMAKE_LFLAGS += -rdynamic -ldl
-    #rdynamic is required so that the LjLibFfi functions are visible to LuaJIT FFI
+    #rdynamic is required so that the LjLibFfi functions are visible to LuaJIT_811e448 FFI
     LIBS += -lSDL2
 }
 macx {
-    include( ../LuaJIT/src/LuaJit.pri )
+    include( ../LuaJIT_811e448/src/LuaJit.pri )
     QMAKE_LFLAGS += -rdynamic -ldl -pagezero_size 10000 -image_base 100000000
 }
 

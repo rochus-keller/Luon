@@ -38,7 +38,6 @@ static SDL_Window* window = 0;
 static SDL_Texture* texture = 0;
 static SDL_Renderer* renderer = 0;
 static uint8_t* buffer = 0;
-static int length = 0;
 static uint8_t pixelBuf[2000*2000];
 static uint16_t queue[QueueLen];
 static int head = 0, tail = 0, count = 0;
@@ -73,7 +72,7 @@ static void disposeWindow()
 static void time_init();
 DllExport int32_t PAL2_getTime();
 
-DllExport int PAL2_init(uint8_t* b, int l, int w, int h)
+DllExport int PAL2_init(uint8_t* b, int w, int h)
 {
     SDL_version v;
     SDL_GetVersion(&v);
@@ -118,7 +117,6 @@ DllExport int PAL2_init(uint8_t* b, int l, int w, int h)
     }
 
     buffer = b;
-    length = l;
     return 1;
 }
 
@@ -126,11 +124,10 @@ DllExport int PAL2_deinit()
 {
     disposeWindow();
     buffer = 0;
-    length = 0;
     return 0;
 }
 
-DllExport int PAL2_setCursorBitmap(uint8_t* b, int l, int w, int h)
+DllExport int PAL2_setCursorBitmap(uint8_t* b, int w, int h)
 {
     // TODO SDL_SetCursor & SDL_CreateCursor
     return 0;
