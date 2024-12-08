@@ -38,6 +38,7 @@ static SDL_Window* window = 0;
 static SDL_Texture* texture = 0;
 static SDL_Renderer* renderer = 0;
 static uint8_t* buffer = 0;
+static int buflen = 0;
 static uint8_t pixelBuf[2000*2000];
 static uint16_t queue[QueueLen];
 static int head = 0, tail = 0, count = 0;
@@ -67,12 +68,13 @@ static void disposeWindow()
     renderer = 0;
     texture = 0;
     buffer = 0;
+    buflen = 0;
 }
 
 static void time_init();
 DllExport int32_t PAL2_getTime();
 
-DllExport int PAL2_init(uint8_t* b, int w, int h)
+DllExport int PAL2_init(uint8_t* b, int len, int w, int h)
 {
     SDL_version v;
     SDL_GetVersion(&v);
@@ -117,6 +119,7 @@ DllExport int PAL2_init(uint8_t* b, int w, int h)
     }
 
     buffer = b;
+    buflen = len;
     return 1;
 }
 
@@ -124,6 +127,7 @@ DllExport int PAL2_deinit()
 {
     disposeWindow();
     buffer = 0;
+    buflen = 0;
     return 0;
 }
 
@@ -145,7 +149,7 @@ static void enqueue( uint16_t c)
 {
     if(count == QueueLen)
     {
-        printf("buffer overflow");
+        printf("event buffer overflow\n");
         return;
     }
     count++;
@@ -390,15 +394,29 @@ static void updateTexture()
     const int ah = HEIGHT;
     const int ay = 0;
 
+    if( buflen < ( WIDTH * HEIGHT / 8 ) )
+    {
+        printf("PAL2 WARNING: display buffer too short (%d) for size (%d/%d)\n", buflen, WIDTH, HEIGHT);
+        return;
+    }
+
     src_data += sw * ay;
     dest_data += dw * ay;
-    int x, y;
+    int x, xx, y;
+    uint8_t v;
     for( y = 0; y < ah; y++ )
     {
-        uint*p = (uint*)dest_data;
+        uint32_t* p = (uint32_t*)dest_data;
         p += ax;
         for( x = ax; x < axaw; x++ )
-            *p++ = ((src_data[x>>3] >> (7 - (x & 7))) & 1) ? 0xff000000 : 0xffffffff;
+        {
+            xx = x>>3;
+            assert( src_data + xx - buffer < buflen);
+            v = src_data[xx];
+            v = (v >> (7 - (x & 7))) & 1;
+            *p = v ? 0xff000000 : 0xffffffff;
+            p++;
+        }
         src_data += sw;
         dest_data += dw;
     }
@@ -520,6 +538,14 @@ DllExport int PAL2_nextEvent()
     return dequeue();
 }
 
+DllExport int PAL2_eventPending()
+{
+    return count;
+}
+
+DllExport void PAL2_updateArea(int x,int y,int w,int h,int cx,int cy,int cw,int ch)
+{
+}
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 

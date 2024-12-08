@@ -1,0 +1,24 @@
+module Hashes
+
+var h: hashmap string of integer
+    a: array of string
+    i: integer
+begin
+  new(h)
+
+  h["b"] := 234
+  println(h["b"])
+  h["b"] := 0
+  
+  a := keys(h)
+  
+  println(len(a))
+  
+  i := h["b"]
+  print("default ")println(i)
+  inc(i)
+  print("inc ")println(i)
+  println(h["b"])
+
+  println("end")
+end Hashes

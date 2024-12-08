@@ -57,7 +57,7 @@ namespace Ln
         enum Type {
             // functions
             ABS, CAP, BITAND, BITASR, BITNOT, BITOR, BITS, BITSHL, BITSHR,
-            BITXOR, CAST, CHR, CLIP, DEFAULT, FLOOR, FLT, GETENV, LEN, MAX,
+            BITXOR, CAST, CHR, CLIP, DEFAULT, FLOOR, FLT, GETENV, LEN, KEYS, MAX,
             MIN, ODD, ORD, STRLEN,
             // procedures
             ASSERT, COPY, DEC, EXCL, HALT, INC,

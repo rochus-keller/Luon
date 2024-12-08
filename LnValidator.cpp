@@ -2069,6 +2069,20 @@ bool Validator::checkBuiltinArgs(quint8 builtin, const ExpList& args, Type** ret
                 && t->form != BasicType::StrLit && t->form != BasicType::ByteArrayLit )
             throw "expecing array or string argument";
         break;
+    case Builtin::KEYS: {
+            if( !expectingNArgs(args,1) )
+                break;
+            Type* dic = deref(args[0]->type);
+            if( dic->form != Type::HashMap )
+                throw "expecing hashmap argument";
+            Type* arr = new Type();
+            arr->form = Type::Array;
+            arr->base = deref(dic->expr->type);
+            arr->anonymous = true;
+            addHelper(arr); // TODO: reuse instead
+            *ret = arr;
+        }
+        break;
     case Builtin::MAX:
     case Builtin::MIN:
         if(!expectingNMArgs(args,1,2))

@@ -220,6 +220,25 @@ function module.require(name)
     return m
 end
 
+function module.keys(dic, isBa)
+    local a = {}
+    local i = 0
+    for k, v in pairs(dic) do
+      a[i] = k
+      i = i+1
+    end
+    a.count = i
+    if isBa then
+        local aa = ffi.new( CharArray, len )
+        for j = 0, i do
+            aa[j] = a[j]
+        end
+        return aa
+    else
+        return a
+    end
+end
+
 LUON_require = module.require
 
 -- Magic mumbers used by the compiler
@@ -263,6 +282,7 @@ module[60] = module.clone
 module[61] = module.charArrayToString
 module[62] = module.require
 module[63] = module.tostring
+module[64] = module.keys
 
 return module
 

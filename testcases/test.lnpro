@@ -12,11 +12,13 @@ WorkingDir=
 size=0
 
 [Modules]
-1\AbsPath=/home/me/Entwicklung/Modules/Luon/testcases/Hello.luon
-1\RelPath=Hello.luon
+1\AbsPath=/home/me/Entwicklung/Modules/Luon/testcases/Hashes.luon
+1\RelPath=Hashes.luon
 2\AbsPath=/home/me/Entwicklung/Modules/Luon/testcases/Convert.luon
 2\RelPath=Convert.luon
-size=2
+3\AbsPath=/home/me/Entwicklung/Modules/Luon/testcases/Hashes.luon
+3\RelPath=Hashes.luon
+size=1
 
 [Packages]
 1\Name=@ByteArray()

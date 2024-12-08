@@ -41,7 +41,7 @@ const char* BasicType::name[] = {
 
 const char* Builtin::name[] = {
     "ABS", "CAP", "BITAND", "BITASR", "BITNOT", "BITOR", "BITS", "BITSHL", "BITSHR",
-    "BITXOR", "CAST", "CHR", "CLIP", "DEFAULT", "FLOOR", "FLT", "GETENV", "LEN", "MAX",
+    "BITXOR", "CAST", "CHR", "CLIP", "DEFAULT", "FLOOR", "FLT", "GETENV", "LEN", "KEYS", "MAX",
     "MIN", "ODD", "ORD", "STRLEN",
     "ASSERT", "COPY", "DEC", "EXCL", "HALT", "INC",
     "INCL", "NEW", "PCALL", "PRINT", "PRINTLN", "RAISE", "SETENV",

@@ -73,6 +73,15 @@ static bool preloadLib( Project* pro, const QByteArray& name )
     return true;
 }
 
+extern "C" {
+void PAL2_setIdle(void (*tick)() );
+}
+
+static void processEvents()
+{
+    QApplication::processEvents();
+}
+
 LjRuntime::LjRuntime(QObject*p):QObject(p), d_jitEnabled(true),d_buildErrors(false)
 {
     d_pro = new Project(this);
@@ -80,6 +89,7 @@ LjRuntime::LjRuntime(QObject*p):QObject(p), d_jitEnabled(true),d_buildErrors(fal
     d_lua = new Lua::Engine2(this);
     Lua::Engine2::setInst(d_lua);
     prepareEngine();
+    PAL2_setIdle(processEvents);
 }
 
 bool LjRuntime::compile(bool doGenerate)

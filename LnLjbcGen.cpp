@@ -78,7 +78,10 @@ public:
 
     struct Lvalue
     {
-        enum Kind { Invalid, TableIdxSlot, TableIdx, Slot };
+        enum Kind { Invalid,
+                    TableIdxSlot, // for Index
+                    TableIdx, // for Select
+                    Slot };
         uint kind : 3;
         uint disposeSlot : 1;
         uint disposeIndex : 1;
@@ -869,7 +872,7 @@ public:
         releaseSlot(); // rhs, lhs is used as result
     }
 
-    void emitLvalueToSlot( quint8 slot, const Lvalue& acc, const RowCol& loc )
+    void emitLvalueToSlot( quint8 slot, const Lvalue& acc, Type* hashMapElem, const RowCol& loc )
     {
         switch( acc.kind )
         {
@@ -881,6 +884,8 @@ public:
             break;
         case Lvalue::TableIdxSlot:
             bc.TGET(slot, acc.slot, acc.index, loc.packed() );
+            if( hashMapElem )
+                emitFixHashmapElem(slot, hashMapElem, loc);
             break;
         default:
             Q_ASSERT( false );
@@ -977,7 +982,7 @@ public:
         // INC(v, n) v, n: integer type v := v + n
 
         Lvalue v = lvalue(var);
-        emitLvalueToSlot(res, v, pos);
+        emitLvalueToSlot(res, v, 0, pos);
         quint8 off;
         if( by )
         {
@@ -1147,6 +1152,19 @@ public:
                         emitBuiltinN(proc->id, call, 1, res);
                     break;
                 }
+                break;
+            }
+        case Builtin::KEYS: {
+                emitExpression(call->rhs);
+                const quint8 tmp = ctx.back().buySlots(3, true);
+                fetchLnlibMember(tmp,64,call->pos); // module.keys
+                bc.MOV(tmp+1, slotStack.back(), call->pos.packed() );
+                releaseSlot();
+                Type* base = deref(deref(call->rhs->type)->base);
+                bc.KSET(tmp+2, base->form == BasicType::CHAR || base->form == BasicType::BYTE, call->pos.packed());
+                bc.CALL(tmp, 1 ,2, call->pos.packed());
+                bc.MOV(res,tmp, call->pos.packed());
+                ctx.back().sellSlots(tmp,3);
                 break;
             }
         case Builtin::COPY: {
@@ -1327,7 +1345,12 @@ public:
             if( accs[i].kind != Lvalue::Invalid )
             {
                 Q_ASSERT( formals[i]->varParam );
-                emitLvalueToSlot(slot+off, accs[i], actuals[i]->pos );
+                Type* h = deref(formals[i]->type);
+                if( h->form == Type::HashMap )
+                    h = h->expr->type;
+                else
+                    h = 0;
+                emitLvalueToSlot(slot+off, accs[i], h, actuals[i]->pos );
             }else
             {
                 // here all by val (i.e. !var)
@@ -1515,6 +1538,24 @@ public:
         }
     }
 
+    void emitFixHashmapElem(quint8 val, Type* base, const RowCol& pos)
+    {
+        base = deref(base);
+        if( !base->isReference() )
+        {
+            // if hashmap check if lhs is nil and possibly replace by default
+            const int tmp = ctx.back().buySlots(1);
+            bc.KNIL(tmp, 1, pos.packed());
+            bc.ISNE(tmp, val, pos.packed() );
+            emitJMP(0, pos.packed());
+            const quint32 pc1 = bc.getCurPc();
+            emitInitializer(tmp, base, pos);
+            bc.MOV(val, tmp, pos.packed() );
+            bc.patch(pc1);
+            ctx.back().sellSlots(tmp);
+        }
+    }
+
     void emitExpression(Expression* e)
     {
         switch(e->kind)
@@ -1617,7 +1658,10 @@ public:
                 quint8 rhs = slotStack.back();
                 bc.TGET(lhs,lhs,rhs, e->pos.packed());
                 releaseSlot();
-                break;
+                Type* lhsT = deref(e->lhs->type);
+                if( lhsT->form == Type::HashMap )
+                    emitFixHashmapElem(lhs, lhsT->base, e->pos);
+               break;
             }
         case Expression::Call:
             emitCallOp(e);
@@ -1987,7 +2031,22 @@ public:
 
         Lvalue lhs = lvalue( s->lhs );
 
-        prepareRhs(s->lhs->type, s->rhs, s->pos );
+        Type* rhsT = deref(s->rhs->type);
+        if( lhs.kind == Lvalue::TableIdxSlot &&
+                deref(s->lhs->lhs->type)->form == Type::HashMap &&
+                !rhsT->isReference() )
+        {
+            // if rhs equals the default value, set key to nil to remove it
+            const int tmp = ctx.back().buySlots(1);
+            emitInitializer(tmp, rhsT, s->rhs->pos);
+            bc.ISNE(tmp, slotStack.back(), s->rhs->pos.packed() );
+            emitJMP(0, s->rhs->pos.packed());
+            const quint32 pc1 = bc.getCurPc();
+            bc.KNIL(slotStack.back(), 1, s->rhs->pos.packed() );
+            bc.patch(pc1);
+            ctx.back().sellSlots(tmp);
+        }else
+            prepareRhs(s->lhs->type, s->rhs, s->pos );
         emitSlotToLvalue(lhs, rhs, s->pos);
         releaseLvalue(lhs);
 

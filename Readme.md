@@ -90,6 +90,10 @@ The migration of [the Luon implementation of the Smalltalk VM](https://github.co
 
 Meanwhile also [the Luon specification](https://github.com/rochus-keller/Luon/tree/master/specification) is available, though not all features are yet implemented.
 
+#### Status on December 8. 2024
+
+The ST-80 display representation works, but only with the C version of the BitBlt so far. Also added a Qt version of the PAL to ease debugging. Extended the language (KEYS function) and made other hasmap fixes. The ST VM requires still more debugging.
+
 
 #### Precompiled versions
 

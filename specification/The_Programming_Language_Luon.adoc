@@ -310,6 +310,7 @@ The following identifiers are predeclared; their meaning is defined in the indic
 |INC
 |INCL
 |INTEGER
+|KEYS
 |LEN
 |MAX
 |MIN
@@ -427,14 +428,12 @@ array of char
 ....
 
 === Dictionary types
-A dictionary is a structure consisting of arbitrary key-value pairs. The keys and values are all of the same type, called the key and value types. New values are added to the dictionary by assigning the value to a given key. If the value is the default value of the value type, the key-value pair is removed. Accordingly, if the dictionary is indexed with a non-existing key, the default value of the value type is returned. No particular order of the keys is assumed.
+A dictionary is a structure consisting of arbitrary key-value pairs. The keys and values are all of the same type, called the key and value types. New values are added to the dictionary by assigning the value to a given key. If the value is the default value of the value type, the key-value pair is removed. Accordingly, if the dictionary is indexed with a non-existing key, the default value of the value type is returned. No particular order of the keys is assumed. The KEYS() predeclared function can be used to iterate over all keys included in the dictionary.
 
 .Syntax
 ....
 DictType = HASHMAP NamedType OF type
 ....
-
-// TODO iterate dictionary
 
 === Record types
 A record type is a structure consisting of a fixed number of elements, called fields, with possibly different types. The record type declaration specifies the name and type of each field. The scope of the field identifiers extends from the point of their declaration to the end of the record type, but they are also visible within designators referring to elements of record variables (see <<Operands>>). If a record type is exported, field identifiers that are to be visible outside the declaring module must be marked. They are called public fields; unmarked elements are called private fields.
@@ -1143,6 +1142,7 @@ The following table lists the predeclared procedures. Some are generic procedure
 |FLT(x)      |x: INTEGER           |REAL           |Convert integer to real type; accepting potential loss of information
 |LEN(v)      |v: array             |INTEGER        |allocated length of the array
 |            |v: STRING            |INTEGER        |length of STRING (including the terminating 0X)
+|KEYS(v)     |v: HASHMAP K OF T	   |ARRAY OF K     |return an array which includes all keys of the dictionary in arbitrary order
 |MAX(T)      |T = basic type       |T              |maximum value of type T
 |            |T = SET              |INTEGER        |maximum element of a set
 |            |T = enumeration type |T              |last element of the enumeration

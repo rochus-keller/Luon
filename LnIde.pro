@@ -21,7 +21,7 @@ QT       += core gui widgets
 TARGET = LuonIDE
 TEMPLATE = app
 
-INCLUDEPATH += .. ../LuaJIT_811e448/src
+INCLUDEPATH += .. ../LuaJIT/src
 
 DEFINES += _LJTOOLS_DONT_CREATE_TAIL_CALLS
 
@@ -42,7 +42,9 @@ SOURCES += LnIde.cpp \
     LnProject.cpp \
     LnLjbcGen.cpp \
     LnPAL.c \
-    LnPAL2.c
+    LnPAL2.c \
+    LnPAL3.cpp \
+    LnBitBlt.c
 
 HEADERS  += LnIde.h \
     LnHighlighter.h \
@@ -59,23 +61,24 @@ HEADERS  += LnIde.h \
     ../LjTools/LjDisasm.h \ 
     LnLjRuntime.h \
     LnProject.h \
-    LnLjbcGen.h
+    LnLjbcGen.h \
+    LnPAL3.h
 
 win32 {
-    LIBS += -L../LuaJIT_811e448/src -llua51
+    LIBS += -L../LuaJIT/src -llua51
 }
 linux {
-    include( ../LuaJIT_811e448/src/LuaJit.pri ){
+    include( ../LuaJIT/src/LuaJit.pri ){
         LIBS += -ldl
     } else {
         LIBS += -lluajit
     }
     QMAKE_LFLAGS += -rdynamic -ldl
-    #rdynamic is required so that the LjLibFfi functions are visible to LuaJIT_811e448 FFI
+    #rdynamic is required so that the LjLibFfi functions are visible to LuaJIT FFI
     LIBS += -lSDL2
 }
 macx {
-    include( ../LuaJIT_811e448/src/LuaJit.pri )
+    include( ../LuaJIT/src/LuaJit.pri )
     QMAKE_LFLAGS += -rdynamic -ldl -pagezero_size 10000 -image_base 100000000
 }
 
