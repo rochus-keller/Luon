@@ -72,7 +72,7 @@ static void disposeWindow()
 }
 
 static void time_init();
-DllExport int32_t PAL2_getTime();
+DllExport uint32_t PAL2_getTime();
 
 DllExport int PAL2_init(uint8_t* b, int len, int w, int h)
 {
@@ -460,7 +460,7 @@ DllExport int PAL2_processEvents(int sleep)
     SDL_Rect r;
 
     if( window == 0 )
-        return 1;
+        return -1;
 
     sleepTime = sleep;
     down = 0;
@@ -470,10 +470,10 @@ DllExport int PAL2_processEvents(int sleep)
         {
         case SDL_QUIT:
         case SDL_APP_TERMINATING:
-            return 1;
+            return -1;
         case SDL_WINDOWEVENT:
             if( e.window.event == SDL_WINDOWEVENT_CLOSE )
-                return 1;
+                return -1;
             break;
         case SDL_MOUSEMOTION: {
                 const int dx = e.motion.x - x;
@@ -509,7 +509,7 @@ DllExport int PAL2_processEvents(int sleep)
         case SDL_KEYUP:
             down = (e.key.state == SDL_PRESSED);
             if( e.key.keysym.sym == SDLK_q && down && (e.key.keysym.mod & KMOD_LCTRL) )
-                return 1;
+                return -1;
             else
                 keyEvent(e.key.keysym.sym, 0, 1);
             break;
@@ -530,17 +530,12 @@ DllExport int PAL2_processEvents(int sleep)
         if( idler )
             idler();
     }
-    return 0;
+    return count;
 }
 
 DllExport int PAL2_nextEvent()
 {
     return dequeue();
-}
-
-DllExport int PAL2_eventPending()
-{
-    return count;
 }
 
 DllExport void PAL2_updateArea(int x,int y,int w,int h,int cx,int cy,int cw,int ch)
@@ -591,13 +586,13 @@ int gettimeofday(struct timeval * tp, struct timezone * tzp)
 
 static struct timeval start;
 
-DllExport int32_t PAL2_getTime()
+DllExport uint32_t PAL2_getTime()
 {
     static struct timeval now;
     gettimeofday(&now, 0);
     const long seconds = now.tv_sec - start.tv_sec;
     const long microseconds = now.tv_usec - start.tv_usec;
-    return seconds*1000000 + microseconds;
+    return seconds*1000 + microseconds / 1000;
 }
 
 static void time_init()

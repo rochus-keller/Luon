@@ -43,8 +43,10 @@ static const int s_msPerFrame = 30; // 20ms according to BB
 enum { whitePixel = 1, blackPixel = 0 };
 static QFile s_out("st.log");
 
+extern "C" { uint32_t PAL2_getTime(); }
+
 Display::Display(QWidget *parent) : QWidget(parent),d_curX(-1),d_curY(-1),d_capsLockDown(false),
-    d_shiftDown(false),d_recOn(false),d_forceClose(false),d_eventCb(0)
+    d_shiftDown(false),d_recOn(false),d_forceClose(false)
 {
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
@@ -52,8 +54,6 @@ Display::Display(QWidget *parent) : QWidget(parent),d_curX(-1),d_curY(-1),d_caps
     setWindowTitle( renderTitle() );
     show();
     d_lastEvent = 0;
-    d_elapsed.start();
-    // startTimer(s_msPerFrame);
     new QShortcut(tr("ALT+R"), this, SLOT(onRecord()) );
     new QShortcut(tr("ALT+L"), this, SLOT(onLog()) );
     new QShortcut(tr("ALT+X"), this, SLOT(onExit()) );
@@ -152,7 +152,7 @@ void Display::processEvents()
     {
         count = 0;
         Display* d = Display::inst();
-        const quint32 cur = d->d_elapsed.elapsed();
+        const quint32 cur = PAL2_getTime();
         if( ( cur - last ) >= 30 )
         {
             last = cur;
@@ -292,12 +292,10 @@ void Display::mouseMoveEvent(QMouseEvent* event)
     if( d_mousePos.y() >= height() )
         d_mousePos.setY( height() - 1 );
 
-    quint32 diff = d_elapsed.elapsed() - d_lastEvent;
+    quint32 diff = PAL2_getTime() - d_lastEvent;
     if( diff < s_msPerFrame )
         return;
 
-#if 0
-    // TEST
     if( old.x() != d_mousePos.x() )
     {
         if( d_mousePos.x() > MaxPos )
@@ -312,7 +310,6 @@ void Display::mouseMoveEvent(QMouseEvent* event)
         else
             postEvent( YLocation, d_mousePos.y() );
     }
-#endif
 }
 
 enum MousButton { LeftButton = 130,
@@ -396,7 +393,7 @@ QString Display::renderTitle() const
 
 static inline quint16 compose( quint8 t, quint16 p )
 {
-    return t << 12 | p;
+    return (quint16)t << 12 | p;
 }
 
 bool Display::postEvent(Display::EventType t, quint16 param, bool withTime )
@@ -405,7 +402,7 @@ bool Display::postEvent(Display::EventType t, quint16 param, bool withTime )
 
     if( withTime )
     {
-        quint32 time = d_elapsed.elapsed();
+        quint32 time = PAL2_getTime();
         quint32 diff = time - d_lastEvent;
         d_lastEvent = time;
 
@@ -628,8 +625,6 @@ void Display::sendShift(bool keyPress, bool shiftRequired)
 void Display::notify()
 {
     emit sigEventQueue();
-    if( d_eventCb )
-        d_eventCb();
 }
 
 Bitmap::Bitmap(quint8* buf, quint16 wordLen, quint16 pixWidth, quint16 pixHeight)
@@ -748,25 +743,60 @@ DllExport void PAL3_setCursorPos(int x, int y)
 DllExport int PAL3_processEvents(int sleep)
 {
     Display::processEvents();
-    return !Display::s_run;
+    if( !Display::s_run )
+        return -1;
+    else
+        return Display::inst()->eventsPending();
 }
 
 DllExport int PAL3_nextEvent()
 {
-    if( Display::inst()->hasEvents() )
-        return Display::inst()->nextEvent();
-    else
+    if( Display::inst()->eventsPending() )
+    {
+        const quint16 e = Display::inst()->nextEvent();
+#if 0
+        static int count = 0;
+        if( count )
+        {
+            qWarning() << "cpp AbsoluteTime word" << 3-count;
+            count--;
+        }else
+        {
+            QByteArray name;
+            const quint16 t = e >> 12;
+            switch(t)
+            {
+            case Display::DeltaTime:
+                name = "DeltaTime";
+                break;
+            case Display::XLocation:
+                name = "XLocation";
+                break;
+            case Display::YLocation:
+                name = "YLocation";
+                break;
+            case Display::BiStateOn:
+                name = "BiStateOn";
+                break;
+            case Display::BiStateOff:
+                name = "BiStateOff";
+                break;
+            case Display::AbsoluteTime:
+                count = 2;
+                name = "AbsoluteTime";
+                break;
+            }
+            qWarning() << "cpp" << name.constData() << (e & Display::MaxPos) << "pending" << Display::inst()->eventsPending();
+        }
+#endif
+        return e;
+    }else
         return 0;
-}
-
-DllExport int PAL3_eventPending()
-{
-    return Display::inst()->hasEvents();
 }
 
 DllExport int32_t PAL3_getTime()
 {
-    return Display::inst()->getTicks();
+    return PAL2_getTime();
 }
 
 DllExport void PAL3_updateArea(int x,int y,int w,int h,int cx,int cy,int cw,int ch)
