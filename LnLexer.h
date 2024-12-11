@@ -23,7 +23,7 @@
 // Adopted from Oberon+
 
 #include <QObject>
-#include <LnToken.h>
+#include <Luon/LnToken.h>
 #include <QDateTime>
 
 class QIODevice;

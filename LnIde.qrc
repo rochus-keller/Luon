@@ -38,5 +38,6 @@
         <file>runtime/_XYPlane.lua</file>
         <file>runtime/_DateTime.lua</file>
         <file>runtime/DateTime.luon</file>
+        <file>fonts/NotoSans.ttf</file>
     </qresource>
 </RCC>

@@ -73,15 +73,6 @@ static bool preloadLib( Project* pro, const QByteArray& name )
     return true;
 }
 
-extern "C" {
-void PAL2_setIdle(void (*tick)() );
-}
-
-static void processEvents()
-{
-    QApplication::processEvents();
-}
-
 LjRuntime::LjRuntime(QObject*p):QObject(p), d_jitEnabled(true),d_buildErrors(false)
 {
     d_pro = new Project(this);
@@ -89,7 +80,6 @@ LjRuntime::LjRuntime(QObject*p):QObject(p), d_jitEnabled(true),d_buildErrors(fal
     d_lua = new Lua::Engine2(this);
     Lua::Engine2::setInst(d_lua);
     prepareEngine();
-    PAL2_setIdle(processEvents);
 }
 
 bool LjRuntime::compile(bool doGenerate)
@@ -346,6 +336,7 @@ void LjRuntime::generate(Declaration* m)
 
 extern "C" {
 void PAL_setIdle(void (*tick)() );
+void PAL2_setIdle(void (*tick)() );
 
 static void tick()
 {
@@ -372,6 +363,9 @@ void LjRuntime::prepareEngine()
     // d_lua->setJit(false); // must be called after addLibrary! doesn't have any effect otherwise
     loadLuaLib( d_lua, "LUON", true );
     QDir::setCurrent(QFileInfo(d_pro->getProjectPath()).path());
+#ifdef HAVE_SDL
     PAL_setIdle(tick);
+    PAL2_setIdle(tick);
+#endif
 }
 

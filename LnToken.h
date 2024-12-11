@@ -21,8 +21,8 @@
 */
 
 #include <QString>
-#include <LnTokenType.h>
-#include <LnRowCol.h>
+#include <Luon/LnTokenType.h>
+#include <Luon/LnRowCol.h>
 
 namespace Ln
 {

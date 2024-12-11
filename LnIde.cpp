@@ -3113,9 +3113,27 @@ int main(int argc, char *argv[])
     a.setOrganizationName("me@rochus-keller.ch");
     a.setOrganizationDomain("github.com/rochus-keller/Luon");
     a.setApplicationName("Luon IDE (LuaJIT)");
-    a.setApplicationVersion("0.7.7");
+    a.setApplicationVersion("0.7.8");
     a.setStyle("Fusion");    
-    QFontDatabase::addApplicationFont(":/font/DejaVuSansMono.ttf"); // "DejaVu Sans Mono"
+    QFontDatabase::addApplicationFont(":/fonts/DejaVuSansMono.ttf"); // "DejaVu Sans Mono"
+
+#ifdef QT_STATIC
+    QFontDatabase::addApplicationFont(":/fonts/NotoSans.ttf"); // "Noto Sans"
+    QFont af("Noto Sans",10);
+    a.setFont(af);
+#endif
+
+#ifdef Q_OS_MAC
+    QDir cur = QCoreApplication::applicationDirPath();
+    if( cur.path().endsWith("/Contents/MacOS") )
+    {
+        // we're in a bundle
+        cur.cdUp();
+        cur.cdUp();
+        cur.cdUp();
+    }
+    QDir::setCurrent(cur.path());
+#endif
 
     Ide w;
     if( a.arguments().size() > 1 )

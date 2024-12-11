@@ -1,0 +1,96 @@
+# author: Rochus Keller (me@rochus-keller.ch)
+# License: GPL
+# https://github.com/rochus-keller/BUSY/blob/main/README.md on how to use this file
+
+if busy_version < "2023-01-15" {
+    error("this version of BUSY is not compatible with this build")
+}
+
+let mtconf : Config {
+    .cflags = [ "/O2", "/MT" ]
+}
+
+if (build_mode == `optimized) && (target_toolchain == `msvc) {
+    set_defaults(target_toolchain,mtconf)
+}
+
+submod qt = ../LeanQt (HAVE_ITEMVIEWS)
+
+let compiler_files = [
+		./LnLexer.cpp 
+		./LnPpLexer.cpp 
+		./LnRowCol.cpp 
+		./LnToken.cpp 
+		./LnTokenType.cpp 
+		./LnAst.cpp 
+		./LnParser2.cpp 
+		./LnValidator.cpp
+	]
+
+let ide_files = [
+        ../GuiTools/NamedFunction.cpp
+        ../GuiTools/UiFunction.cpp
+        ../GuiTools/AutoMenu.cpp
+        ../GuiTools/AutoShortcut.cpp
+        ../GuiTools/CodeEditor.cpp
+        ../GuiTools/DocSelector.cpp
+        ../GuiTools/DocTabWidget.cpp
+        ../LjTools/LuaJitBytecode.cpp
+		../LjTools/Engine2.cpp 
+		../LjTools/Terminal2.cpp 
+		../LjTools/ExpressionParser.cpp 
+		../LjTools/LuaJitComposer.cpp 
+		../LjTools/BcViewer2.cpp 
+		../LjTools/BcViewer.cpp 
+		../LjTools/LjDisasm.cpp  
+        ./LnIde.cpp
+		./LnHighlighter.cpp 
+		./LnLjRuntime.cpp 
+		./LnProject.cpp 
+		./LnLjbcGen.cpp 
+        #./LnPAL.c
+        #./LnPAL2.c
+		./LnPAL3.cpp 
+		./LnBitBlt.c
+	]
+
+let ide_moc : Moc {
+	.sources += [
+		../GuiTools/UiFunction.h
+		../GuiTools/AutoShortcut.h
+		../GuiTools/AutoMenu.h
+		../GuiTools/DocTabWidget.h
+		../GuiTools/DocSelector.h
+		../GuiTools/CodeEditor.h
+        ../LjTools/BcViewer.h
+        ../LjTools/BcViewer2.h
+        ../LjTools/Engine2.h
+        ../LjTools/Terminal2.h
+        ./LnIde.h
+        ./LnPAL3.h
+        ./LnProject.h
+    ]
+}
+
+let ide_rcc : Rcc {
+    .sources += ./LnIde.qrc
+}
+
+let ide ! : Executable {
+    .configs += [ qt.qt_client_config ]
+    .deps += [ qt.libqt ide_rcc ide_moc ]
+    .include_dirs += [ ../LuaJIT/src .. ]
+    .sources += compiler_files + ide_files
+    if target_os == `win32 {
+        .lib_names += [ "lua51" ]
+        .deps += qt.libqtwinmain
+    } else {
+        .lib_names += [ "luajit" "dl" ]
+        .ldflags += [ "-rdynamic" ]
+        if target_os == `macos {
+            .ldflags += [ "-pagezero_size 10000" "-image_base 100000000" ]
+        }
+    }
+    .name = "LuonIDE"
+}
+

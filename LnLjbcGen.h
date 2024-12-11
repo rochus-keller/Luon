@@ -22,6 +22,8 @@
 
 #include <Luon/LnAst.h>
 
+class QIODevice;
+
 namespace Ln
 {
     class LjbcGen
