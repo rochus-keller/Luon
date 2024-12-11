@@ -413,6 +413,12 @@ void Project::setOptions(const QByteArrayList& o)
     touch();
 }
 
+void Project::setArguments(const QStringList& args)
+{
+    d_arguments = args;
+    touch();
+}
+
 bool Project::printTreeShaken(const QString& module, const QString& fileName)
 {
 #if 0
@@ -833,6 +839,7 @@ bool Project::save()
     out.setValue("WorkingDir", d_workingDir );
     out.setValue("BuildDir", d_buildDir );
     out.setValue("Options", d_options.join(' ') );
+    out.setValue("Arguments", d_arguments );
 
     const FileGroup* root = getRootFileGroup();
     out.beginWriteArray("Modules", root->d_files.size() ); // nested arrays don't work
@@ -892,6 +899,7 @@ bool Project::loadFrom(const QString& filePath)
     d_workingDir = in.value("WorkingDir").toString();
     d_buildDir = in.value("BuildDir").toString();
     d_options = in.value("Options").toByteArray().split(' ');
+    d_arguments = in.value("Arguments").toStringList();
 
     int count = in.beginReadArray("Modules");
     for( int i = 0; i < count; i++ )

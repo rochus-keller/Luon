@@ -29,6 +29,7 @@
 #include <QShortcut>
 #include <QClipboard>
 #include <bitset>
+#include <time.h>
 using namespace St;
 
 #define _USE_BB_IMP_
@@ -39,11 +40,19 @@ bool Display::s_break = false;
 bool Display::s_copy = false;
 QList<QFile*> Display::s_files;
 
-static const int s_msPerFrame = 30; // 20ms according to BB
+static const int s_msPerFrame = 20; // 20ms according to BB
 enum { whitePixel = 1, blackPixel = 0 };
 static QFile s_out("st.log");
 
-extern "C" { uint32_t PAL2_getTime(); }
+static inline quint32 tick()
+{
+    static clock_t start = 0;
+    if( start == 0 )
+        start = clock();
+
+    clock_t t = clock();
+    return ((double)(t - start) * 1000) / CLOCKS_PER_SEC;
+}
 
 Display::Display(QWidget *parent) : QWidget(parent),d_curX(-1),d_curY(-1),d_capsLockDown(false),
     d_shiftDown(false),d_recOn(false),d_forceClose(false)
@@ -131,8 +140,6 @@ void Display::drawRecord(int x, int y, int w, int h)
 void Display::updateArea(const QRect& r )
 {
     d_updateArea |= r;
-
-    update( r );
 }
 
 void Display::setLog(bool on)
@@ -145,21 +152,8 @@ void Display::setLog(bool on)
 
 void Display::processEvents()
 {
-    static quint32 last = 0;
-    static quint32 count = 0;
-
-    if( count > 4000 )
-    {
-        count = 0;
-        Display* d = Display::inst();
-        const quint32 cur = PAL2_getTime();
-        if( ( cur - last ) >= 30 )
-        {
-            last = cur;
-            QApplication::processEvents();
-        }
-    }else
-        count++;
+    Display::inst()->updateImage();
+    QApplication::processEvents();
 }
 
 void Display::copyToClipboard(const QByteArray& str)
@@ -247,12 +241,6 @@ void Display::paintEvent(QPaintEvent* event)
     if( r.isNull() )
         return;
 
-    if( !d_updateArea.isNull() )
-    {
-        d_bitmap.toImage( d_screen, d_updateArea );
-        d_updateArea = QRect();
-    }
-
     QPainter p(this);
     p.setRenderHints( QPainter::Antialiasing | QPainter::TextAntialiasing | QPainter::SmoothPixmapTransform, false );
 
@@ -292,7 +280,7 @@ void Display::mouseMoveEvent(QMouseEvent* event)
     if( d_mousePos.y() >= height() )
         d_mousePos.setY( height() - 1 );
 
-    quint32 diff = PAL2_getTime() - d_lastEvent;
+    const quint32 diff = tick() - d_lastEvent;
     if( diff < s_msPerFrame )
         return;
 
@@ -402,8 +390,8 @@ bool Display::postEvent(Display::EventType t, quint16 param, bool withTime )
 
     if( withTime )
     {
-        quint32 time = PAL2_getTime();
-        quint32 diff = time - d_lastEvent;
+        const quint32 time = tick();
+        const quint32 diff = time - d_lastEvent;
         d_lastEvent = time;
 
         if( diff <= MaxPos )
@@ -627,6 +615,22 @@ void Display::notify()
     emit sigEventQueue();
 }
 
+void Display::updateImage()
+{
+#if 1
+    if( !d_updateArea.isNull() )
+    {
+        // qWarning() << "updateArea" << d_updateArea;
+        d_bitmap.toImage( d_screen, d_updateArea );
+        update( d_updateArea );
+        d_updateArea = QRect();
+    }
+#else
+    d_bitmap.toImage( d_screen, d_screen.rect() );
+    update(d_screen.rect());
+#endif
+}
+
 Bitmap::Bitmap(quint8* buf, quint16 wordLen, quint16 pixWidth, quint16 pixHeight)
 {
     d_buf = buf;
@@ -654,7 +658,6 @@ void Bitmap::toImage(QImage& img, QRect area) const
         Q_ASSERT( area.y() >= 0 && ( area.y() + area.height() ) <= d_pixHeight );
     }
 
-#if 1
     const int sw = d_pixLineWidth / 8;
     const int dw = img.bytesPerLine();
     const uchar *src_data = d_buf;
@@ -682,23 +685,6 @@ void Bitmap::toImage(QImage& img, QRect area) const
         src_data += sw;
         dest_data += dw;
     }
-#else
-    const uint8_t* source = d_buf;
-
-    for( int y = 0; y < d_pixHeight; y++ )
-    {
-        for( int xb = 0; xb < d_pixLineWidth / 8; xb++ )
-        {
-            std::bitset<8> byte(source[xb]);
-            for( int pix = 0; pix < 8; pix++ )
-            {
-                img.setPixel(xb*8+pix, y, byte.test(pix) ? qRgb(0,0,0) : qRgb(255,255,255));
-            }
-        }
-        source += d_pixLineWidth / 8;
-    }
-
-#endif
 }
 
 extern "C" {
@@ -723,7 +709,6 @@ DllExport int PAL3_init(uint8_t* b, int len, int w, int h)
 
 DllExport int PAL3_deinit()
 {
-    // Display::inst()->getScreen().save("screen_at_end.png"); // TEST
     Display::inst()->forceClose();
     return 0;
 }
@@ -796,15 +781,15 @@ DllExport int PAL3_nextEvent()
 
 DllExport int32_t PAL3_getTime()
 {
-    return PAL2_getTime();
+    return tick();
 }
 
 DllExport void PAL3_updateArea(int x,int y,int w,int h,int cx,int cy,int cw,int ch)
 {
-    QRect r(x,y,w,h);
-    QRect clip(cx,cy,cw,ch);
-    Display::inst()->updateArea( r & clip );
-    QApplication::processEvents();
+    const QRect r(x,y,w,h);
+    const QRect clip(cx,cy,cw,ch);
+    const QRect patch(r & clip);
+    Display::inst()->updateArea( patch );
 }
 
 }

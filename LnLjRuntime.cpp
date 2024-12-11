@@ -124,6 +124,19 @@ bool LjRuntime::run()
     if( !loadLibraries() )
         return false;
 
+    QStringList args = d_pro->getArguments();
+    lua_createtable(d_lua->getCtx(), args.size(), 0 );
+    const int t = lua_gettop(d_lua->getCtx());
+    for( int i = 0; i < args.size(); i++ )
+    {
+        const QByteArray arg = args[i].simplified().toUtf8();
+        lua_pushinteger(d_lua->getCtx(), i + 1);
+        lua_pushstring(d_lua->getCtx(), arg.constData());
+        lua_settable(d_lua->getCtx(), t );
+    }
+    lua_setglobal(d_lua->getCtx(), "arg");
+
+
     if( !loadBytecode() )
         return false;
 

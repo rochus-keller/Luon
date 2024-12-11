@@ -42,7 +42,7 @@ static int buflen = 0;
 static uint8_t pixelBuf[2000*2000];
 static uint16_t queue[QueueLen];
 static int head = 0, tail = 0, count = 0;
-static int sleepTime = 0, x = 0, y = 0, lastUpdate = 0;
+static int sleepTime = 0, x = 0, y = 0;
 static int WIDTH, HEIGHT;
 static void (*idler)() = 0;
 static uint32_t lastEvent = 0;
@@ -71,7 +71,6 @@ static void disposeWindow()
     buflen = 0;
 }
 
-static void time_init();
 DllExport uint32_t PAL2_getTime();
 
 DllExport int PAL2_init(uint8_t* b, int len, int w, int h)
@@ -80,7 +79,6 @@ DllExport int PAL2_init(uint8_t* b, int len, int w, int h)
     SDL_GetVersion(&v);
     SDL_Log("Loaded SDL version %d.%d.%d\n", v.major, v.minor, v.patch );
     disposeWindow();
-    time_init();
     WIDTH = w;
     HEIGHT = h;
     window = SDL_CreateWindow("Luon PAL on SDL",
@@ -133,7 +131,15 @@ DllExport int PAL2_deinit()
 
 DllExport int PAL2_setCursorBitmap(uint8_t* b, int w, int h)
 {
-    // TODO SDL_SetCursor & SDL_CreateCursor
+    static SDL_Cursor* cursor = 0;
+
+    if( cursor )
+        SDL_FreeCursor(cursor);
+
+    cursor = SDL_CreateCursor(b, b, w, h, 0, 0);
+
+    SDL_SetCursor(cursor);
+
     return 0;
 }
 
@@ -431,7 +437,7 @@ static void mousePressReleaseImp(int press, int button)
     switch( button )
     {
     case SDL_BUTTON_LEFT:
-        if( ctrlDown == 0 && shiftDown == 1 )
+        if( ctrlDown == 0 && shiftDown == 0 )
             postEvent( t, LeftButton, 1 );
         else if( ctrlDown)
             postEvent( t, RightButton, 1 );
@@ -456,7 +462,6 @@ DllExport int PAL2_processEvents(int sleep)
 {
     SDL_Event e;
     BOOL  down;
-    int time;
     SDL_Rect r;
 
     if( window == 0 )
@@ -480,19 +485,21 @@ DllExport int PAL2_processEvents(int sleep)
                 const int dy = e.motion.y - y;
                 x = e.motion.x;
                 y = e.motion.y;
-                if( (x >= 0 && x < WIDTH ) || ( y >= 0 && y < HEIGHT) )
-                    SDL_ShowCursor( SDL_DISABLE );
-                else
+#if 0
+                if( (x >= 0 && x < WIDTH ) && ( y >= 0 && y < HEIGHT) )
                     SDL_ShowCursor( SDL_ENABLE );
+                else
+                    SDL_ShowCursor( SDL_DISABLE );
+#endif
 
                 x = MAX(x, 0);
                 x = MIN(x, WIDTH-1);
                 y = MAX(y, 0);
                 y = MIN(y, HEIGHT-1);
                 const uint32_t diff = PAL2_getTime() - lastEvent;
-                if( diff >= msPerFrame && dx )
+                if( /*diff >= msPerFrame &&*/ dx )
                     postEvent( XLocation, x, 1 );
-                if( diff >= msPerFrame && dy )
+                if( /*diff >= msPerFrame &&*/ dy )
                     postEvent( YLocation, y, 1 );
                 break;
             }
@@ -515,10 +522,8 @@ DllExport int PAL2_processEvents(int sleep)
             break;
         }
     }
-    time = SDL_GetTicks();
-    if( ( time - lastUpdate ) > 30 ) // 20 good for runtime, too slow for debugger
+    if( 1 ) // ( time - lastUpdate ) > 30 ) // 20 good for runtime, too slow for debugger
     {
-        lastUpdate = time;
         updateTexture();
         SDL_RenderClear(renderer);
         r.x = 0;
@@ -542,62 +547,8 @@ DllExport void PAL2_updateArea(int x,int y,int w,int h,int cx,int cy,int cw,int 
 {
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////
-
-#include <time.h>
-
-#if defined(_WIN32) && !defined(__GNUC__)
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-#include <direct.h>
-
-// Source: https://stackoverflow.com/questions/10905892/equivalent-of-gettimeday-for-windows/26085827
-
-// MSVC defines this in winsock2.h!?
-typedef struct timeval {
-    long tv_sec;
-    long tv_usec;
-} timeval;
-
-int gettimeofday(struct timeval * tp, struct timezone * tzp)
+DllExport uint32_t PAL2_getTime() // in milliseconds!
 {
-    // Note: some broken versions only have 8 trailing zero's, the correct epoch has 9 trailing zero's
-    // This magic number is the number of 100 nanosecond intervals since January 1, 1601 (UTC)
-    // until 00:00:00 January 1, 1970
-    static const uint64_t EPOCH = ((uint64_t) 116444736000000000ULL);
-
-    SYSTEMTIME  system_time;
-    FILETIME    file_time;
-    uint64_t    time;
-
-    GetSystemTime( &system_time );
-    SystemTimeToFileTime( &system_time, &file_time );
-    time =  ((uint64_t)file_time.dwLowDateTime )      ;
-    time += ((uint64_t)file_time.dwHighDateTime) << 32;
-
-    tp->tv_sec  = (long) ((time - EPOCH) / 10000000L);
-    tp->tv_usec = (long) (system_time.wMilliseconds * 1000);
-    return 0;
+    return SDL_GetTicks();
 }
-#else
-#include <sys/time.h>
-#include <unistd.h>
-#endif
-
-static struct timeval start;
-
-DllExport uint32_t PAL2_getTime()
-{
-    static struct timeval now;
-    gettimeofday(&now, 0);
-    const long seconds = now.tv_sec - start.tv_sec;
-    const long microseconds = now.tv_usec - start.tv_usec;
-    return seconds*1000 + microseconds / 1000;
-}
-
-static void time_init()
-{
-    gettimeofday(&start, 0);
-}
-
 

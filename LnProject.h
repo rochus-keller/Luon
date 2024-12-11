@@ -96,6 +96,8 @@ namespace Ln
         void setBuildDir( const QString& );
         QByteArrayList getOptions() const { return d_options; }
         void setOptions( const QByteArrayList& );
+        QStringList getArguments() const { return d_arguments; }
+        void setArguments( const QStringList& );
 
         bool addFile(const QString& filePath, const QByteArrayList& package = QByteArrayList() );
         bool removeFile( const QString& filePath );
@@ -165,6 +167,7 @@ namespace Ln
         QString d_filePath; // path where the project file was loaded from or saved to
         QStringList d_suffixes;
         QByteArrayList d_options;
+        QStringList d_arguments;
         QString d_workingDir, d_buildDir;
         ModProc d_main;
         bool d_dirty;

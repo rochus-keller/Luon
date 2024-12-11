@@ -1,0 +1,209 @@
+(* 
+ * Copyright (c) 2024 Rochus Keller <me@rochus-keller.ch> (for Luon migration)
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the 'Software'), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ *)
+ 
+module Tester
+
+import 
+    H := Harness
+    
+    <* if HaveTests then *>
+    B := som.RedBlackTree(integer,string)
+    IB := som.Interfaces(B.Entry)
+    RVV := som.RedBlackTree(Vector2D,SV.Vector)
+    IVV := som.Interfaces(RVV.Entry)
+    SV := som.Vector(String)
+
+    type
+        String = array 32 of char
+        Vector2D = record x,y: real end
+
+    proc Test4()
+        var t : B.RedBlackTree
+            s : string
+        proc intComp(const lhs,rhs: integer): integer
+        begin
+            if lhs < rhs then
+                return -1
+            elsif lhs > rhs then
+                return 1
+            else
+                return 0
+            end
+        end intComp
+        
+        type FI = record (IB.ForEachInterface) i: integer end
+        
+        proc (this: FI) apply(const elem: B.Entry) 
+        begin
+            print(elem.key)
+            print("=")
+            println(elem.value)
+        end apply
+        
+        var it : FI
+    begin
+        t := B.create(intComp)
+        
+        s := t.put( 10, "Mandelbrot")
+        s := t.put( 3, "Nbody")    
+        s := t.put( 6, "Permute")    
+        s := t.put( 2, "Queens")    
+        s := t.put( 4, "Richards")    
+        s := t.put( 8, "Sieve")    
+        s := t.put( 11, "Storage")    
+        s := t.put( 9, "Tower")    
+        s := t.put( 3, "Json")    
+        s := t.remove(11)
+        
+        new(it)
+        it.i := 33
+        t.forEach(it)
+        
+        println("Done Test4")
+    end Test4
+    
+    proc compareVector2D(const lhs, rhs: Vector2D ): integer
+        var result: integer
+    begin
+    result := compareNumbers(lhs.x, rhs.x)
+    if result # 0 then
+      return result
+    end
+    return compareNumbers(lhs.y, rhs.y)
+    end compareVector2D 
+
+    proc compareNumbers(a,b: real): integer
+    begin
+        if a = b then
+          return 0
+        end
+        if a < b then
+          return -1
+        end
+        if a > b then
+          return 1
+        end
+    
+        // We say that NaN is smaller than non-NaN.
+        if a = a then
+          return 1
+        end
+        return -1
+    end compareNumbers
+
+    proc Test5()
+        var t : RVV.RedBlackTree
+        
+        type FI = record (IVV.ForEachInterface) i: integer end
+        
+        proc (this: FI) apply(CONST elem: RVV.Entry) 
+            var i: integer
+        begin
+            print("Point ")
+            print(elem.key.x)
+            print(":")
+            println(elem.key.y)
+            for i := 0 to elem.value.getSize()-1 do
+                println(elem.value.at(i))
+            end
+        end apply
+        
+        var it : FI
+            point: Vector2D
+            vec: SV.Vector
+    begin
+        new(point)
+        t := RVV.create(compareVector2D)
+        
+        vec := SV.create()
+        vec.append("Mandelbrot")
+        vec.append("Nbody")
+        vec.append("Permute")
+        point.x := 10.0
+        point.y := 20.0
+        vec := t.put( point, vec)
+
+        vec := SV.create()
+        vec.append("Queens")
+        vec.append("Richards")
+        vec.append("Sieve")
+        point.x := 30.0
+        point.y := 40.0
+        vec := t.put( point, vec)
+
+        vec := SV.create()
+        vec.append("Storage")
+        vec.append("Tower")
+        vec.append("Json")
+        point.x := 50.0
+        point.y := 60.0
+        vec := t.put( point, vec)
+
+        new(it)
+        it.i := 33
+        t.forEach(it)
+        
+        println("Done Test5")
+    end Test5
+    <* end *>
+    
+    proc RunAll()
+    begin
+       H.run("DeltaBlue", 12000, 1 )
+       H.run("Richards", 100, 1)
+       H.run("Json", 100, 1)
+       H.run("Havlak", 10, 1 )
+       H.run("CD", 250, 2)
+       H.run("Bounce", 1500, 1)
+       H.run("List", 1500, 1)
+       H.run("Mandelbrot", 500, 1)
+       H.run("NBody", 250000, 1)
+       H.run("Permute", 1000, 1)
+       H.run("Queens", 1000, 1)
+       H.run("Sieve", 3000, 1)
+       H.run("Storage", 1000, 1)
+       H.run("Towers", 600, 1)
+    end RunAll
+
+    proc RunEachOnce()
+    begin
+       H.run("DeltaBlue", 1, 1 )
+       H.run("Richards", 1, 1)
+       H.run("Json", 1, 1)
+       H.run("Havlak", 1, 1 )
+       H.run("CD", 1, 2)
+       H.run("Bounce", 1, 1)
+       H.run("List", 1, 1)
+       H.run("Mandelbrot", 1, 1)
+       H.run("NBody", 1, 1)
+       H.run("Permute", 1, 1)
+       H.run("Queens", 1, 1)
+       H.run("Sieve", 1, 1)
+       H.run("Storage", 1, 1)
+       H.run("Towers", 1, 1)
+    end RunEachOnce
+
+begin
+   //RunAll()
+   RunEachOnce()
+
+end Tester

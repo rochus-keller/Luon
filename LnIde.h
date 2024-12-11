@@ -137,6 +137,7 @@ namespace Ln
         void onOpenFile();
         void onOakwood();
         void onSetOptions();
+        void onSetArguments();
         void onAddFiles();
         void onNewModule();
         void onAddDir();

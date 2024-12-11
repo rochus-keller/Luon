@@ -2011,7 +2011,7 @@ void Parser2::import() {
 		expect(Tok_ident, false, "import");
         localName = cur;
         expect(Tok_ColonEq, false, "import");
-	}
+    }
     TokenList tl;
     expect(Tok_ident, false, "import");
     tl << cur;

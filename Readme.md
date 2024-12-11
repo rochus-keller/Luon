@@ -1,12 +1,15 @@
-This project implements a compiler and IDE for the Luon programming language.
+## Welcome to the Luon Programming Language
 
-Luon is a high-level programming language with a syntax similar to Oberon+, Oberon-07 and Oberon-2, aspiring to run on the LuaJIT VM and to be compatible with the Lua programming language. Luon can be regarded as a statically typed version of Lua. The name is thus a combination of "Lua" and "Oberon". 
+Luon is a high-level programming language with a syntax similar to Oberon+, Oberon-07 and Oberon-2, aspiring to run on the LuaJIT VM. Luon can be regarded as a statically typed version of Lua. The name is thus a combination of "Lua" and "Oberon". 
+
+Luon procedures can be declared "external" and be implemented in Lua. This allows the re-use of libraries written in Lua, and also C libraries via 
+the LuaJIT foreign function interface.
 
 The project is the result of the author's experience with the [Smalltalk-80](https://github.com/rochus-keller/Smalltalk/) and [SOM VM](https://github.com/rochus-keller/Som/) implementation, and the prospect to build a [LuaJIT based Interlisp VM](https://github.com/rochus-keller/Gingko/). 
 
 In contrast to Oberon+, Luon doesn't have pointers, but instead all structured datatypes have reference semantics and are dynamically created. In addition to the ARRAY type, there is also a HASHMAP type for compatibility with Lua. There is also a STRING data type which - like Lua - is immutable and follows a value semantics. 
 
-In particular, Luon solves the following shortcomings recognized during the aforementioned projects:
+In particular, Luon solves the following Lua shortcomings recognized during the aforementioned projects:
 
 - conditional compilation to enable or disable statements only used for debugging and to avoid wasting calculation time 
 - constants not requiring local slots or hashed element access
@@ -15,6 +18,11 @@ In particular, Luon solves the following shortcomings recognized during the afor
 - no implicit global declarations, and other means to detect as many errors as possible during compile time
 - locals can no longer be used before declaration
 - switch/case control statement to avoid writing the relation expressionall over again
+
+This project implements a compiler and IDE for the Luon programming language. Representative example projects demonstrating the
+capabilities of the language and the IDE can be found in the [testcases subdirectory](https://github.com/rochus-keller/Luon/tree/master/testcases/). 
+The language specification can be found
+in the [specification subdirectory](https://github.com/rochus-keller/Luon/tree/master/specification).
 
 Here is a screenshot of the IDE:
 
@@ -25,8 +33,6 @@ And here is the source-level debugger of the IDE:
 ![IDE Screenshot 2](http://software.rochus-keller.ch/luon-ide-screenshot-0.7.0-2.png)
 
 
-NOTE that this project is work-in-progress.
-
 #### Planned features
 
 - [x] Implement lexer with directive support
@@ -35,8 +41,8 @@ NOTE that this project is work-in-progress.
 - [x] Implement a LuaJIT backend based on LjTools
 - [x] Implement an IDE similar to the Oberon+ IDE
 - [x] Document the language (specification is available)
-- [ ] Migrate the Smalltalk-80 VM to Luon as a proof-of-concept and to optimize the language (WIP)
-- [ ] Complete the language implementation according to the specification
+- [x] Migrate the Smalltalk-80 VM to Luon as a proof-of-concept and to optimize the language
+- [ ] Complete the language implementation according to the specification (inline, invar)
 
 #### Status on October 14, 2024
 
@@ -94,10 +100,16 @@ Meanwhile also [the Luon specification](https://github.com/rochus-keller/Luon/tr
 
 The ST-80 display representation works, but only with the C version of the BitBlt so far. Also added a Qt version of the PAL to ease debugging. Extended the language (KEYS function) and made other hasmap fixes. The ST VM requires still more debugging.
 
+#### Status on December 10. 2024
+
+The Smalltalk-80 VM implemented in Luon works (with a few issues WIP), with both the SDL2 and Qt based PAL. Added the source code of the VM as
+a local testcase and demonstration to the Luon repository (as a copy of the corresponding files in the Smalltalk repository). 
+The same applies to the Are-we-fast-yet implementation. The project is close to an MVP release.
+
 
 #### Precompiled versions
 
-Not available at this time.
+In preparation.
 
 #### How to build
 

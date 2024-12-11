@@ -742,13 +742,14 @@ void Ide::createMenu()
     pop->addSeparator();
     pop->addCommand( "Built-in Oakwood", this, SLOT(onOakwood()) );
     pop->addCommand( "Set Configuration Variables...", this, SLOT( onSetOptions()) );
-    pop->addCommand( "File System Root...", this, SLOT( onWorkingDir() ) );
+    //pop->addCommand( "File System Root...", this, SLOT( onWorkingDir() ) );
     pop->addSeparator();
     pop->addCommand( "Compile", this, SLOT(onCompile()), tr("CTRL+T"), false );
     pop->addCommand( "Compile && Generate", this, SLOT(onGenerate()), tr("CTRL+SHIFT+T"), false );
     pop->addCommand( "JIT Enabled", this, SLOT(onJitEnabled()) );
     pop->addCommand( "Restart LuaJIT", this, SLOT(onRestartLua()), tr("CTRL+SHIFT+R"), false );
     pop->addCommand( "Set Command...", this, SLOT(onRunCommand()) );
+    pop->addCommand( "Set Arguments...", this, SLOT( onSetArguments()) );
     pop->addCommand( "Run on LuaJIT", this, SLOT(onRun()), tr("CTRL+R"), false );
     addDebugMenu(pop);
     addTopCommands(pop);
@@ -814,7 +815,7 @@ void Ide::createMenuBar()
     pop->addSeparator();
     pop->addCommand( "Built-in Oakwood", this, SLOT(onOakwood()) );
     pop->addCommand( "Set Configuration Variables...", this, SLOT( onSetOptions()) );
-    pop->addCommand( "File System Root...", this, SLOT( onWorkingDir() ) );
+    //pop->addCommand( "File System Root...", this, SLOT( onWorkingDir() ) );
 
     pop = new Gui::AutoMenu( tr("Build && Run"), this );
     pop->addCommand( "Compile", this, SLOT(onCompile()), tr("CTRL+T"), false );
@@ -822,6 +823,7 @@ void Ide::createMenuBar()
     pop->addCommand( "JIT Enabled", this, SLOT(onJitEnabled()) );
     pop->addCommand( "Restart LuaJIT", this, SLOT(onRestartLua()), tr("CTRL+SHIFT+R"), false );
     pop->addCommand( "Set Command...", this, SLOT(onRunCommand()) );
+    pop->addCommand( "Set Arguments...", this, SLOT( onSetArguments()) );
     pop->addCommand( "Run on LuaJIT", this, SLOT(onRun()), tr("CTRL+R"), false );
 
     pop = new Gui::AutoMenu( tr("Debug"), this );
@@ -888,6 +890,24 @@ void Ide::onSetOptions()
                              tr("The following entries are illegal and ignored: \n%1").arg(errs.join('\n')));
 
     d_rt->getPro()->setOptions(l);
+}
+
+void Ide::onSetArguments()
+{
+    ENABLED_IF(true);
+
+    QStringList l = d_rt->getPro()->getArguments();
+
+    bool ok;
+    const QString args = QInputDialog::getMultiLineText(this,tr("Set Arguments"),
+                                                           tr("Please enter an argument per line:"),
+                                                           l.join('\n'), &ok );
+    if( !ok )
+        return;
+
+    l = args.split('\n');
+
+    d_rt->getPro()->setArguments(l);
 }
 
 void Ide::onCompile()
@@ -3093,7 +3113,7 @@ int main(int argc, char *argv[])
     a.setOrganizationName("me@rochus-keller.ch");
     a.setOrganizationDomain("github.com/rochus-keller/Luon");
     a.setApplicationName("Luon IDE (LuaJIT)");
-    a.setApplicationVersion("0.7.6");
+    a.setApplicationVersion("0.7.7");
     a.setStyle("Fusion");    
     QFontDatabase::addApplicationFont(":/font/DejaVuSansMono.ttf"); // "DejaVu Sans Mono"
 

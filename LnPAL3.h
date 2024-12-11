@@ -133,6 +133,7 @@ namespace St
         void simulateKeyEvent( char ch );
         void sendShift(bool keyPress, bool shiftRequired);
         void notify();
+        void updateImage();
     private:
         Bitmap d_bitmap;
         QImage d_screen;
