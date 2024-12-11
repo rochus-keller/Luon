@@ -2,7 +2,7 @@
 
 ## Welcome to the Luon Programming Language
 
-Luon is a high-level programming language with a syntax similar to [Oberon+](https://github.com/rochus-keller/oberon/), Oberon-07 and Oberon-2, with concepts found in Lua, targetting the LuaJIT VM. Luon can be regarded as a statically typed version of Lua. The name is thus a combination of "Lua" and "Oberon". 
+Luon is a high-level programming language with a syntax similar to [Oberon+](https://github.com/rochus-keller/oberon/), Oberon-07 and Oberon-2, with concepts found in Lua, targeting the LuaJIT VM. Luon can be regarded as a statically typed version of Lua. The name is thus a combination of "Lua" and "Oberon". 
 
 Luon procedures can be declared "external" and be implemented in Lua. This allows the re-use of libraries written in Lua, and also C libraries via 
 the LuaJIT foreign function interface.
@@ -22,7 +22,7 @@ In particular, Luon solves the following Lua shortcomings recognized during the 
   switches and slot consumption
 - no implicit global declarations, and other means to detect as many errors as possible during compile time
 - locals can no longer be used before declaration
-- switch/case control statement to avoid writing the relation expressionall over again
+- switch/case control statement to avoid writing the relation expression all over again
 
 This project implements a compiler and IDE for the Luon programming language. Representative example projects demonstrating the
 capabilities of the language and the IDE can be found in the [testcases subdirectory](https://github.com/rochus-keller/Luon/tree/master/testcases/). 
@@ -234,6 +234,8 @@ The following precompiled versions are available at this time:
 
 - [Linux i386](https://software.rochus-keller.ch/LuonIDE_linux_i386.tar.gz)
 - (Linux x86_64, Windows x86 and Windows x86_64 in preparation)
+
+Just download and unpack the compressed file to a directory. Start the IDE by double clicking on the LuonIDE executable. The specification and some demonstration projects are included.
 
 ### How to build
 

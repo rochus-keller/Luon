@@ -80,12 +80,14 @@ let ide ! : Executable {
     .configs += [ qt.qt_client_config ]
     .deps += [ qt.libqt ide_rcc ide_moc ]
     .include_dirs += [ ../LuaJIT/src .. ]
+    .lib_dirs += [ ../LuaJIT/src ]
     .sources += compiler_files + ide_files
     if target_os == `win32 {
         .lib_names += [ "lua51" ]
         .deps += qt.libqtwinmain
     } else {
-        .lib_names += [ "luajit" "dl" ]
+        .lib_names += [ "dl" ]
+        .lib_files += [ ../LuaJIT/src/libluajit.a ]
         .ldflags += [ "-rdynamic" ]
         if target_os == `macos {
             .ldflags += [ "-pagezero_size 10000" "-image_base 100000000" ]
