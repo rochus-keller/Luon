@@ -83,7 +83,7 @@ let ide ! : Executable {
     .lib_dirs += [ ../LuaJIT/src ]
     .sources += compiler_files + ide_files
     if target_os == `win32 {
-        .lib_names += [ "lua51" ]
+        .lib_files +=  [ ../LuaJIT/src/lua51.lib ]
         .deps += qt.libqtwinmain
     } else {
         .lib_names += [ "dl" ]

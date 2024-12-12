@@ -32,7 +32,7 @@ class Engine2;
 
 namespace Ln
 {
-    struct Declaration;
+    class Declaration;
     class Project;
 
     class LjRuntime : public QObject

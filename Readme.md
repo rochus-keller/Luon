@@ -227,13 +227,18 @@ The Smalltalk-80 VM implemented in Luon works (with a few issues WIP), with both
 a local testcase and demonstration to the Luon repository (as a copy of the corresponding files in the Smalltalk repository). 
 The same applies to the Are-we-fast-yet implementation. The project is close to an MVP release.
 
+##### Status on December 12. 2024
+
+With only a few changes, the IDE and demo projects also work on Windows. Provided precompiled packages for a few platforms. LuaJIT is statically linked
+on all platforms so far.
 
 ### Precompiled versions
 
 The following precompiled versions are available at this time:
 
-- [Linux i386](https://software.rochus-keller.ch/LuonIDE_linux_i386.tar.gz)
-- (Linux x86_64, Windows x86 and Windows x86_64 in preparation)
+- [Linux x86](http://software.rochus-keller.ch/LuonIDE_linux_i386.tar.gz)
+- [Linux x86_64](http://software.rochus-keller.ch/LuonIDE_linux_x64.tar.gz)
+- [Windows x86](http://software.rochus-keller.ch/LuonIDE_win32.zip)
 
 Just download and unpack the compressed file to a directory. Start the IDE by double clicking on the LuonIDE executable. The specification and some demonstration projects are included.
 
@@ -259,4 +264,16 @@ It is still possible to build the IDE using Qt 5 with qmake; use LnIde.pro for t
 ### Support
 
 If you need support or would like to post issues or feature requests please use the Github issue list at https://github.com/rochus-keller/Luon/issues or send an email to the author.
+
+### License
+
+Luon is available under GPL 2 or 3. The runtime libraries in the runtime subfolder, in addition, are available under MPL or LGPL.
+
+### Additional Credits
+
+- [LuaJIT](http://luajit.org) is Copyright © 2005-2023 Mike Pall, released under the MIT open source license. 
+- [LeanQt](https://github.com/rochus-keller/LeanQt) is based on Qt, which is Copyright (C) 2016 by The Qt Company Ltd, 2008 by Nokia Corporation and/or its subsidiary(-ies), 1992-2005 by Trolltech AS, and many individual contributors around the world.
+
+
+
 

@@ -2687,6 +2687,7 @@ bool LjbcGen::allocateModuleSlots(Declaration* module)
         d = d->getNext();
     }
     module->id = modSlotNr;
+    return true;
 }
 
 const QList<LjbcGen::Error>&LjbcGen::getErrors() const

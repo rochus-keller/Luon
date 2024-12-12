@@ -2352,7 +2352,7 @@ bool Validator::evalBuiltin(quint8 builtin, const ExpList& args, QVariant& ret, 
         ret = args[0]->val;
         break;
     case Builtin::STRLEN:
-        ret = ::strlen(args[0]->val.toByteArray().constData());
+        ret = (quint32)::strlen(args[0]->val.toByteArray().constData());
         break;
     case Builtin::INC:
         if( args.size() == 2 )
