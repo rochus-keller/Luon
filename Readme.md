@@ -2,7 +2,7 @@
 
 ## Welcome to the Luon Programming Language
 
-Luon is a high-level programming language with a syntax similar to [Oberon+](https://github.com/rochus-keller/oberon/), Oberon-07 and Oberon-2, with concepts found in Lua, targeting the LuaJIT VM. Luon can be regarded as a statically typed version of Lua. The name is thus a combination of "Lua" and "Oberon". 
+Luon is a high-level programming language with a syntax similar to [Oberon+](https://github.com/rochus-keller/oberon/), Oberon-07 and Oberon-2, integrating concepts from Lua, and targeting the LuaJIT VM. Luon can be regarded as a statically typed version of Lua. The name is thus a combination of "Lua" and "Oberon". 
 
 Luon procedures can be declared "external" and be implemented in Lua. This allows the re-use of libraries written in Lua, and also C libraries via 
 the LuaJIT foreign function interface.
@@ -161,7 +161,8 @@ end Drawing
 - [x] Document the language (specification is available)
 - [x] Migrate the Smalltalk-80 VM to Luon as a proof-of-concept and to optimize the language
 - [x] BUSY build and precompiled versions for some platforms
-- [ ] Complete the language implementation according to the specification (inline, invar)
+- [ ] Migrate PAL2 from C to Lua, fix BitBlt, LJ binary deployment
+- [ ] Complete the language implementation according to the specification (inline, invar, etc.)
 
 ### Development history
 
@@ -230,7 +231,7 @@ The same applies to the Are-we-fast-yet implementation. The project is close to 
 ##### Status on December 12. 2024
 
 With only a few changes, the IDE and demo projects also work on Windows. Provided precompiled packages for a few platforms. LuaJIT is statically linked
-on all platforms so far.
+on all platforms. MVP release.
 
 ### Precompiled versions
 
