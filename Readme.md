@@ -41,17 +41,25 @@ And here is the source-level debugger of the IDE:
 ```
 module Fibonacci
   proc calc*(n : integer): integer
-    var a, b: integer // comma is optional
+    var a, b, i, next: integer // comma is optional
   begin
+   <* if use_recursion then *>
     if n > 1 then 
       a := calc(n - 1)
       b := calc(n - 2)
       return a + b
-    elsif n = 0 then 
-      return 0
-    else 
-      return 1
+    elsif n = 0 then return 0
+    else return 1
     end
+   <* else *>
+    b := 1
+    for i := 0 to n-1 do
+      next := a + b
+      a := b
+      b := next
+    end
+    return a
+   <* end *>
   end calc
   var res: integer
 begin
@@ -66,15 +74,15 @@ end Fibonacci
 ##### Generic Programming
 ```
 module Collections(T) 
-  type Deque* = record
-                      data: array of T
+  type Deque* = record data: array of T
                       size: integer end
+                      
   proc createDeque*(): Deque 
-    const initial_len = 50
+    const initial_len = 1_000 // separators
     var this: Deque  // this is initialized to nil
   begin 
-    new(this); new(this.data,initial_len) 
-             // semicolon is optional
+    new(this); 
+    new(this.data,initial_len) 
     return this 
     // this and data will be garbage collected
   end createDeque
@@ -88,8 +96,8 @@ module Collections(T)
   type Iterator* = record end
   proc (this: Iterator) apply*(element: T) end
   
-  proc (this: Deque) forEach*(var iter: Iterator)
-    var i: integer
+  proc (this: Deque) forEach*(iter: Iterator)
+    var i: integer; val: T
   begin 
     for i := 0 to this.size-1 do 
       iter.apply(this.data[i]) 
@@ -104,22 +112,19 @@ module Drawing
   import F := Fibonacci
          C := Collections(Figure)
   
-  type Figure* = record
-                   position: record 
+  type Figure* = record position: record 
                      x,y: integer end end  
   proc (this: Figure) draw*() end
     
   type
-     Circle* = record (Figure) 
-                          diameter: integer end
-     Square* = record (Figure) 
-                          width: integer end 
-  proc (this: Circle) draw*() end
-  proc (this: Square) draw*() end
+    Circle* = record (Figure) diameter: integer end
+    Square* = record (Figure) width: integer end 
+    proc (this: Circle) draw*() end
+    proc (this: Square) draw*() end
         
   var figures: C.Deque
-       circle: Circle
-       square: Square
+      circle: Circle
+      square: Square
     
   proc drawAll()
     type I = record(C.Iterator) count: integer end
@@ -134,19 +139,13 @@ module Drawing
     assert(i.count = 2)
     println("drawing done")
   end drawAll
+  
 begin 
   figures := C.createDeque()
-  new(circle)
-  new(circle.position)
-  circle.position.x := F.calc(3)
-  circle.position.y := F.calc(4)
-  circle.diameter := 3
+  // use constructors instead of new:
+  circle := { { F.calc(3), F.calc(4) }, diameter: 3 }
   figures.append(circle)
-  new(square)
-  new(square.position)
-  square.position.x := F.calc(5)
-  square.position.y := F.calc(6)
-  square.width := 4
+  square := { { x: F.calc(5), y: F.calc(6) }, 4 }
   figures.append(square)
   drawAll()
 end Drawing  
@@ -161,8 +160,8 @@ end Drawing
 - [x] Document the language (specification is available)
 - [x] Migrate the Smalltalk-80 VM to Luon as a proof-of-concept and to optimize the language
 - [x] BUSY build and precompiled versions for some platforms
-- [ ] Migrate PAL2 from C to Lua, fix BitBlt, LJ binary deployment
-- [ ] Complete the language implementation according to the specification (inline, invar, etc.)
+- [ ] Migrate PAL2 from C to Lua, fix BitBlt, separate deployment
+- [ ] Complete the language implementation according to the specification (inline, invar, pcall, visibility, etc.)
 
 ### Development history
 

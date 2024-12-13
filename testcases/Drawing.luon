@@ -2,22 +2,19 @@ module Drawing
   import F := Fibonacci
          C := Collections(Figure)
   
-  type Figure* = record
-                   position: record 
+  type Figure* = record position: record 
                      x,y: integer end end  
   proc (this: Figure) draw*() end
     
   type
-     Circle* = record (Figure) 
-                          diameter: integer end
-     Square* = record (Figure) 
-                          width: integer end 
-  proc (this: Circle) draw*() end
-  proc (this: Square) draw*() end
+    Circle* = record (Figure) diameter: integer end
+    Square* = record (Figure) width: integer end 
+    proc (this: Circle) draw*() end
+    proc (this: Square) draw*() end
         
   var figures: C.Deque
-       circle: Circle
-       square: Square
+      circle: Circle
+      square: Square
     
   proc drawAll()
     type I = record(C.Iterator) count: integer end
@@ -32,19 +29,13 @@ module Drawing
     assert(i.count = 2)
     println("drawing done")
   end drawAll
+  
 begin 
   figures := C.createDeque()
-  new(circle)
-  new(circle.position)
-  circle.position.x := F.calc(3)
-  circle.position.y := F.calc(4)
-  circle.diameter := 3
+  // use constructors instead of new:
+  circle := { { F.calc(3), F.calc(4) }, diameter: 3 }
   figures.append(circle)
-  new(square)
-  new(square.position)
-  square.position.x := F.calc(5)
-  square.position.y := F.calc(6)
-  square.width := 4
+  square := { { x: F.calc(5), y: F.calc(6) }, 4 }
   figures.append(square)
   drawAll()
 end Drawing  

@@ -1,16 +1,24 @@
 module Fibonacci
   proc calc*(n : integer): integer
-    var a, b: integer // comma is optional
+    var a, b, i, next: integer // comma is optional
   begin
+   <* if use_recursion then *>
     if n > 1 then 
       a := calc(n - 1)
       b := calc(n - 2)
       return a + b
-    elsif n = 0 then 
-      return 0
-    else 
-      return 1
+    elsif n = 0 then return 0
+    else return 1
     end
+   <* else *>
+    b := 1
+    for i := 0 to n-1 do
+      next := a + b
+      a := b
+      b := next
+    end
+    return a
+   <* end *>
   end calc
   var res: integer
 begin

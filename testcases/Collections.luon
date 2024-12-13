@@ -1,13 +1,13 @@
 module Collections(T) 
-  type Deque* = record
-                      data: array of T
+  type Deque* = record data: array of T
                       size: integer end
+                      
   proc createDeque*(): Deque 
-    const initial_len = 50
+    const initial_len = 1_000 // separators
     var this: Deque  // this is initialized to nil
   begin 
-    new(this); new(this.data,initial_len) 
-             // semicolon is optional
+    new(this); 
+    new(this.data,initial_len) 
     return this 
     // this and data will be garbage collected
   end createDeque
