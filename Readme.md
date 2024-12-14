@@ -68,7 +68,6 @@ begin
   print("Fibonaccy result: ")
   println(res)
 end Fibonacci
-
 ```
 
 ##### Generic Programming
@@ -247,7 +246,7 @@ Just download and unpack the compressed file to a directory. Start the IDE by do
 Follow these steps if you want to build the Luon IDE yourself. The build is using LeanQt and the BUSY build system. Note that compiling on Linux requires the build essentials, xcb, libxcb1-dev and libx11-dev packages. On Mac and Windows there are no additional requirements than a toolchain.
 
 1. Create a new directory; we call it the root directory here
-1. Download https://github.com/rochus-keller/Luon/archive/refs/heads/master.zip and unpack it to the root directory; rename the resulting directory to "Oberon".
+1. Download https://github.com/rochus-keller/Luon/archive/refs/heads/master.zip and unpack it to the root directory; rename the resulting directory to "Luon".
 1. Download https://github.com/rochus-keller/LuaJIT/archive/refs/heads/LjTools.zip and unpack it to the root directory; rename the resulting directory to "LuaJIT".
 1. Download https://github.com/rochus-keller/LjTools/archive/refs/heads/master.zip and unpack it to the root directory; rename the resulting directory to "MonoTools".
 1. Download https://github.com/rochus-keller/GuiTools/archive/refs/heads/master.zip and unpack it to the root directory; rename the resulting directory to "GuiTools".
