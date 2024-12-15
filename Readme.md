@@ -248,7 +248,7 @@ Follow these steps if you want to build the Luon IDE yourself. The build is usin
 1. Create a new directory; we call it the root directory here
 1. Download https://github.com/rochus-keller/Luon/archive/refs/heads/master.zip and unpack it to the root directory; rename the resulting directory to "Luon".
 1. Download https://github.com/rochus-keller/LuaJIT/archive/refs/heads/LjTools.zip and unpack it to the root directory; rename the resulting directory to "LuaJIT".
-1. Download https://github.com/rochus-keller/LjTools/archive/refs/heads/master.zip and unpack it to the root directory; rename the resulting directory to "MonoTools".
+1. Download https://github.com/rochus-keller/LjTools/archive/refs/heads/master.zip and unpack it to the root directory; rename the resulting directory to "LjTools".
 1. Download https://github.com/rochus-keller/GuiTools/archive/refs/heads/master.zip and unpack it to the root directory; rename the resulting directory to "GuiTools".
 1. Download https://github.com/rochus-keller/LeanQt/archive/refs/heads/master.zip and unpack it to the root directory; rename the resulting directory to "LeanQt".
 1. Download https://github.com/rochus-keller/BUSY/archive/refs/heads/master.zip and unpack it to the root directory; rename the resulting directory to "build".
