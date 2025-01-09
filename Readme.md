@@ -270,8 +270,9 @@ Luon is available under GPL 2 or 3. The runtime libraries in the runtime subfold
 
 ### Additional Credits
 
-- [LuaJIT](http://luajit.org) is Copyright © 2005-2023 Mike Pall, released under the MIT open source license. 
-- [LeanQt](https://github.com/rochus-keller/LeanQt) is based on Qt, which is Copyright (C) 2016 by The Qt Company Ltd, 2008 by Nokia Corporation and/or its subsidiary(-ies), 1992-2005 by Trolltech AS, and many individual contributors around the world.
+- [LuaJIT](http://luajit.org) is copyright 2005-2023 Mike Pall, released under the MIT open source license. 
+- [LeanQt](https://github.com/rochus-keller/LeanQt) is based on Qt, which is copyright 2016 by The Qt Company Ltd, 2008 by Nokia Corporation and/or its subsidiary(-ies), 1992-2005 by Trolltech AS, and many individual contributors around the world.
+- [Lua 5.1](http://www.lua.org) is copyright 1994-2012 by Luiz Henrique de Figueiredo, Roberto Ierusalimschy and Waldemar Celes.
 
 
 

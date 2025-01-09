@@ -45,13 +45,13 @@ type ::= NamedType | ArrayType | DictType | RecordType | ProcedureType | enumera
 
 NamedType ::= qualident
 
-ArrayType ::= 'ARRAY' [ length ] 'OF' type | '[' [ length ] ']' type
+ArrayType ::= ARRAY [ length ] OF type | '[' [ length ] ']' type
 
 length ::= ConstExpression 
 
-DictType ::= 'HASHMAP' NamedType 'OF' type
+DictType ::= HASHMAP NamedType OF type
 
-RecordType ::= 'RECORD' ['(' BaseType ')'] { FieldList [ ';' ] } 'END' 
+RecordType ::= RECORD ['(' BaseType ')'] { FieldList [ ';' ] } END
 BaseType ::= NamedType
 FieldList ::= IdentList ':' type 
 
@@ -72,21 +72,21 @@ ExpList ::= expression { [','] expression }
 
 expression ::= SimpleExpression [ relation SimpleExpression ]
 
-relation ::= '=' | '#' | '<' | '<=' | '>' | '>=' | IN |'IS'
+relation ::= '=' | '#' | '<' | '<=' | '>' | '>=' | IN | IS
 
 SimpleExpression ::= ['+' | '-'] term { AddOperator term }
 
-AddOperator ::= '+' | '-' | 'OR'
+AddOperator ::= '+' | '-' | OR
 
 term ::= factor {MulOperator factor}
 
-MulOperator ::= '*' | '/' | 'DIV' | 'MOD' | '&' | 'AND'
+MulOperator ::= '*' | '/' | DIV | MOD | '&' | AND
 
-literal ::= number | string | hexstring | hexchar | 'NIL' | 'TRUE' | 'FALSE'
+literal ::= number | string | hexstring | hexchar | NIL | TRUE | FALSE
 
 constructor ::= [NamedType] '{' [ component {[','] component} ] '}'  
+                            // NOTE: includes set
                             // TODO: support empty or incomplete constructors with default values for undefineds
-                            // TODO: structured constructor create instance
 
 component ::= 
         \LL:2\ ident ':' expression // explicit record field name (ident is like a label, thus ':')
@@ -94,11 +94,11 @@ component ::=
         | expression ['..' expression] // value mapped to record or array by field/element order; '..' only for sets
 
 factor ::= 
-        \LA: 1:'{' | 1:ident & 2:'{'\ constructor
+        \LA: 1:ident & 2:'{'\ constructor
         | literal
 	| variableOrFunctionCall // replaces: designator [ActualParameters]
 	| '(' expression ')' 
-	| ('~'|'NOT') factor // negation
+	| ('~'|NOT) factor // negation
 
 variableOrFunctionCall ::= designator // designator includes [ ActualParameters ] 
 	
@@ -116,13 +116,13 @@ assignmentOrProcedureCall ::= designator  [
 
 StatementSequence ::=  { statement { ';' } } 
 
-IfStatement ::= 'IF' expression 'THEN' StatementSequence { ElsifStatement }
-	[ ElseStatement ] 'END'
-ElsifStatement ::= 'ELSIF' expression 'THEN' StatementSequence 
-ElseStatement ::= 'ELSE' StatementSequence
+IfStatement ::= IF expression THEN StatementSequence { ElsifStatement }
+	[ ElseStatement ] END
+ElsifStatement ::= ELSIF expression THEN StatementSequence 
+ElseStatement ::= ELSE StatementSequence
 
-CaseStatement ::= 'CASE' expression 'OF' [Case] { '|' Case }
-	[ 'ELSE' StatementSequence ] 'END' 
+CaseStatement ::= CASE expression OF [Case] { '|' Case }
+	[ ELSE StatementSequence ] END
 
 Case ::= CaseLabelList ':' StatementSequence
 
@@ -132,25 +132,25 @@ LabelRange ::= label [ '..' label ]
 
 label ::= ConstExpression
 
-WhileStatement ::= 'WHILE' expression 'DO' StatementSequence 'END'
+WhileStatement ::= WHILE expression DO StatementSequence END
 
 RepeatStatement ::= 'REPEAT' StatementSequence 'UNTIL' expression
 
-ForStatement ::= 'FOR' ident ':=' expression 'TO' expression [ 'BY' ConstExpression ]
-	'DO' StatementSequence 'END'
+ForStatement ::= FOR ident ':=' expression TO expression [ BY ConstExpression ]
+	DO StatementSequence END
 	
-LoopStatement ::= 'LOOP' StatementSequence 'END'
+LoopStatement ::= LOOP StatementSequence END
 
-ExitStatement ::= 'EXIT'
+ExitStatement ::= EXIT
 
-procedure ::= 'PROCEDURE' | 'PROC'
+procedure ::= PROCEDURE | PROC
 
 ProcedureType ::= procedure [ '^'] [FormalParameters]  //  '^' is an object callback
 
 ProcedureDeclaration ::= 
         ProcedureHeading ( 
-             \LL:2\ [ ';' ] 'EXTERN' [ident]  // TODO: maybe we need some additions for the FFI
-            | ['INLINE'| 'INVAR'] [ ';' ] ( ProcedureBody | 'END' ) 
+             \LL:2\ [ ';' ] EXTERN [ident]  // TODO: maybe we need some additions for the FFI
+            | [INLINE| INVAR] [ ';' ] ( ProcedureBody | END ) 
             )
             // type bound procs cannot be INLINE, INVAR, nor EXTERN
 
@@ -158,19 +158,19 @@ ProcedureDeclaration ::=
 ProcedureHeading ::= procedure [Receiver] identdef [ FormalParameters ]  
 Receiver ::= '(' ident ':' ident ')'
 
-block ::= 'BEGIN' StatementSequence
+block ::= BEGIN StatementSequence
 
-ProcedureBody ::= DeclarationSequence block 'END' ident
+ProcedureBody ::= DeclarationSequence block END ident
 	
 // The order of declarations is generally not relevant; but we require that the record declaration a bound procedure
 // refers to is in the same scope and prior to the bound procedure declaration
 DeclarationSequence ::= 
-	{ 'CONST' { ConstDeclaration [';'] } 
-	| 'TYPE' { TypeDeclaration [';'] } 
-	| 'VAR' { VariableDeclaration [';'] } 
+	{ CONST { ConstDeclaration [';'] } 
+	| TYPE { TypeDeclaration [';'] } 
+	| VAR { VariableDeclaration [';'] } 
 	| ProcedureDeclaration [';'] }
 
-ReturnStatement ::= 'RETURN' 
+ReturnStatement ::= RETURN
 	[ expression ] // leads to LL(k) ambig with qualident statement; resolve by checking if proc has return type
 
 FormalParameters ::= '(' [ FPSection { \LA: 1:(ident|'CONST'|'VAR') | (1:';' & 2:(ident|'CONST'|'VAR'))\ 
@@ -184,11 +184,11 @@ FPSection ::= [VAR|CONST] ident { [','] ident } ':' FormalType
 
 FormalType ::= type
 
-module ::= 'MODULE' ident [ MetaParams ] [';'] 
+module ::= MODULE ident [ MetaParams ] [';'] 
 	{ ImportList | DeclarationSequence }
-	[ block ] 'END' ident ['.'] 
+	[ block ] END ident ['.'] 
 	
-ImportList ::= 'IMPORT' import { [ ',' ] import } [';']
+ImportList ::= IMPORT import { [ ',' ] import } [';']
 
 import ::= [ \LL:2\ ident ':=' ] ident  { '.' ident }  [ MetaActuals ] 
 

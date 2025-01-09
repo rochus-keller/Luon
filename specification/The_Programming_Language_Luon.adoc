@@ -24,7 +24,7 @@ This work is based on the language reports of Oberon+, Oberon-07 and Oberon-2.
 == Introduction
 Luon is a general-purpose, procedural and object-oriented programming language in the tradition of Oberon+, Oberon-07 <<Wi16>> and Oberon-2 <<Mo91>>, with elements of Pascal <<Wi73>>. Even though Luon has many similarities with those languages, backward compatibility is not a goal.
 
-Luon is conceived as a statically typed alternative to scripting languages like e.g. Lua and targets the virtual machines of such dynamic languages. The name "Luon" is a combination of "Lua" and "Oberon".
+Luon is conceived as a statically typed alternative to scripting languages like e.g. Lua <<Lua05>> and targets the virtual machines of such dynamic languages. The name "Luon" is a combination of "Lua" and "Oberon".
 
 The most important features of Luon are block structure, modularity, separate compilation, static typing with strong type checking, generic programming footnote:[generic modules, inspired by <<Ada83>>], garbage collection, and type extension with type-bound procedures.
  
@@ -1664,5 +1664,6 @@ end Drawing
 - [[[Wi16]]] Wirth, N. (2016). The Programming Language Oberon. https://people.inf.ethz.ch/wirth/Oberon/Oberon07.Report.pdf (accessed 2020-11-16).
 - [[[Wi73]]] Wirth, N. (1973). The Programming Language Pascal (Revised Report). ETH Report. https://doi.org/10.3929/ethz-a-000814158 (accessed 2020-11-16).
 - [[[Wi87]]] Wirth, N. (1987). From Modula to Oberon and the programming language Oberon. ETH Report. https://doi.org/10.3929/ethz-a-005363226 (accessed 2020-11-16).
+- [[Lua05]] Ierusalimschy, R., De Figueiredo, L. H., & Celes Filho, W. (2005). The Implementation of Lua 5.0. J. Univers. Comput. Sci., 11(7), 1159-1176.
 
 

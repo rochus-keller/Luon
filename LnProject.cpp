@@ -90,6 +90,7 @@ struct HitTest
 Project::Project(QObject *parent) : QObject(parent),d_dirty(false),d_useBuiltInOakwood(false)
 {
     d_suffixes << ".luon";
+    d_groups.append( FileGroup() );    // root
 }
 
 Project::~Project()
@@ -101,6 +102,7 @@ void Project::clear()
 {
     clearModules();
     d_groups.clear();
+    d_groups.append( FileGroup() );    // root
     d_filePath.clear();
     d_files.clear();
     d_byName.clear();
@@ -842,16 +844,19 @@ bool Project::save()
     out.setValue("Arguments", d_arguments );
 
     const FileGroup* root = getRootFileGroup();
-    out.beginWriteArray("Modules", root->d_files.size() ); // nested arrays don't work
-    for( int i = 0; i < root->d_files.size(); i++ )
+    if( root )
     {
-        const QString absPath = root->d_files[i]->d_filePath;
-        const QString relPath = dir.relativeFilePath( absPath );
-        out.setArrayIndex(i);
-        out.setValue("AbsPath", absPath );
-        out.setValue("RelPath", relPath );
+        out.beginWriteArray("Modules", root->d_files.size() ); // nested arrays don't work
+        for( int i = 0; i < root->d_files.size(); i++ )
+        {
+            const QString absPath = root->d_files[i]->d_filePath;
+            const QString relPath = dir.relativeFilePath( absPath );
+            out.setArrayIndex(i);
+            out.setValue("AbsPath", absPath );
+            out.setValue("RelPath", relPath );
+        }
+        out.endArray();
     }
-    out.endArray();
 
     out.beginWriteArray("Packages", d_groups.size() );
     for( int i = 0; i < d_groups.size(); i++ )

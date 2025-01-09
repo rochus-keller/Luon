@@ -271,14 +271,14 @@ static inline bool FIRST_MulOperator(int tt) {
 
 static inline bool FIRST_literal(int tt) {
 	switch(tt){
-	case Tok_NIL:
-	case Tok_TRUE:
-	case Tok_hexchar:
-	case Tok_integer:
-	case Tok_string:
+    case Tok_FALSE:
+    case Tok_hexchar:
     case Tok_hexstring:
-	case Tok_real:
-	case Tok_FALSE:
+    case Tok_integer:
+    case Tok_NIL:
+    case Tok_real:
+    case Tok_string:
+    case Tok_TRUE:
 		return true;
 	default: return false;
 	}
