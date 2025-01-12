@@ -109,6 +109,13 @@ statement ::=
 	ExitStatement | 
 	ReturnStatement |
 	WhileStatement | RepeatStatement | ForStatement
+	| VAR LocalVarDeclaration
+	| CONST ConstDeclaration
+	| TYPE TypeDeclaration
+	| ProcedureDeclaration
+	| DO StatementSequence END
+	
+LocalVarDeclaration ::= ident (':=' expression | ':' type [ ':=' expression ] )
 
 assignmentOrProcedureCall ::= designator  [
 		':=' expression ] // assignment 
@@ -136,7 +143,7 @@ WhileStatement ::= WHILE expression DO StatementSequence END
 
 RepeatStatement ::= 'REPEAT' StatementSequence 'UNTIL' expression
 
-ForStatement ::= FOR ident ':=' expression TO expression [ BY ConstExpression ]
+ForStatement ::= FOR [VAR] ident ':=' expression TO expression [ BY ConstExpression ] // VAR is a local var decl
 	DO StatementSequence END
 	
 LoopStatement ::= LOOP StatementSequence END
@@ -145,11 +152,11 @@ ExitStatement ::= EXIT
 
 procedure ::= PROCEDURE | PROC
 
-ProcedureType ::= procedure [ '^'] [FormalParameters]  //  '^' is an object callback
+ProcedureType ::= procedure ['^'] [FormalParameters]  //  '^' is an object callback
 
 ProcedureDeclaration ::= 
         ProcedureHeading ( 
-             \LL:2\ [ ';' ] EXTERN [ident]  // TODO: maybe we need some additions for the FFI
+             \LL:2\ [ ';' ] EXTERN // [ident]  // TODO: maybe we need some additions for the FFI
             | [INLINE| INVAR] [ ';' ] ( ProcedureBody | END ) 
             )
             // type bound procs cannot be INLINE, INVAR, nor EXTERN
@@ -160,7 +167,7 @@ Receiver ::= '(' ident ':' ident ')'
 
 block ::= BEGIN StatementSequence
 
-ProcedureBody ::= DeclarationSequence block END ident
+ProcedureBody ::= (DeclarationSequence block | DO StatementSequence) END ident
 	
 // The order of declarations is generally not relevant; but we require that the record declaration a bound procedure
 // refers to is in the same scope and prior to the bound procedure declaration

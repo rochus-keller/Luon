@@ -33,6 +33,7 @@ const char* SynTree::rToStr( quint16 r ) {
 		case R_IfStatement: return "IfStatement";
 		case R_ImportList: return "ImportList";
 		case R_LabelRange: return "LabelRange";
+		case R_LocalVarDeclaration: return "LocalVarDeclaration";
 		case R_LoopStatement: return "LoopStatement";
 		case R_Luon: return "Luon";
 		case R_MetaActuals: return "MetaActuals";

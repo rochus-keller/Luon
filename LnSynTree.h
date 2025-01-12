@@ -34,6 +34,7 @@ namespace Ln {
 			R_IfStatement,
 			R_ImportList,
 			R_LabelRange,
+			R_LocalVarDeclaration,
 			R_LoopStatement,
 			R_Luon,
 			R_MetaActuals,

@@ -192,7 +192,7 @@ void Validator::visitScope(Declaration* scope)
     cur = scope->link;
     while( cur )
     {
-        if( cur->kind == Declaration::Procedure )
+        if( cur->kind == Declaration::Procedure || cur->kind == Declaration::Block )
             visitScope(cur);
         cur = cur->getNext();
     }
@@ -249,6 +249,8 @@ void Validator::visitDecl(Declaration* d)
             visitDecl(params[i]);
         break;
         }
+    case Declaration::Block:
+        break;
     default:
         Q_ASSERT(false);
         break;
@@ -290,6 +292,8 @@ void Validator::visitBody(Statement* s)
 
     while( s )
     {
+        if( s->scope )
+            scopeStack.push_back(s->scope);
         switch(s->kind)
         {
         case Statement::Assig:
@@ -323,6 +327,9 @@ void Validator::visitBody(Statement* s)
         case Statement::ForAssig:
             s = forStat(s);
             break;
+        case Statement::Do:
+            visitBody(s->body);
+            break;
         case Statement::ForToBy:
         case Statement::CaseLabel:
         case Statement::TypeCase:
@@ -335,6 +342,8 @@ void Validator::visitBody(Statement* s)
         default:
             Q_ASSERT(false);
         }
+        if( s->scope )
+            scopeStack.pop_back();
         s = s->getNext();
     }
 }
@@ -1236,16 +1245,32 @@ void Validator::loopStat(Statement* s)
     visitBody(s->body);
 }
 
+static Declaration* thisProc(Declaration* scope)
+{
+    if( scope == 0 )
+        return 0;
+    Q_ASSERT( scope->kind == Declaration::Module || scope->kind == Declaration::Procedure
+              || scope->kind == Declaration::Block );
+    while( scope && scope->kind == Declaration::Block )
+        scope = scope->outer;
+    Q_ASSERT( scope && (scope->kind == Declaration::Procedure || scope->kind == Declaration::Module) );
+    return scope;
+}
+
 void Validator::returnOp(Statement* s)
 {
     visitExpr(s->rhs);
-    Q_ASSERT(!scopeStack.isEmpty() && scopeStack.back()->kind == Declaration::Procedure);
-    if( s->rhs && (scopeStack.back()->type == 0 || scopeStack.back()->type->form == BasicType::NoType) )
+
+    Q_ASSERT(!scopeStack.isEmpty());
+    Declaration* proc = thisProc(scopeStack.back());
+    Q_ASSERT(proc);
+
+    if( s->rhs && (proc->type == 0 || proc->type->form == BasicType::NoType) )
         error(s->rhs->pos,"the procedure doesn't return a value");
-    else if( s->rhs == 0 && scopeStack.back()->type != 0 && scopeStack.back()->type->form != BasicType::NoType)
+    else if( s->rhs == 0 && proc->type != 0 && proc->type->form != BasicType::NoType)
         error(s->pos,"a value must be returned");
-    else if( s->rhs != 0 && scopeStack.back()->type != 0 && scopeStack.back()->type->form != BasicType::NoType
-             && !assigCompat(scopeStack.back()->type, s->rhs) )
+    else if( s->rhs != 0 && proc->type != 0 && proc->type->form != BasicType::NoType
+             && !assigCompat(proc->type, s->rhs) )
         error(s->rhs->pos,"the returned value is not compatible with the function return type");
 }
 
@@ -1289,7 +1314,7 @@ Qualident Validator::resolve(Expression* nameRef)
         pos.d_col += q.first.size() + 1;
     }
     Symbol* s = markRef(r.second, pos);
-    if( nameRef->needsLval )
+    if( s && nameRef->needsLval )
         s->kind = Symbol::Lval;
     resolve(r.second->type);
 #if 0
@@ -1310,9 +1335,10 @@ Qualident Validator::resolve(Expression* nameRef)
         nameRef->kind = Expression::DeclRef;
         nameRef->val = QVariant::fromValue(r.second);
         nameRef->type = r.second->type;
+        Declaration* proc = thisProc(scopeStack.back());
         if( r.second->kind == Declaration::LocalDecl || r.second->kind == Declaration::ParamDecl )
         {
-            if( r.second->outer != scopeStack.back() )
+            if( thisProc(r.second->outer) != proc )
                 error(nameRef->pos,"cannot access parameters and local variables of outer procedures");
             // Luon - in contrast to Oberon+ - doesn't support non-local variable access
         }
@@ -2399,7 +2425,7 @@ void Validator::markDecl(Declaration* d)
 
 Symbol* Validator::markRef(Declaration* d, const RowCol& pos)
 {
-    if( first == 0 )
+    if( first == 0 || !pos.isValid() )
         return 0;
     Symbol* s = new Symbol();
     s->kind = Symbol::DeclRef;

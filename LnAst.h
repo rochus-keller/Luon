@@ -117,7 +117,7 @@ namespace Ln
     class Declaration
     {
     public:
-        enum Kind { Invalid, Helper, Scope, Module, TypeDecl, Builtin, ConstDecl, Import, Field,
+        enum Kind { Invalid, Helper, Scope, Module, Block, TypeDecl, Builtin, ConstDecl, Import, Field,
                     VarDecl, LocalDecl,
                     Procedure, ParamDecl,
                     Max };
@@ -125,7 +125,7 @@ namespace Ln
         Declaration* link; // member list or imported module decl
         Declaration* outer; // the owning declaration to reconstruct the qualident
         Declaration* super; // super class or overridden method
-        Statement* body; // procs
+        Statement* body; // procs, owned
         Type* type;
         QByteArray name;
         RowCol pos;
@@ -239,7 +239,7 @@ namespace Ln
     public:
         enum Kind { Invalid,
             Assig, Call, If, Elsif, Else, Case, TypeCase, CaseLabel,
-            Loop, While, Repeat, Exit, Return, ForAssig, ForToBy, End
+            Do, Loop, While, Repeat, Exit, Return, ForAssig, ForToBy, End
         };
         quint8 kind;
 
@@ -247,9 +247,10 @@ namespace Ln
         Expression* lhs; // owns: proc, assig lhs
         Expression* rhs; // owns: rhs, args, cond, case, label, return
         Statement* body; // owns: then
+        Declaration* scope; // not owned
 
         Statement(Kind k = Invalid, const RowCol& pos = RowCol()):kind(k),pos(pos),lhs(0),rhs(0),
-            next(0),body(0),inList(false) {}
+            next(0),body(0),scope(0),inList(false) {}
         Statement* getLast() const;
         Statement* getNext() const { return next; }
         void append(Statement*s);

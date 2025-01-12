@@ -18,7 +18,7 @@
 #include <QtDebug>
 using namespace Ln;
 
-static const quint64 maxUlong = (1L << BasicType::SignedIntBitWidth) - 1; // 52 bits
+static const quint64 maxUlong = ((quint64)1 << BasicType::SignedIntBitWidth) - 1; // 52 bits
 
 static inline bool FIRST_Luon(int tt) {
 	return tt == Tok_MODULE;
@@ -337,16 +337,22 @@ static inline bool FIRST_variableOrFunctionCall(int tt) {
 
 static inline bool FIRST_statement(int tt) {
 	switch(tt){
-	case Tok_EXIT:
-	case Tok_IF:
-	case Tok_ident:
-	case Tok_FOR:
-	case Tok_LOOP:
-	case Tok_WHILE:
-	case Tok_RETURN:
-	case Tok_CASE:
-	case Tok_REPEAT:
-		return true;
+    case Tok_WHILE:
+    case Tok_IF:
+    case Tok_CONST:
+    case Tok_CASE:
+    case Tok_DO:
+    case Tok_PROC:
+    case Tok_VAR:
+    case Tok_FOR:
+    case Tok_PROCEDURE:
+    case Tok_LOOP:
+    case Tok_EXIT:
+    case Tok_ident:
+    case Tok_REPEAT:
+    case Tok_TYPE:
+    case Tok_RETURN:
+        return true;
 	default: return false;
 	}
 }
@@ -499,13 +505,14 @@ static inline bool FIRST_block(int tt) {
 
 static inline bool FIRST_ProcedureBody(int tt) {
 	switch(tt){
-	case Tok_PROC:
-	case Tok_BEGIN:
-	case Tok_PROCEDURE:
-	case Tok_CONST:
-	case Tok_VAR:
-	case Tok_TYPE:
-		return true;
+    case Tok_CONST:
+    case Tok_PROC:
+    case Tok_DO:
+    case Tok_VAR:
+    case Tok_PROCEDURE:
+    case Tok_BEGIN:
+    case Tok_TYPE:
+        return true;
 	default: return false;
 	}
 }
@@ -569,8 +576,14 @@ static inline bool FIRST_MetaSection(int tt) {
 	return tt == Tok_ident || tt == Tok_CONST || tt == Tok_TYPE;
 }
 
+Parser2::Parser2(AstModel* m, Scanner2* s):scanner(s),mdl(m),thisMod(0)
+{
+    dummy = new Statement();
+}
+
 Parser2::~Parser2()
 {
+    Statement::deleteAll(dummy);
     if( thisMod )
         Declaration::deleteAll(thisMod);
 }
@@ -917,11 +930,11 @@ void Parser2::VariableDeclaration() {
     Declaration* outer = mdl->getTopScope();
     foreach( const IdentDef& id, ids )
     {
-        Declaration* d = addDecl(id,outer->kind == Declaration::Module ?
+        Declaration* d = addDecl(id, outer->kind == Declaration::Module ?
                                      Declaration::VarDecl : Declaration::LocalDecl);
         if( d == 0 )
             continue;
-        d->outer = outer;
+        //d->outer = outer;
         d->type = t;
     }
 }
@@ -1129,8 +1142,8 @@ quint8 Parser2::MulOperator() {
 static QByteArray dequote(const QByteArray& str)
 {
     QByteArray res;
-    if( str.startsWith('\'') && str.endsWith('\'') ||
-            str.startsWith('"') && str.endsWith('"') )
+    if( (str.startsWith('\'') && str.endsWith('\'')) ||
+            (str.startsWith('"') && str.endsWith('"')) )
         res = str.mid(1,str.size()-2);
     else
         res = str;
@@ -1272,7 +1285,7 @@ Expression* Parser2::component() {
 
 Expression* Parser2::factor(bool lvalue) {
     Expression* res = 0;
-    if( ( ( peek(1).d_type == Tok_Lbrace || peek(1).d_type == Tok_ident && peek(2).d_type == Tok_Lbrace ) )  ) {
+    if( peek(1).d_type == Tok_Lbrace || (peek(1).d_type == Tok_ident && peek(2).d_type == Tok_Lbrace) ) {
         res = constructor();
 	} else if( FIRST_literal(la.d_type) ) {
         res = literal();
@@ -1324,15 +1337,29 @@ Statement* Parser2::statement() {
         res = RepeatStatement();
 	} else if( FIRST_ForStatement(la.d_type) ) {
         res = ForStatement();
-	} else
+    } else if( la.d_type == Tok_DO ) {
+        res = DoStatement();
+    } else if( la.d_type == Tok_VAR ) {
+        expect(Tok_VAR, false, "statement");
+        res = LocalVarDeclaration();
+    } else if( la.d_type == Tok_CONST ) {
+        expect(Tok_CONST, false, "statement");
+        ConstDeclaration();
+        res = dummy;
+    } else if( la.d_type == Tok_TYPE ) {
+        expect(Tok_TYPE, false, "statement");
+        TypeDeclaration();
+        res = dummy;
+    } else if( FIRST_ProcedureDeclaration(la.d_type) ) {
+        ProcedureDeclaration();
+        res = dummy;
+    } else
 		invalid("statement");
     return res;
 }
 
 Statement* Parser2::assignmentOrProcedureCall() {
     Token t = la;
-    if( t.d_lineNr == 25 )
-        dummy();
     Expression* lhs = designator(true);
     if( lhs == 0 )
         return 0;
@@ -1367,11 +1394,14 @@ Statement* Parser2::StatementSequence() {
             Statement::deleteAll(first);
             return 0;
         }
-        if( last )
-            last->append(stat);
-        last = stat->getLast();
-        if( first == 0 )
-            first = stat;
+        if( stat != dummy )
+        {
+            if( last )
+                last->append(stat);
+            last = stat->getLast();
+            if( first == 0 )
+                first = stat;
+        }
 		while( la.d_type == Tok_Semi ) {
 			expect(Tok_Semi, false, "StatementSequence");
 		}
@@ -1386,15 +1416,15 @@ Statement* Parser2::StatementSequence() {
 
 Statement* Parser2::IfStatement() {
 	expect(Tok_IF, true, "IfStatement");
-    Statement* first = new Statement(Statement::If,cur.toRowCol());
-    first->rhs = expression();
-    if( first->rhs == 0 )
-    {
-        Statement::deleteAll(first);
+    const Token t = cur;
+    Expression* e = expression();
+    if( e == 0 )
         return 0;
-    }
 	expect(Tok_THEN, true, "IfStatement");
+    Statement* first = createBlockStat(Statement::If,t.toRowCol());
+    first->rhs = e;
     first->body = StatementSequence();
+    mdl->closeScope();
     Statement* last = first;
 	while( FIRST_ElsifStatement(la.d_type) ) {
         Statement* stat = ElsifStatement();
@@ -1421,15 +1451,15 @@ Statement* Parser2::IfStatement() {
 
 Statement* Parser2::ElsifStatement() {
 	expect(Tok_ELSIF, true, "ElsifStatement");
-    Statement* res = new Statement(Statement::Elsif,cur.toRowCol());
-    res->rhs = expression();
-    if( res->rhs == 0 )
-    {
-        Statement::deleteAll(res);
+    const Token t = cur;
+    Expression* e = expression();
+    if( e == 0 )
         return 0;
-    }
 	expect(Tok_THEN, true, "ElsifStatement");
+    Statement* res = createBlockStat(Statement::Elsif,t.toRowCol());
+    res->rhs = e;
     res->body = StatementSequence();
+    mdl->closeScope();
     if( res->body == 0 )
     {
         Statement::deleteAll(res);
@@ -1440,8 +1470,9 @@ Statement* Parser2::ElsifStatement() {
 
 Statement* Parser2::ElseStatement() {
 	expect(Tok_ELSE, true, "ElseStatement");
-    Statement* res = new Statement(Statement::Else, cur.toRowCol());
+    Statement* res = createBlockStat(Statement::Else, cur.toRowCol());
     res->body = StatementSequence();
+    mdl->closeScope();
     if( res->body == 0 )
     {
         Statement::deleteAll(res);
@@ -1499,15 +1530,15 @@ Statement* Parser2::CaseStatement() {
 }
 
 Statement* Parser2::Case() {
-    Statement* res = new Statement(Statement::CaseLabel, la.toRowCol());
-    res->rhs = CaseLabelList();
-    if( res->rhs == 0 )
-    {
-        Statement::deleteAll(res);
+    const Token t = la;
+    Expression* e = CaseLabelList();
+    if( e == 0 )
         return 0;
-    }
     expect(Tok_Colon, false, "Case");
+    Statement* res = createBlockStat(Statement::CaseLabel, t.toRowCol());
+    res->rhs = e;
     res->body = StatementSequence(); // body may be empty
+    mdl->closeScope();
     return res;
 }
 
@@ -1559,24 +1590,25 @@ Expression* Parser2::label() {
 
 Statement* Parser2::WhileStatement() {
 	expect(Tok_WHILE, true, "WhileStatement");
-    Statement* res = new Statement(Statement::While, cur.toRowCol());
-    res->rhs = expression();
-    if( res->rhs == 0 )
-    {
-        Statement::deleteAll(res);
+    const Token t = cur;
+    Expression* e = expression();
+    if( e == 0 )
         return 0;
-    }
 	expect(Tok_DO, true, "WhileStatement");
+    Statement* res = createBlockStat(Statement::While, t.toRowCol());
+    res->rhs = e;
     res->body = StatementSequence();
 	expect(Tok_END, true, "WhileStatement");
+    mdl->closeScope();
     return res;
 }
 
 Statement* Parser2::RepeatStatement() {
 	expect(Tok_REPEAT, true, "RepeatStatement");
-    Statement* res = new Statement(Statement::Repeat, cur.toRowCol());
+    Statement* res = createBlockStat(Statement::Repeat, cur.toRowCol());
     res->body = StatementSequence();
-	expect(Tok_UNTIL, true, "RepeatStatement");
+    mdl->closeScope();
+    expect(Tok_UNTIL, true, "RepeatStatement");
     res->rhs = expression();
     if( res->rhs == 0 )
     {
@@ -1586,49 +1618,147 @@ Statement* Parser2::RepeatStatement() {
     return res;
 }
 
+Statement* Parser2::LocalVarDeclaration() {
+    expect(Tok_ident, false, "LocalVarDeclaration");
+    const IdentDef id(cur);
+    Type* t = mdl->getType(BasicType::NoType);
+    Expression* e = 0;
+    Token colon;
+    if( la.d_type == Tok_ColonEq ) {
+        expect(Tok_ColonEq, false, "LocalVarDeclaration");
+        colon = cur;
+        e = expression();
+        if( e == 0 )
+            return 0;
+    } else if( la.d_type == Tok_Colon ) {
+        expect(Tok_Colon, false, "LocalVarDeclaration");
+        t = type();
+        if( t == 0 )
+            return 0;
+        if( la.d_type == Tok_ColonEq ) {
+            expect(Tok_ColonEq, false, "LocalVarDeclaration");
+            colon = cur;
+            e = expression();
+            if( e == 0 )
+                return 0;
+        }
+    } else
+        invalid("LocalVarDeclaration");
+
+    Declaration* d = addDecl(id, Declaration::LocalDecl);
+    if( d == 0 )
+        return 0;
+    //d->outer = mdl->getTopScope();
+    d->type = t;
+
+    if( e )
+    {
+        Statement* stat = new Statement(Statement::Assig, colon.toRowCol());
+        stat->lhs = new Expression(Expression::NameRef, RowCol() ); // decl and lhs otherwise identical xref entries
+        stat->lhs->val = QVariant::fromValue(Qualident(QByteArray(),id.name.d_val));
+        stat->rhs = e;
+        return stat;
+    }else
+        return dummy;
+}
+
+Statement*Parser2::createBlockStat(Statement::Kind k, const RowCol& pos)
+{
+    Statement* res = new Statement(k, pos);
+    Declaration* block = mdl->addDecl("");
+    block->kind = Declaration::Block;
+    block->pos = pos;
+    res->scope = block;
+    mdl->openScope(block);
+    return res;
+}
+
 Statement* Parser2::ForStatement() {
 	expect(Tok_FOR, true, "ForStatement");
-    Statement* res = new Statement(Statement::ForAssig, cur.toRowCol());
+    const Token t = cur;
+
+    bool localDecl = false;
+    if( la.d_type == Tok_VAR ) {
+        expect(Tok_VAR, false, "ForStatement");
+        localDecl = true;
+    }
+
     expect(Tok_ident, false, "ForStatement");
-    res->lhs = new Expression(Expression::NameRef, cur.toRowCol() );
-    res->lhs->val = QVariant::fromValue(Qualident(QByteArray(),cur.d_val));
-	expect(Tok_ColonEq, false, "ForStatement");
-    res->rhs = expression();
-    if(res->rhs == 0 )
-    {
-        Statement::deleteAll(res);
+    const Token id = cur;
+
+    expect(Tok_ColonEq, false, "ForStatement");
+    Expression* from = expression();
+    if(from == 0 )
         return 0;
-    }
+
 	expect(Tok_TO, true, "ForStatement");
-    Statement* forby = new Statement(Statement::ForToBy, cur.toRowCol());
-    res->append(forby);
-    forby->lhs = expression(); // to
-    if(forby->lhs == 0 )
+    Expression* to = expression();
+    if(to == 0 )
     {
-        Statement::deleteAll(res);
+        delete from;
         return 0;
     }
+
+    Expression* by = 0;
     if( la.d_type == Tok_BY ) {
 		expect(Tok_BY, true, "ForStatement");
-        forby->rhs = ConstExpression(); // by
+        by = ConstExpression();
+        if( by == 0 )
+        {
+            delete from;
+            delete to;
+            return 0;
+        }
 	}
+
 	expect(Tok_DO, true, "ForStatement");
+
+    Statement* res = createBlockStat(Statement::ForAssig, t.toRowCol());
+
+    if( localDecl )
+    {
+        Declaration* d = addDecl(id, Declaration::LocalDecl);
+        if( d != 0 )
+            d->type = mdl->getType(BasicType::INTEGER);
+    }
+
+    res->lhs = new Expression(Expression::NameRef, id.toRowCol() );
+    res->lhs->val = QVariant::fromValue(Qualident(QByteArray(),id.d_val));
+    res->rhs = from;
+
+    Statement* forby = new Statement(Statement::ForToBy, cur.toRowCol());
+    forby->lhs = to;
+    forby->rhs = by;
+    res->append(forby);
+
     res->body = StatementSequence();
 	expect(Tok_END, true, "ForStatement");
+    mdl->closeScope();
     return res;
 }
 
 Statement* Parser2::LoopStatement() {
 	expect(Tok_LOOP, true, "LoopStatement");
-    Statement* res = new Statement(Statement::Loop, cur.toRowCol());
+    Statement* res = createBlockStat(Statement::Loop, cur.toRowCol());
     res->body = StatementSequence();
 	expect(Tok_END, true, "LoopStatement");
+    mdl->closeScope();
     return res;
 }
 
 Statement* Parser2::ExitStatement() {
 	expect(Tok_EXIT, true, "ExitStatement");
     return new Statement(Statement::Exit, cur.toRowCol());
+}
+
+Statement*Parser2::DoStatement()
+{
+    expect(Tok_DO, false, "statement");
+    Statement* res = createBlockStat(Statement::Do, cur.toRowCol());
+    res->body = StatementSequence();
+    expect(Tok_END, false, "statement");
+    mdl->closeScope();
+    return res;
 }
 
 void Parser2::procedure() {
@@ -1684,7 +1814,7 @@ void Parser2::ProcedureDeclaration() {
     if( procDecl == 0 )
         return;
 
-    procDecl->outer = mdl->getTopScope();
+    //procDecl->outer = mdl->getTopScope();
 
     mdl->openScope(procDecl);
 
@@ -1722,10 +1852,13 @@ void Parser2::ProcedureDeclaration() {
             error(cur, "extern declarations not allowed in generic modules");
         else
             procDecl->mode = Declaration::Extern;
+#if 0
+        // syntax decisions pending
         if( la.d_type == Tok_ident ) {
             expect(Tok_ident, false, "ProcedureDeclaration");
             procDecl->data = cur.d_val;
         }
+#endif
     }else
     {
         if( la.d_type == Tok_INLINE || la.d_type == Tok_INVAR ) {
@@ -1754,9 +1887,15 @@ void Parser2::ProcedureDeclaration() {
         }
         if( FIRST_ProcedureBody(la.d_type) ) {
             // inlined ProcedureBody();
-            DeclarationSequence();
-            procDecl->body = block();
-            expect(Tok_END, true, "ProcedureBody");
+            if( FIRST_DeclarationSequence(la.d_type) || FIRST_block(la.d_type) ) {
+                DeclarationSequence();
+                procDecl->body = block();
+            } else if( la.d_type == Tok_DO ) {
+                expect(Tok_DO, false, "ProcedureBody");
+                procDecl->body = StatementSequence();
+            } else
+                invalid("ProcedureBody");
+            expect(Tok_END, false, "ProcedureBody");
             expect(Tok_ident, false, "ProcedureBody");
             if( procDecl->name.constData() != cur.d_val.constData() )
                 error(cur, QString("name after END differs from procedure name") );
@@ -1848,10 +1987,10 @@ Type* Parser2::FormalParameters() {
 	expect(Tok_Lpar, false, "FormalParameters");
 	if( FIRST_FPSection(la.d_type) ) {
 		FPSection();
-        while( ( ( ( peek(1).d_type == Tok_ident || peek(1).d_type == Tok_CONST ||
+        while( ( peek(1).d_type == Tok_ident || peek(1).d_type == Tok_CONST ||
                      peek(1).d_type == Tok_VAR ) ||
-                   peek(1).d_type == Tok_Semi && ( peek(2).d_type == Tok_ident ||
-                                                   peek(2).d_type == Tok_CONST || peek(2).d_type == Tok_VAR ) ) )  ) {
+                   (peek(1).d_type == Tok_Semi && ( peek(2).d_type == Tok_ident ||
+                                                   peek(2).d_type == Tok_CONST || peek(2).d_type == Tok_VAR ) ) ) {
 			if( la.d_type == Tok_Semi ) {
 				expect(Tok_Semi, false, "FormalParameters");
 			}

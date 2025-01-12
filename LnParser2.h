@@ -34,7 +34,7 @@ namespace Ln {
 
 	class Parser2 {
 	public:
-        Parser2(AstModel* m, Scanner2* s):scanner(s),mdl(m),thisMod(0) {}
+        Parser2(AstModel* m, Scanner2* s);
         ~Parser2();
         void RunParser();
         Declaration* takeResult(); // get module declaration and take ownership (otherwise deleted by parser)
@@ -53,6 +53,7 @@ namespace Ln {
             Token name;
             enum Visi { Private, ReadOnly, Public } visi;
             bool isValid() const { return name.d_type == Tok_ident; }
+            IdentDef(const Token& n = Token()):name(n),visi(Private){}
         };
         IdentDef identdef();
 		void ConstDeclaration();
@@ -100,7 +101,10 @@ namespace Ln {
         Statement* ForStatement();
         Statement* LoopStatement();
         Statement* ExitStatement();
-		void procedure();
+        Statement* DoStatement();
+        Statement* LocalVarDeclaration();
+        Statement* createBlockStat(Statement::Kind, const RowCol& pos);
+        void procedure();
         Type* ProcedureType();
 		void ProcedureDeclaration();
         QPair<Token,Token> Receiver();
@@ -130,6 +134,7 @@ namespace Ln {
         Token cur;
 		Token la;
 		Scanner2* scanner;
+        Statement* dummy;
 		void next();
 		Token peek(int off);
 		void invalid(const char* what);

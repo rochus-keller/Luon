@@ -59,6 +59,7 @@ namespace Ln {
 		void factor();
 		void variableOrFunctionCall();
 		void statement();
+		void LocalVarDeclaration();
 		void assignmentOrProcedureCall();
 		void StatementSequence();
 		void IfStatement();

@@ -134,14 +134,17 @@ Declaration* AstModel::addDecl(const QByteArray& name)
     else
     {
         Declaration* d = scope->link;
-        while( d && d->next )
+        while( d )
         {
-            if( d->name.constData() == name.constData() )
+            if( !name.isEmpty() && d->name.constData() == name.constData() )
             {
                 delete decl;
                 return 0; // duplicate
             }
-            d = d->next;
+            if( d->next )
+                d = d->next;
+            else
+                break;
         }
         Q_ASSERT( d && d->next == 0 );
         d->next = decl;
@@ -195,7 +198,7 @@ Declaration*AstModel::getTopScope() const
     for( int i = scopes.size() - 1; i >= 0; i-- )
     {
         Declaration* d = scopes[i];
-        if( d->kind == Declaration::Module || d->kind == Declaration::Procedure )
+        if( d->kind == Declaration::Module || d->kind == Declaration::Procedure || d->kind == Declaration::Block )
             return d;
     }
     return 0;
