@@ -11,7 +11,7 @@
 = The Programming Language Luon
 :author: Rochus Keller 
 :email: me@rochus-keller.ch
-:revdate: 2024-11-29
+:revdate: 2025-01-12
 :revremark: work in progress
 :doctype: article 
 :listing-caption: Listing
@@ -1515,7 +1515,7 @@ ExitStatement = EXIT
 procedure = PROCEDURE | PROC
 ProcedureType = procedure ['^'] [FormalParameters]  
 ProcedureDeclaration =  ProcedureHeading ( 
-             	[ ';' ] EXTERN [ident]  
+             	[ ';' ] EXTERN   
             	| [INLINE] [ ';' ] ( ProcedureBody | END ) )
 ProcedureHeading = procedure [Receiver] identdef [ FormalParameters ]  
 Receiver = '(' ident ':' ident ')'

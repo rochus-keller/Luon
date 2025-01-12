@@ -18,7 +18,7 @@
 #include <QtDebug>
 using namespace Ln;
 
-static const quint64 maxUlong = (1L << BasicType::SignedIntBitWidth) - 1; // 52 bits
+static const quint64 maxUlong = ((quint64)1 << BasicType::SignedIntBitWidth) - 1; // 52 bits
 
 static inline bool FIRST_Luon(int tt) {
 	return tt == Tok_MODULE;
@@ -1722,10 +1722,13 @@ void Parser2::ProcedureDeclaration() {
             error(cur, "extern declarations not allowed in generic modules");
         else
             procDecl->mode = Declaration::Extern;
+#if 0
+        // TODO: we likely need a better way to declare both the external library and function name
         if( la.d_type == Tok_ident ) {
             expect(Tok_ident, false, "ProcedureDeclaration");
             procDecl->data = cur.d_val;
         }
+#endif
     }else
     {
         if( la.d_type == Tok_INLINE || la.d_type == Tok_INVAR ) {

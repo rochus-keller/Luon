@@ -145,11 +145,11 @@ ExitStatement ::= EXIT
 
 procedure ::= PROCEDURE | PROC
 
-ProcedureType ::= procedure [ '^'] [FormalParameters]  //  '^' is an object callback
+ProcedureType ::= procedure ['^'] [FormalParameters]  //  '^' is an object callback
 
 ProcedureDeclaration ::= 
         ProcedureHeading ( 
-             \LL:2\ [ ';' ] EXTERN [ident]  // TODO: maybe we need some additions for the FFI
+             \LL:2\ [ ';' ] EXTERN // [ident]  // TODO: maybe we need some additions for the FFI
             | [INLINE| INVAR] [ ';' ] ( ProcedureBody | END ) 
             )
             // type bound procs cannot be INLINE, INVAR, nor EXTERN

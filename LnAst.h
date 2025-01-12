@@ -125,7 +125,7 @@ namespace Ln
         Declaration* link; // member list or imported module decl
         Declaration* outer; // the owning declaration to reconstruct the qualident
         Declaration* super; // super class or overridden method
-        Statement* body; // procs
+        Statement* body; // procs, owned
         Type* type;
         QByteArray name;
         RowCol pos;

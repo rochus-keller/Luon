@@ -183,7 +183,7 @@
 <p>Luon is a general-purpose, procedural and object-oriented programming language in the tradition of Oberon+, Oberon-07 <a href="#Wi16">[Wi16]</a> and Oberon-2 <a href="#Mo91">[Mo91]</a>, with elements of Pascal <a href="#Wi73">[Wi73]</a>. Even though Luon has many similarities with those languages, backward compatibility is not a goal.</p>
 </div>
 <div class="paragraph">
-<p>Luon is conceived as a statically typed alternative to scripting languages like e.g. Lua and targets the virtual machines of such dynamic languages. The name "Luon" is a combination of "Lua" and "Oberon".</p>
+<p>Luon is conceived as a statically typed alternative to scripting languages like e.g. Lua <a href="#Lua05">[Lua05]</a> and targets the virtual machines of such dynamic languages. The name "Luon" is a combination of "Lua" and "Oberon".</p>
 </div>
 <div class="paragraph">
 <p>The most important features of Luon are block structure, modularity, separate compilation, static typing with strong type checking, generic programming <sup class="footnote">[<a id="_footnoteref_1" class="footnote" href="#_footnote_1" title="View footnote.">1</a>]</sup>, garbage collection, and type extension with type-bound procedures.</p>
@@ -953,7 +953,7 @@ s: set
 F: Function
 a: array 100 of real
 w: array 16 of record
-     name: arra 32 of char
+     name: array 32 of char
      count: integer
    end
 t, c: Tree</pre>
@@ -2730,7 +2730,7 @@ ExitStatement = EXIT
 procedure = PROCEDURE | PROC
 ProcedureType = procedure ['^'] [FormalParameters]
 ProcedureDeclaration =  ProcedureHeading (
-             	[ ';' ] EXTERN [ident]
+             	[ ';' ] EXTERN
             	| [INLINE] [ ';' ] ( ProcedureBody | END ) )
 ProcedureHeading = procedure [Receiver] identdef [ FormalParameters ]
 Receiver = '(' ident ':' ident ')'
@@ -2895,6 +2895,9 @@ end Drawing</code></pre>
 </li>
 <li>
 <p><a id="Wi87"></a>[Wi87] Wirth, N. (1987). From Modula to Oberon and the programming language Oberon. ETH Report. <a href="https://doi.org/10.3929/ethz-a-005363226" class="bare">https://doi.org/10.3929/ethz-a-005363226</a> (accessed 2020-11-16).</p>
+</li>
+<li>
+<p><a id="Lua05"></a> Ierusalimschy, R., De Figueiredo, L. H., &amp; Celes Filho, W. (2005). The Implementation of Lua 5.0. J. Univers. Comput. Sci., 11(7), 1159-1176.</p>
 </li>
 </ul>
 </div>

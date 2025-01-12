@@ -134,14 +134,17 @@ Declaration* AstModel::addDecl(const QByteArray& name)
     else
     {
         Declaration* d = scope->link;
-        while( d && d->next )
+        while( d )
         {
             if( d->name.constData() == name.constData() )
             {
                 delete decl;
                 return 0; // duplicate
             }
-            d = d->next;
+            if( d->next )
+                d = d->next;
+            else
+                break;
         }
         Q_ASSERT( d && d->next == 0 );
         d->next = decl;
