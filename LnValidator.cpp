@@ -1289,7 +1289,7 @@ Qualident Validator::resolve(Expression* nameRef)
         pos.d_col += q.first.size() + 1;
     }
     Symbol* s = markRef(r.second, pos);
-    if( nameRef->needsLval )
+    if( nameRef->needsLval && s )
         s->kind = Symbol::Lval;
     resolve(r.second->type);
 #if 0
@@ -1378,7 +1378,7 @@ void Validator::selectOp(Expression* e)
         else
         {
             Symbol* s = markRef(field, e->pos);
-            if( e->needsLval )
+            if( e->needsLval && s )
                 s->kind = Symbol::Lval;
             e->val = QVariant::fromValue(field); // Field or bound proc
             e->type = field->type;
