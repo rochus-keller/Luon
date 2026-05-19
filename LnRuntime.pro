@@ -29,7 +29,7 @@ SOURCES += \
     ../LjTools/LuaJitBytecode.cpp \
     ../LjTools/Engine2.cpp \
     ../LjTools/LuaJitComposer.cpp \
-    ../LjTools/LjDisasm.cpp \
+    ../LjTools/LuaJitHelper.cpp \
     LnRuntime.cpp \
     LnLjRuntime.cpp \
     LnProject.cpp \
@@ -41,7 +41,7 @@ HEADERS  += \
     ../LjTools/LuaJitBytecode.h \
     ../LjTools/Engine2.h \
     ../LjTools/LuaJitComposer.h \
-    ../LjTools/LjDisasm.h \
+    ../LjTools/LuaJitHelper.h \
     LnRuntime.h \
     LnLjRuntime.h \
     LnProject.h \

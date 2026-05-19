@@ -231,7 +231,14 @@ The same applies to the Are-we-fast-yet implementation. The project is close to 
 With only a few changes, the IDE and demo projects also work on Windows. Provided precompiled packages for a few platforms. LuaJIT is statically linked
 on all platforms. MVP release.
 
-### Precompiled versions
+##### Status on May 19. 2026
+
+LjTools now support LuaJIT 2.1, so I updated the LuonIDE to also support it. For this purpose, I added copies of the Qt project files with '2' suffices, which use
+the JitComposer2 and JitBytecode2 versions of the LjTools classes. In addition to the IDE, there is now also a runtime version of Luon; the LnRuntime(2).pro produce
+an executable called "luon" which can be run via command line and which accepts the path to a Luon project (.lnpro) created with the IDE. This makes it easier to
+deploy Luon applications.
+
+### Precompiled versions (outdated)
 
 The following precompiled versions are available at this time:
 
@@ -243,7 +250,8 @@ Just download and unpack the compressed file to a directory. Start the IDE by do
 
 ### How to build
 
-Follow these steps if you want to build the Luon IDE yourself. The build is using LeanQt and the BUSY build system. Note that compiling on Linux requires the build essentials, xcb, libxcb1-dev and libx11-dev packages. On Mac and Windows there are no additional requirements than a toolchain.
+Follow these steps if you want to build the Luon IDE yourself. The build is using LeanQt and the BUSY build system. Note that compiling on 
+Linux requires the build essentials, xcb, libxcb1-dev and libx11-dev packages. On Mac and Windows there are no additional requirements than a toolchain.
 
 1. Create a new directory; we call it the root directory here
 1. Download https://github.com/rochus-keller/Luon/archive/refs/heads/master.zip and unpack it to the root directory; rename the resulting directory to "Luon".
@@ -259,6 +267,13 @@ Follow these steps if you want to build the Luon IDE yourself. The build is usin
 Instead of the command line you can run the build using [LeanCreator](https://github.com/rochus-keller/LeanCreator) which uses multiple cores and thus builds faster.
 
 It is still possible to build the IDE using Qt 5 with qmake; use LnIde.pro for this purpose and proceed as usual when building with Qt.
+
+---
+
+To build the runtime, please use the LnRuntime.pro file with qmake or Qt Creator for the time being. You need to download the Luon and LjTools repository archives
+as described above. If you want to use the most recent [LuaJIT 2.0](https://github.com/LuaJIT/LuaJIT/archive/refs/heads/v2.0.zip) or 
+[LuaJIT 2.1](https://github.com/LuaJIT/LuaJIT/archive/refs/heads/v2.1.zip) versions, download and unpack the archive in the same directory where the Luon and LjTools
+directories are, and use the LnRuntime2.pro project for the build.
 
 ### Support
 

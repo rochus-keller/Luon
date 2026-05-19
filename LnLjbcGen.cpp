@@ -1,5 +1,5 @@
 /*
-* Copyright 2024 Rochus Keller <mailto:me@rochus-keller.ch>
+* Copyright 2024, 2026 Rochus Keller <mailto:me@rochus-keller.ch>
 *
 * This file is part of the Luon parser/compiler library.
 *
@@ -18,7 +18,11 @@
 */
 
 #include "LnLjbcGen.h"
+#ifdef USE_JITCOMPOSER2
+#include <LjTools/LuaJitComposer2.h>
+#else
 #include <LjTools/LuaJitComposer.h>
+#endif
 #include <QtDebug>
 using namespace Ln;
 
@@ -168,12 +172,13 @@ public:
                                          .arg(d->scopedName(true,true).constData())
                                          .arg(thisMod->name.constData()), d->pos);
 #endif
-                        const int tmp = ctx.back().buySlots(3,true);
+                        const int cfs = bc.getCallFrameSize();
+                        const int tmp = ctx.back().buySlots(cfs+2,true);
                         fetchLnlibMember(tmp, 22, d->pos); // setmetatable
-                        bc.MOV( tmp+1, curClass, d->pos.packed() );
-                        bc.MOV(tmp+2,baseClass, d->pos.packed() );
+                        bc.MOV( tmp+cfs, curClass, d->pos.packed() );
+                        bc.MOV(tmp+cfs+1,baseClass, d->pos.packed() );
                         bc.CALL( tmp, 0, 2, d->pos.packed() );
-                        ctx.back().sellSlots(tmp,3);
+                        ctx.back().sellSlots(tmp,cfs+2);
                         ctx.back().sellSlots(baseClass);
                         ctx.back().sellSlots(curClass);
                     }
@@ -304,11 +309,12 @@ public:
 
     void emitPrint(const QString& msg, const RowCol& pos)
     {
-        const int tmp = ctx.back().buySlots(2, true);
+        const int cfs = bc.getCallFrameSize();
+        const int tmp = ctx.back().buySlots(cfs+1, true);
         bc.GGET(tmp, "print", pos.packed());
-        bc.KSET(tmp+1,msg,pos.packed());
+        bc.KSET(tmp+cfs,msg,pos.packed());
         bc.CALL(tmp, 0, 1, pos.packed());
-        ctx.back().sellSlots(tmp,2);
+        ctx.back().sellSlots(tmp,cfs+1);
     }
 
     bool visitModule(Declaration* module, QIODevice* out, bool strip)
@@ -395,11 +401,12 @@ public:
 
         if( hasExterns )
         {
-            const int tmp = ctx.back().buySlots(2,true);
+            const int cfs = bc.getCallFrameSize();
+            const int tmp = ctx.back().buySlots(cfs+1,true);
             bc.GGET( tmp, "require", md.end.packed() ); // just load the module so globals are created
-            bc.KSET( tmp+1, "_" + md.path.join('_'), md.end.packed() );
+            bc.KSET( tmp+cfs, "_" + md.path.join('_'), md.end.packed() );
             bc.CALL( tmp, 1, 1, md.end.packed() );
-            ctx.back().sellSlots(tmp, 2);
+            ctx.back().sellSlots(tmp, cfs+1);
         }
 
         if( begin )
@@ -542,16 +549,17 @@ public:
         if( p->mode == Declaration::Extern )
         {
             hasExterns = true;
-            const int tmp = ctx.back().buySlots(pars+1,true);
+            const int cfs = bc.getCallFrameSize();
+            const int tmp = ctx.back().buySlots(cfs+pars,true);
             ModuleData md = thisMod->data.value<ModuleData>();
             bc.GGET(tmp, md.path.join('_') + "_" + p->name, p->pos.packed());
             // we expec the EXTERN proc to be implemented under the name "<module>_<proc>", e.g Out_String
             // whereas '_' is also used as the module path separator (to be compatible with Lua source code)
             for( int i = 0; i < pars; i++ )
-                bc.MOV(tmp+i+1, i, p->pos.packed());
+                bc.MOV(tmp+cfs+i, i, p->pos.packed());
             bc.CALL(tmp, 1+vpars,pars,p->pos.packed());
             bc.RET(tmp, 1+vpars, p->pos.packed());
-            ctx.back().sellSlots(tmp, pars+1);
+            ctx.back().sellSlots(tmp, cfs+pars);
         }else
         {
             Statement* stat = p->body;
@@ -724,14 +732,15 @@ public:
                 op = 6;
                 break;
             }
-            const int tmp = ctx.back().buySlots(4,true);
-            fetchLnlibMember(tmp,17, e->pos); // stringRelOp
-            bc.MOV(tmp+1, lhs, e->pos.packed() );
-            bc.MOV(tmp+2, rhs, e->pos.packed() );
-            bc.KSET(tmp+3, op, e->pos.packed() );
-            bc.CALL(tmp,1,3, e->pos.packed());
-            bc.MOV(res,tmp, e->pos.packed());
-            ctx.back().sellSlots(tmp,4);
+                const int cfs = bc.getCallFrameSize();
+                const int tmp = ctx.back().buySlots(cfs+3,true);
+                fetchLnlibMember(tmp,17, e->pos); // stringRelOp
+                bc.MOV(tmp+cfs, lhs, e->pos.packed() );
+                bc.MOV(tmp+cfs+1, rhs, e->pos.packed() );
+                bc.KSET(tmp+cfs+2, op, e->pos.packed() );
+                bc.CALL(tmp,1,3, e->pos.packed());
+                bc.MOV(res,tmp, e->pos.packed());
+                ctx.back().sellSlots(tmp,cfs+3);
         }else
             Q_ASSERT(false);
         releaseSlot(); // remove rhs, keep lhs as result
@@ -771,23 +780,25 @@ public:
 
     void setOp( quint8 res, int op, const RowCol& loc )
     {
-        const int tmp = ctx.back().buySlots(3,true);
+        const int cfs = bc.getCallFrameSize();
+        const int tmp = ctx.back().buySlots(cfs+2,true);
         fetchLnlibMember(tmp,op,loc);
-        bc.MOV(tmp+1, slotStack[slotStack.size()-2], loc.packed() );
-        bc.MOV(tmp+2, slotStack.back(), loc.packed() );
+        bc.MOV(tmp+cfs, slotStack[slotStack.size()-2], loc.packed() );
+        bc.MOV(tmp+cfs+1, slotStack.back(), loc.packed() );
         bc.CALL(tmp,1,2,loc.packed());
         bc.MOV(res,tmp,loc.packed());
-        ctx.back().sellSlots(tmp,3);
+        ctx.back().sellSlots(tmp,cfs+2);
     }
 
     void emitCharToStr(quint8 ch, const RowCol& loc )
     {
-        const int tmp = ctx.back().buySlots(2,true);
+        const int cfs = bc.getCallFrameSize();
+        const int tmp = ctx.back().buySlots(cfs+1,true);
         fetchLnlibMember(tmp, 55, loc ); // string.char
-        bc.MOV(tmp + 1, ch, loc.packed() );
+        bc.MOV(tmp + cfs, ch, loc.packed() );
         bc.CALL(tmp,1,1,loc.packed());
         bc.MOV(ch,tmp, loc.packed());
-        ctx.back().sellSlots(tmp,2);
+        ctx.back().sellSlots(tmp,cfs+1);
     }
 
     void emitArithOp(Expression* e)
@@ -807,13 +818,14 @@ public:
                 bc.MUL(res, lhs, rhs, e->pos.packed());
                 break;
             case Expression::Div: {
-                    const int tmp = ctx.back().buySlots(3,true);
+                    const int cfs = bc.getCallFrameSize();
+                    const int tmp = ctx.back().buySlots(cfs+2,true);
                     fetchLnlibMember(tmp,14,e->pos); // module.DIV
-                    bc.MOV(tmp+1, lhs, e->pos.packed() );
-                    bc.MOV(tmp+2, rhs, e->pos.packed() );
+                    bc.MOV(tmp+cfs, lhs, e->pos.packed() );
+                    bc.MOV(tmp+cfs+1, rhs, e->pos.packed() );
                     bc.CALL(tmp,1,2,e->pos.packed());
                     bc.MOV(res,tmp,e->pos.packed());
-                    ctx.back().sellSlots(tmp,3);
+                    ctx.back().sellSlots(tmp,cfs+2);
                     break;
                 }
             case Expression::Fdiv:
@@ -822,13 +834,14 @@ public:
             case Expression::Mod:
                 if( lt->isInteger() )
                 {
-                    const int tmp = ctx.back().buySlots(3,true);
+                    const int cfs = bc.getCallFrameSize();
+                    const int tmp = ctx.back().buySlots(cfs+2,true);
                     fetchLnlibMember(tmp,15,e->pos); // module.MOD
-                    bc.MOV(tmp+1, lhs, e->pos.packed() );
-                    bc.MOV(tmp+2, rhs, e->pos.packed() );
+                    bc.MOV(tmp+cfs, lhs, e->pos.packed() );
+                    bc.MOV(tmp+cfs+1, rhs, e->pos.packed() );
                     bc.CALL(tmp,1,2,e->pos.packed());
                     bc.MOV(res,tmp,e->pos.packed());
-                    ctx.back().sellSlots(tmp,3);
+                    ctx.back().sellSlots(tmp,cfs+2);
                 }else
                     bc.MOD(res, lhs, rhs, e->pos.packed());
                 break;
@@ -960,20 +973,21 @@ public:
     {
         ExpList args = Expression::getList(call->rhs);
         Q_ASSERT(args.size() == count);
-        const quint8 tmp = ctx.back().buySlots(1+count, true);
+        const int cfs = bc.getCallFrameSize();
+        const quint8 tmp = ctx.back().buySlots(cfs+count, true);
         fetchLnlibMember(tmp,builtinToMagic(op),call->pos);
 
         for( int i = 0; i < args.size(); i++ )
         {
             emitExpression(args[i]);
-            bc.MOV(tmp+i+1, slotStack.back(), call->pos.packed() );
+            bc.MOV(tmp+cfs+i, slotStack.back(), call->pos.packed() );
             releaseSlot();
         }
 
         bc.CALL(tmp, res >= 0 ? 1 : 0,count, call->pos.packed());
         if( res >= 0 )
             bc.MOV(res,tmp, call->pos.packed());
-        ctx.back().sellSlots(tmp,1+count);
+        ctx.back().sellSlots(tmp,cfs+count);
     }
 
     void emitIncDec(quint8 res, Expression* var, Expression* by, bool isInc, const RowCol& pos)
@@ -1005,13 +1019,14 @@ public:
 
     void emitClip(quint8 to, quint8 from, int bits, const RowCol& pos)
     {
-        const quint8 tmp = ctx.back().buySlots(3, true);
+        const int cfs = bc.getCallFrameSize();
+        const quint8 tmp = ctx.back().buySlots(cfs+2, true);
         fetchLnlibMember(tmp,19,pos); // bit.band
-        bc.MOV(tmp+1, from, pos.packed() );
-        bc.KSET(tmp+2, (1 << bits) - 1, pos.packed());
+        bc.MOV(tmp+cfs, from, pos.packed() );
+        bc.KSET(tmp+cfs+1, (1 << bits) - 1, pos.packed());
         bc.CALL(tmp, 1 ,2, pos.packed());
         bc.MOV(to,tmp, pos.packed());
-        ctx.back().sellSlots(tmp,3);
+        ctx.back().sellSlots(tmp,cfs+2);
     }
 
     void emitBuiltin(Declaration* proc, Expression* call, quint8 res)
@@ -1156,15 +1171,16 @@ public:
             }
         case Builtin::KEYS: {
                 emitExpression(call->rhs);
-                const quint8 tmp = ctx.back().buySlots(3, true);
+                const int cfs = bc.getCallFrameSize();
+                const quint8 tmp = ctx.back().buySlots(cfs+2, true);
                 fetchLnlibMember(tmp,64,call->pos); // module.keys
-                bc.MOV(tmp+1, slotStack.back(), call->pos.packed() );
+                bc.MOV(tmp+cfs, slotStack.back(), call->pos.packed() );
                 releaseSlot();
                 Type* base = deref(deref(call->rhs->type)->base);
-                bc.KSET(tmp+2, base->form == BasicType::CHAR || base->form == BasicType::BYTE, call->pos.packed());
+                bc.KSET(tmp+cfs+1, base->form == BasicType::CHAR || base->form == BasicType::BYTE, call->pos.packed());
                 bc.CALL(tmp, 1 ,2, call->pos.packed());
                 bc.MOV(res,tmp, call->pos.packed());
-                ctx.back().sellSlots(tmp,3);
+                ctx.back().sellSlots(tmp,cfs+2);
                 break;
             }
         case Builtin::COPY: {
@@ -1180,28 +1196,29 @@ public:
                     emitExpression(call->rhs);
                     rt = deref(call->rhs->type);
                 }
-                const int tmp = ctx.back().buySlots(3,true);
+                const int cfs = bc.getCallFrameSize();
+                const int tmp = ctx.back().buySlots(cfs+2,true);
                 if( rt->form < BasicType::Max ) // string, literals
                 {
                     fetchLnlibMember(tmp, 7, call->pos ); // module.stringToCharArray
-                    bc.MOV(tmp + 1, slotStack.back(), call->pos.packed() );
+                    bc.MOV(tmp + cfs, slotStack.back(), call->pos.packed() );
                     releaseSlot();
-                    bc.KSET(tmp+2, lt ? lt->len : 0, call->pos.packed() );
+                    bc.KSET(tmp+cfs+1, lt ? lt->len : 0, call->pos.packed() );
                     bc.CALL(tmp,1,1,call->pos.packed());
                     bc.MOV(res,tmp, call->pos.packed());
                 }else
                 {
                     fetchLnlibMember(tmp,60,call->pos); // module.clone
-                    bc.MOV(tmp+1, slotStack.back(), call->pos.packed() );
+                    bc.MOV(tmp+cfs, slotStack.back(), call->pos.packed() );
                     releaseSlot();
                     if( rt->form == Type::Record )
-                        bc.KSET(tmp+2, rt->countAllocRecordMembers(true).first, call->pos.packed());
+                        bc.KSET(tmp+cfs+1, rt->countAllocRecordMembers(true).first, call->pos.packed());
                     else
-                        bc.KNIL(tmp+2,1,call->pos.packed());
+                        bc.KNIL(tmp+cfs+1,1,call->pos.packed());
                     bc.CALL(tmp, 1,2, call->pos.packed());
                     bc.MOV(res, tmp, call->pos.packed());
                 }
-                ctx.back().sellSlots(tmp,3);
+                ctx.back().sellSlots(tmp,cfs+2);
                 if( call->rhs->next )
                 {
                     Lvalue v = lvalue(call->rhs);
@@ -1211,21 +1228,23 @@ public:
                 break;
             }
         case Builtin::TRAP: {
-                const quint8 tmp = ctx.back().buySlots(1,true);
+                const int cfs = bc.getCallFrameSize();
+                const quint8 tmp = ctx.back().buySlots(cfs,true);
                 bc.GGET(tmp, "TRAP", call->pos.packed());
                 bc.CALL(tmp,0,0,call->pos.packed());
-                ctx.back().sellSlots(tmp,1);
+                ctx.back().sellSlots(tmp,cfs);
             }
             break;
         case Builtin::TRAPIF: {
                 emitExpression(call->rhs);
                 Q_ASSERT( !slotStack.isEmpty() );
 
-                const quint8 tmp = ctx.back().buySlots(2,true);
+                const int cfs = bc.getCallFrameSize();
+                const quint8 tmp = ctx.back().buySlots(cfs+1,true);
                 bc.GGET(tmp, "TRAP", call->pos.packed());
-                bc.MOV(tmp+1,slotStack.back(),call->pos.packed());
+                bc.MOV(tmp+cfs,slotStack.back(),call->pos.packed());
                 bc.CALL(tmp,0,1,call->pos.packed());
-                ctx.back().sellSlots(tmp,2);
+                ctx.back().sellSlots(tmp,cfs+1);
                 releaseSlot();
             }
             break;
@@ -1243,12 +1262,13 @@ public:
 
     void emitGetClassObject(quint8 to, quint8 instance, const RowCol& loc)
     {
-        const int tmp = ctx.back().buySlots(2,true);
+        const int cfs = bc.getCallFrameSize();
+        const int tmp = ctx.back().buySlots(cfs+1,true);
         fetchLnlibMember( tmp, 40, loc ); // getmetatable
-        bc.MOV( tmp+1, instance, loc.packed() ); // this
+        bc.MOV( tmp+cfs, instance, loc.packed() ); // this
         bc.CALL( tmp, 1, 1, loc.packed() ); // resulting tmp is class of this
         bc.MOV( to, tmp, loc.packed() );
-        ctx.back().sellSlots(tmp,2);
+        ctx.back().sellSlots(tmp,cfs+1);
     }
 
     void emitCallOp(Expression* e)
@@ -1312,7 +1332,7 @@ public:
         if( proc && proc->mode == Declaration::Receiver )
             isBound = true;
 
-        const int funcCount = 1;
+        const int funcCount = bc.getCallFrameSize();
         // we always assume a return value if there are vars to be returned even if there isn't one
         const int retCount = returnType->form == BasicType::NoType && varCount == 0 ? 0 : 1;
 
@@ -1482,31 +1502,32 @@ public:
         Expression* c = e->rhs;
         while( c )
         {
+            const int cfs = bc.getCallFrameSize();
             if( c->kind == Expression::Range )
             {
-                const int tmp = ctx.back().buySlots(4,true);
+                const int tmp = ctx.back().buySlots(cfs+3,true);
                 bc.MOV(tmp, addRangeToSet, c->lhs->pos.packed() );
-                bc.MOV(tmp+1, res, c->lhs->pos.packed() );
+                bc.MOV(tmp+cfs, res, c->lhs->pos.packed() );
                 emitExpression(c->lhs);
-                bc.MOV(tmp+2, slotStack.back(), c->lhs->pos.packed() );
+                bc.MOV(tmp+cfs+1, slotStack.back(), c->lhs->pos.packed() );
                 releaseSlot();
                 emitExpression( c->rhs );
-                bc.MOV(tmp+3, slotStack.back(), c->rhs->pos.packed() );
+                bc.MOV(tmp+cfs+2, slotStack.back(), c->rhs->pos.packed() );
                 releaseSlot();
                 bc.CALL(tmp,1,3, c->rhs->pos.packed() );
                 bc.MOV(res, tmp, c->rhs->pos.packed() );
-                ctx.back().sellSlots(tmp,4);
+                ctx.back().sellSlots(tmp,cfs+3);
             }else
             {
-                const int tmp = ctx.back().buySlots(3,true);
+                const int tmp = ctx.back().buySlots(cfs+2,true);
                 bc.MOV(tmp, addElemToSet, e->pos.packed() );
-                bc.MOV(tmp+1, res, e->pos.packed() );
+                bc.MOV(tmp+cfs, res, e->pos.packed() );
                 emitExpression(c);
-                bc.MOV(tmp+2, slotStack.back(), c->pos.packed() );
+                bc.MOV(tmp+cfs+1, slotStack.back(), c->pos.packed() );
                 releaseSlot();
                 bc.CALL(tmp,1,2, e->pos.packed() );
                 bc.MOV(res, tmp, e->pos.packed() );
-                ctx.back().sellSlots(tmp,3);
+                ctx.back().sellSlots(tmp,cfs+2);
             }
             c = c->next;
         }
@@ -1567,12 +1588,13 @@ public:
             emitExpression(e->lhs);
             if( deref(e->type)->form == BasicType::SET )
             {
-                const int tmp = ctx.back().buySlots(2,true);
+                const int cfs = bc.getCallFrameSize();
+                const int tmp = ctx.back().buySlots(cfs+1,true);
                 fetchLnlibMember(tmp,11,e->pos); // bit.bnot
-                bc.MOV(tmp+1,slotStack.back(),e->pos.packed());
+                bc.MOV(tmp+cfs,slotStack.back(),e->pos.packed());
                 bc.CALL(tmp,1,1,e->pos.packed());
                 bc.MOV(slotStack.back(),tmp,e->pos.packed());
-                ctx.back().sellSlots(tmp,2);
+                ctx.back().sellSlots(tmp,cfs+1);
             }else
                 bc.UNM(slotStack.back(),slotStack.back(),e->pos.packed());
             break;
@@ -1809,13 +1831,14 @@ public:
     void emitIsOp(quint8 lhs, quint8 rhs, quint8 to, const RowCol& pos)
     {
         // lhs IS rhs
-        const int tmp = ctx.back().buySlots(3,true);
+        const int cfs = bc.getCallFrameSize();
+        const int tmp = ctx.back().buySlots(cfs+2,true);
         fetchLnlibMember(tmp,23, pos); // module.is_a
-        bc.MOV(tmp+1, lhs, pos.packed());
-        bc.MOV(tmp+2, rhs, pos.packed() );
+        bc.MOV(tmp+cfs, lhs, pos.packed());
+        bc.MOV(tmp+cfs+1, rhs, pos.packed() );
         bc.CALL(tmp,1,2, pos.packed());
         bc.MOV(to, tmp, pos.packed());
-        ctx.back().sellSlots(tmp,3);
+        ctx.back().sellSlots(tmp,cfs+2);
     }
 
     void emitTypeCase( Statement* s )
@@ -2111,34 +2134,37 @@ public:
             // there is already the string on the stack; replace it by the char
             bc.KSET(slotStack.back(), (quint8)rhs->val.toByteArray()[0], loc.packed());
 #else
-            const int tmp = ctx.back().buySlots(2,true);
+            const int cfs = bc.getCallFrameSize();
+            const int tmp = ctx.back().buySlots(cfs+1,true);
             fetchLnlibMember(tmp, 59, loc ); // string.byte
-            bc.MOV(tmp + 1, slotStack.back(), loc.packed() );
+            bc.MOV(tmp + cfs, slotStack.back(), loc.packed() );
             bc.CALL(tmp,1,1,loc.packed());
             bc.MOV(slotStack.back(),tmp, loc.packed());
-            ctx.back().sellSlots(tmp,2);
+            ctx.back().sellSlots(tmp,cfs+1);
 #endif
         }else if( (lhsT->isDerefCharArray() && (rhsT->form == BasicType::StrLit || rhsT->form == BasicType::STRING ) )
                   || ( lhsT->isDerefByteArray() && rhsT->form == BasicType::ByteArrayLit ) )
         {
             // convert string to CharArray
-            const int tmp = ctx.back().buySlots(3,true);
+            const int cfs = bc.getCallFrameSize();
+            const int tmp = ctx.back().buySlots(cfs+2,true);
             fetchLnlibMember(tmp, 7, loc ); // module.stringToCharArray
-            bc.MOV(tmp + 1, slotStack.back(), loc.packed() );
-            bc.KSET(tmp+2, lhsT->len, loc.packed() );
+            bc.MOV(tmp + cfs, slotStack.back(), loc.packed() );
+            bc.KSET(tmp+cfs+1, lhsT->len, loc.packed() );
             bc.CALL(tmp,1,1,loc.packed());
             bc.MOV(slotStack.back(),tmp, loc.packed());
-            ctx.back().sellSlots(tmp,3);
+            ctx.back().sellSlots(tmp,cfs+2);
         }else if( lhsT->form == BasicType::STRING && rhsT->isDerefCharArray() )
         {
             // convert CharArray to string
-            const int tmp = ctx.back().buySlots(3,true);
+            const int cfs2 = bc.getCallFrameSize();
+            const int tmp = ctx.back().buySlots(cfs2+2,true);
             fetchLnlibMember(tmp, 61, loc ); // module.charArrayToString
-            bc.MOV(tmp + 1, slotStack.back(), loc.packed() );
-            bc.KSET(tmp+2, lhsT->len, loc.packed() );
+            bc.MOV(tmp + cfs2, slotStack.back(), loc.packed() );
+            bc.KSET(tmp+cfs2+1, lhsT->len, loc.packed() );
             bc.CALL(tmp,1,1,loc.packed());
             bc.MOV(slotStack.back(),tmp, loc.packed());
-            ctx.back().sellSlots(tmp,3);
+            ctx.back().sellSlots(tmp,cfs2+2);
         }else if( lhsT->form == Type::Proc && (rhs->kind == Expression::DeclRef || rhs->kind == Expression::Select) )
         {
             Declaration* d = rhs->val.value<Declaration*>();
@@ -2316,13 +2342,14 @@ public:
     void emitImport( const QByteArray& modName, quint16 toIndex, const RowCol& loc, bool toLocal = false, bool useLuaRequire = false )
     {
         Q_ASSERT( !modName.isEmpty() );
-        const int tmp = ctx.back().buySlots(2,true);
+        const int cfs = bc.getCallFrameSize();
+        const int tmp = ctx.back().buySlots(cfs+1,true);
         // TEST emitPrint(QString("importing %1 by %2").arg(modName.constData()).arg(thisMod->name.constData()),loc);
         if( useLuaRequire )
             bc.GGET( tmp, "require", loc.packed() ); // cannot use this one for Luon modules
         else
             fetchLnlibMember(tmp, 62, loc); // module.require
-        bc.KSET( tmp+1, modName, loc.packed() );
+        bc.KSET( tmp+cfs, modName, loc.packed() );
         bc.CALL( tmp, 1, 1, loc.packed() );
         if( toLocal )
             bc.MOV(toIndex,tmp,loc.packed() );
@@ -2330,20 +2357,21 @@ public:
             emitSetTableByIndex(tmp,modSlot,toIndex,loc);
         else
         {
-            fetchModule(tmp+1,loc);
-            emitSetTableByIndex(tmp,tmp+1,toIndex,loc);
+            fetchModule(tmp+cfs,loc);
+            emitSetTableByIndex(tmp,tmp+cfs,toIndex,loc);
         }
-        ctx.back().sellSlots(tmp,2);
+        ctx.back().sellSlots(tmp,cfs+1);
     }
 
     void emitAssureNotNil(quint8 what, const QString& msg, const RowCol& loc)
     {
-        const int tmp = ctx.back().buySlots(3, true);
+        const int cfs = bc.getCallFrameSize();
+        const int tmp = ctx.back().buySlots(cfs+2, true);
         fetchLnlibMember(tmp, 6, loc); // module.assureNotNil
-        bc.MOV( tmp+1, what, loc.packed() );
-        bc.KSET(tmp+2, msg, loc.packed());
+        bc.MOV( tmp+cfs, what, loc.packed() );
+        bc.KSET(tmp+cfs+1, msg, loc.packed());
         bc.CALL( tmp, 0, 2, loc.packed() );
-        ctx.back().sellSlots(tmp,3);
+        ctx.back().sellSlots(tmp,cfs+2);
     }
 
     void emitDeferredImports( Declaration* module, const RowCol& loc )
@@ -2414,13 +2442,14 @@ public:
         const int meta = ctx.back().buySlots(1);
         fetchClass(meta, t, loc );
 
-        const int tmp = ctx.back().buySlots(3,true);
+        const int cfs = bc.getCallFrameSize();
+        const int tmp = ctx.back().buySlots(cfs+2,true);
         // call setmetatable
         fetchLnlibMember(tmp, 22, loc ); // setmetatable
-        bc.MOV(tmp+1, to, loc.packed() );
-        bc.MOV(tmp+2, meta, loc.packed() );
+        bc.MOV(tmp+cfs, to, loc.packed() );
+        bc.MOV(tmp+cfs+1, meta, loc.packed() );
         bc.CALL( tmp, 0, 2, loc.packed() );
-        ctx.back().sellSlots(tmp,3);
+        ctx.back().sellSlots(tmp,cfs+2);
         ctx.back().sellSlots(meta);
 
         const int val = ctx.back().buySlots(1);
@@ -2441,17 +2470,18 @@ public:
         Type* baseType = deref(array->base);
         if( baseType->form == BasicType::CHAR || baseType->form == BasicType::BYTE )
         {
-            const int tmp = ctx.back().buySlots(2,true);
+            const int cfs = bc.getCallFrameSize();
+            const int tmp = ctx.back().buySlots(cfs+1,true);
             fetchLnlibMember(tmp,8,loc); // module.createCharArray
             if( array->len > 0 )
-                bc.KSET(tmp+1, array->len, loc.packed() );
+                bc.KSET(tmp+cfs, array->len, loc.packed() );
             else if( lenSlot >= 0 )
-                bc.MOV(tmp+1, lenSlot, loc.packed() );
+                bc.MOV(tmp+cfs, lenSlot, loc.packed() );
             else
                 Q_ASSERT(false);
             bc.CALL(tmp,1,1,loc.packed());
             bc.MOV(to,tmp,loc.packed());
-            ctx.back().sellSlots(tmp,2);
+            ctx.back().sellSlots(tmp,cfs+1);
             // NOTE: len via rt 26 bytesize
         }else
         {

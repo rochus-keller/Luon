@@ -21,19 +21,19 @@ QT       += core gui widgets
 TARGET = LuonIDE
 TEMPLATE = app
 
-INCLUDEPATH += .. ../LuaJIT/src
+INCLUDEPATH += .. ../LuaJIT-2.1/src
 
-DEFINES += _LJTOOLS_DONT_CREATE_TAIL_CALLS HAVE_SDL
+DEFINES += _LJTOOLS_DONT_CREATE_TAIL_CALLS HAVE_SDL USE_JITCOMPOSER2
 
 SOURCES += LnIde.cpp \
     ../LjTools/LuaJitHelper.cpp \
     LnHighlighter.cpp \
     ../GuiTools/CodeEditor.cpp \
-    ../LjTools/LuaJitBytecode.cpp \
+    ../LjTools/LuaJitBytecode2.cpp \
     ../LjTools/Engine2.cpp \
     ../LjTools/Terminal2.cpp \
     ../LjTools/ExpressionParser.cpp \
-    ../LjTools/LuaJitComposer.cpp \
+    ../LjTools/LuaJitComposer2.cpp \
     ../LjTools/BcViewer2.cpp \
     ../GuiTools/DocSelector.cpp \
     ../GuiTools/DocTabWidget.cpp \
@@ -51,11 +51,11 @@ HEADERS  += LnIde.h \
     ../LjTools/LuaJitHelper.h \
     LnHighlighter.h \
     ../GuiTools/CodeEditor.h \
-    ../LjTools/LuaJitBytecode.h \
+    ../LjTools/LuaJitBytecode2.h \
     ../LjTools/Engine2.h \
     ../LjTools/Terminal2.h \
     ../LjTools/ExpressionParser.h \
-    ../LjTools/LuaJitComposer.h \
+    ../LjTools/LuaJitComposer2.h \
     ../LjTools/BcViewer2.h \
     ../GuiTools/DocSelector.h \
     ../GuiTools/DocTabWidget.h \
@@ -67,21 +67,13 @@ HEADERS  += LnIde.h \
     LnPAL3.h
 
 win32 {
-    LIBS += -L../LuaJIT/src -llua51
+    LIBS += -L../LuaJIT-2.1/src -llua51
 }
-linux {
-    include( ../LuaJIT/src/LuaJit.pri ){
-        LIBS += -ldl
-    } else {
-        LIBS += -lluajit
-    }
+linux | macx {
+    LIBS += $$absolute_path(../LuaJIT-2.1/src/libluajit.a, $$_PRO_FILE_PWD_)
     QMAKE_LFLAGS += -rdynamic -ldl
     #rdynamic is required so that the LjLibFfi functions are visible to LuaJIT FFI
     LIBS += -lSDL2
-}
-macx {
-    include( ../LuaJIT/src/LuaJit.pri )
-    QMAKE_LFLAGS += -rdynamic -ldl -pagezero_size 10000 -image_base 100000000
 }
 
 include( LnParser.pri )

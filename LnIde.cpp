@@ -31,6 +31,7 @@
 #include <LjTools/BcViewer.h>
 #include <LjTools/LuaJitEngine.h>
 #include <LjTools/LjBcDebugger.h>
+#include <LjTools/LuaJitHelper.h>
 #include <QtDebug>
 #include <QDockWidget>
 #include <QApplication>
@@ -2153,7 +2154,7 @@ static void fillRawLocals(QTreeWidget* locals, Lua::Engine2* lua)
         {
             typeAddr(item,v.d_value);
             fillLocalSubs(item,v.d_value.toMap() );
-        }else if( Lua::JitBytecode::isString(v.d_value) )
+        }else if( Lua::JitValue::isString(v.d_value) )
         {
             item->setText(1, "\"" + v.d_value.toString().simplified() + "\"");
             item->setToolTip(1, v.d_value.toString() );
@@ -3114,7 +3115,7 @@ int main(int argc, char *argv[])
     a.setOrganizationName("me@rochus-keller.ch");
     a.setOrganizationDomain("github.com/rochus-keller/Luon");
     a.setApplicationName("Luon IDE (LuaJIT)");
-    a.setApplicationVersion("0.7.11");
+    a.setApplicationVersion("0.7.12");
     a.setStyle("Fusion");    
     QFontDatabase::addApplicationFont(":/fonts/DejaVuSansMono.ttf"); // "DejaVu Sans Mono"
 
