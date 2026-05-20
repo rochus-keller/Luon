@@ -439,6 +439,10 @@ public:
         }
         bc.setVarNames( sn );
 
+        // assert framesize is correct before closing
+#ifdef USE_JITCOMPOSER2
+        Q_ASSERT(ctx.back().pool.d_frameSize >= Lua::JitComposer::currentHighWater(ctx.back().pool));
+#endif
         bc.closeFunction(ctx.back().pool.d_frameSize); // module function
         ctx.pop_back();
 
@@ -599,6 +603,10 @@ public:
             uv[uvi.value().first] = u;
         }
         bc.setUpvals(uv);
+        // assert framesize is correct before closing
+#ifdef USE_JITCOMPOSER2
+        Q_ASSERT(ctx.back().pool.d_frameSize >= Lua::JitComposer::currentHighWater(ctx.back().pool));
+#endif
         bc.closeFunction(ctx.back().pool.d_frameSize);
         ctx.pop_back();
 
@@ -1717,7 +1725,15 @@ public:
 
     inline void emitJMP( qint16 offset, quint32 line )
     {
-        bc.JMP(ctx.back().pool.d_frameSize, offset, line );
+#ifdef USE_JITCOMPOSER2
+        // use currentHighWater instead of d_frameSize for the JMP A operand.
+        // This gives the JIT recorder a tighter maxslot hint at branch points,
+        // resulting in smaller snapshots (see rec_comp_fixup in lj_record.c).
+        const quint8 base = Lua::JitComposer::currentHighWater(ctx.back().pool)
+#else
+        const quint8 base = ctx.back().pool.d_frameSize;
+#endif
+        bc.JMP(base, offset, line );
     }
 
     inline void statementSequence(Statement* s)

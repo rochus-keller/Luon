@@ -3115,7 +3115,7 @@ int main(int argc, char *argv[])
     a.setOrganizationName("me@rochus-keller.ch");
     a.setOrganizationDomain("github.com/rochus-keller/Luon");
     a.setApplicationName("Luon IDE (LuaJIT)");
-    a.setApplicationVersion("0.7.12");
+    a.setApplicationVersion("0.7.13");
     a.setStyle("Fusion");    
     QFontDatabase::addApplicationFont(":/fonts/DejaVuSansMono.ttf"); // "DejaVu Sans Mono"
 

@@ -31,7 +31,7 @@ typedef unsigned char BOOL;
 enum {
     BLACK = 0x000000,
     WHITE = 0xFFFFFF,
-    QueueLen = 100
+    QueueLen = 4096
 };
 
 static SDL_Window* window = 0;
@@ -39,7 +39,7 @@ static SDL_Texture* texture = 0;
 static SDL_Renderer* renderer = 0;
 static uint8_t* buffer = 0;
 static int buflen = 0;
-static uint8_t pixelBuf[2000*2000];
+static uint8_t* pixelBuf = 0;
 static uint16_t queue[QueueLen];
 static int head = 0, tail = 0, count = 0;
 static int sleepTime = 0, x = 0, y = 0;
@@ -49,7 +49,9 @@ static uint32_t lastEvent = 0;
 static int shiftDown = 0;
 static int ctrlDown = 0;
 static int capsLockDown = 0;
-static const uint32_t msPerFrame = 30; // 20ms according to BB
+static SDL_Cursor* customCursor = 0;
+static SDL_Rect dirtyArea = {0, 0, 0, 0};
+static int isDirty = 0;
 
 DllExport void PAL2_setIdle(void (*tick)() )
 {
@@ -95,8 +97,7 @@ DllExport int PAL2_init(uint8_t* b, int len, int w, int h)
 
     renderer = SDL_CreateRenderer(window,
                                   -1,
-                                  SDL_RENDERER_ACCELERATED |
-                                  SDL_RENDERER_PRESENTVSYNC);
+                                  SDL_RENDERER_ACCELERATED);
     if( renderer == 0 )
     {
         SDL_Log("There was an issue creating the renderer. %s",SDL_GetError());
@@ -116,14 +117,28 @@ DllExport int PAL2_init(uint8_t* b, int len, int w, int h)
         return 0;
     }
 
+    if(pixelBuf)
+        free(pixelBuf);
+    pixelBuf = (uint32_t*)malloc(WIDTH * HEIGHT * 4);
+
     buffer = b;
     buflen = len;
+    isDirty = 1; dirtyArea.x = 0; dirtyArea.y = 0; dirtyArea.w = w; dirtyArea.h = h;
     return 1;
 }
 
 DllExport int PAL2_deinit()
 {
     disposeWindow();
+    if( pixelBuf ) {
+        free(pixelBuf);
+        pixelBuf = 0;
+    }
+
+    if( customCursor) {
+        SDL_FreeCursor(customCursor);
+        customCursor = 0;
+    }
     buffer = 0;
     buflen = 0;
     return 0;
@@ -131,15 +146,11 @@ DllExport int PAL2_deinit()
 
 DllExport int PAL2_setCursorBitmap(uint8_t* b, int w, int h)
 {
-    static SDL_Cursor* cursor = 0;
+    if( customCursor )
+        SDL_FreeCursor(customCursor);
 
-    if( cursor )
-        SDL_FreeCursor(cursor);
-
-    cursor = SDL_CreateCursor(b, b, w, h, 0, 0);
-
-    SDL_SetCursor(cursor);
-
+    customCursor = SDL_CreateCursor(b, b, w, h, 0, 0);
+    SDL_SetCursor(customCursor);
     return 0;
 }
 
@@ -197,7 +208,7 @@ enum { MaxPos = 0xfff }; // 12 bits
 
 static void notify()
 {
-    // TODO
+    // NOP
 }
 
 static int postEvent(EventType t, uint16_t param, int withTime )
@@ -376,49 +387,43 @@ static int decodeUtf8char( char* encoded )
         return c;
     if( c >= 0xc0 && c <= 0xdf ) // 11000000..11011111
         return ((c & 0x1f) << 6) | ( (unsigned char)encoded[1] & 0x3f);
-    return 0;
+    return '?';
 }
 
-static void updateTexture()
+static void updateTexture(SDL_Rect* patch)
 {
-    SDL_Rect r;
-    r.x = 0;
-    r.y = 0;
-    r.w = WIDTH;
-    r.h = HEIGHT;
+    if (patch->w <= 0 || patch->h <= 0)
+        return;
+    if (buflen < (WIDTH * HEIGHT / 8))
+        return;
 
-    // TODO: partial update
     const int PixPerWord = 16;
-    const int pixLineWidth = ( ( WIDTH + PixPerWord - 1 ) / PixPerWord ) * PixPerWord; // line width is a multiple of 16
+    const int pixLineWidth = ((WIDTH + PixPerWord - 1) / PixPerWord) * PixPerWord;
     const int sw = pixLineWidth / 8;
-    const int dw = WIDTH * 4; // four bytes per pixel in SDL_PIXELFORMAT_ARGB8888
+    const int dw = WIDTH * 4;
+
     const uint8_t *src_data = buffer;
     uint8_t *dest_data = pixelBuf;
-    const int ax = 0;
-    const int aw = WIDTH;
-    const int axaw = ax + aw;
-    const int ah = HEIGHT;
-    const int ay = 0;
 
-    if( buflen < ( WIDTH * HEIGHT / 8 ) )
-    {
-        printf("PAL2 WARNING: display buffer too short (%d) for size (%d/%d)\n", buflen, WIDTH, HEIGHT);
-        return;
-    }
+    int ax = patch->x;
+    int aw = patch->w;
+    int axaw = ax + aw;
+    int ah = patch->y + patch->h;
+    int ay = patch->y;
 
+    // Advance pointers to the starting Y row
     src_data += sw * ay;
     dest_data += dw * ay;
-    int x, xx, y;
-    uint8_t v;
-    for( y = 0; y < ah; y++ )
+
+    for (int y = ay; y < ah; y++)
     {
         uint32_t* p = (uint32_t*)dest_data;
-        p += ax;
-        for( x = ax; x < axaw; x++ )
+        p += ax; // Advance pointer to the starting X column
+
+        for (int x = ax; x < axaw; x++)
         {
-            xx = x>>3;
-            assert( src_data + xx - buffer < buflen);
-            v = src_data[xx];
+            int xx = x >> 3;
+            uint8_t v = src_data[xx];
             v = (v >> (7 - (x & 7))) & 1;
             *p = v ? 0xff000000 : 0xffffffff;
             p++;
@@ -427,7 +432,10 @@ static void updateTexture()
         dest_data += dw;
     }
 
-    SDL_UpdateTexture(texture, &r, pixelBuf, r.w * 4);
+    // only upload the modified rectangle
+    // We pass the memory address of the top-left pixel of our patch.
+    uint8_t* patchPixels = pixelBuf + (ay * dw) + (ax * 4);
+    SDL_UpdateTexture(texture, patch, patchPixels, dw);
 }
 
 static void mousePressReleaseImp(int press, int button)
@@ -461,15 +469,39 @@ static void mousePressReleaseImp(int press, int button)
 DllExport int PAL2_processEvents(int sleep)
 {
     SDL_Event e;
-    BOOL  down;
+    BOOL down;
     SDL_Rect r;
 
     if( window == 0 )
         return -1;
 
     sleepTime = sleep;
-    down = 0;
-    if(SDL_WaitEventTimeout(&e,sleep) == 1)
+
+    if( isDirty )
+    {
+        updateTexture(&dirtyArea);
+
+        SDL_RenderClear(renderer);
+        r.x = 0; r.y = 0; r.w = WIDTH; r.h = HEIGHT;
+        SDL_RenderCopy(renderer, texture, &r, &r);
+        SDL_RenderPresent(renderer);
+
+        isDirty = 0;
+        dirtyArea.x = dirtyArea.y = dirtyArea.w = dirtyArea.h = 0;
+    }
+
+    if( idler )
+        idler();
+
+    int hasEvent = (sleep > 0) ? SDL_WaitEventTimeout(&e, sleep) : SDL_PollEvent(&e);
+
+    // Variables to compress mouse movement
+    int mouseMoved = 0;
+    int finalMouseX = x;
+    int finalMouseY = y;
+
+    // use all events
+    while( hasEvent )
     {
         switch( e.type)
         {
@@ -480,35 +512,17 @@ DllExport int PAL2_processEvents(int sleep)
             if( e.window.event == SDL_WINDOWEVENT_CLOSE )
                 return -1;
             break;
-        case SDL_MOUSEMOTION: {
-                const int dx = e.motion.x - x;
-                const int dy = e.motion.y - y;
-                x = e.motion.x;
-                y = e.motion.y;
-#if 0
-                if( (x >= 0 && x < WIDTH ) && ( y >= 0 && y < HEIGHT) )
-                    SDL_ShowCursor( SDL_ENABLE );
-                else
-                    SDL_ShowCursor( SDL_DISABLE );
-#endif
-
-                x = MAX(x, 0);
-                x = MIN(x, WIDTH-1);
-                y = MAX(y, 0);
-                y = MIN(y, HEIGHT-1);
-                const uint32_t diff = PAL2_getTime() - lastEvent;
-                if( /*diff >= msPerFrame &&*/ dx )
-                    postEvent( XLocation, x, 1 );
-                if( /*diff >= msPerFrame &&*/ dy )
-                    postEvent( YLocation, y, 1 );
-                break;
-            }
+        case SDL_MOUSEMOTION:
+            // Just update the final position, don't queue yet!
+            finalMouseX = MAX(MIN(e.motion.x, WIDTH-1), 0);
+            finalMouseY = MAX(MIN(e.motion.y, HEIGHT-1), 0);
+            mouseMoved = 1;
+            break;
         case SDL_MOUSEBUTTONDOWN:
-        case SDL_MOUSEBUTTONUP: {
-                down = (e.button.state == SDL_PRESSED);
-                mousePressReleaseImp(down, e.button.button);
-                break;
-            }
+        case SDL_MOUSEBUTTONUP:
+            down = (e.button.state == SDL_PRESSED);
+            mousePressReleaseImp(down, e.button.button);
+            break;
         case SDL_TEXTINPUT:
             keyEvent(0, decodeUtf8char(e.text.text), 1);
             break;
@@ -518,23 +532,21 @@ DllExport int PAL2_processEvents(int sleep)
             if( e.key.keysym.sym == SDLK_q && down && (e.key.keysym.mod & KMOD_LCTRL) )
                 return -1;
             else
-                keyEvent(e.key.keysym.sym, 0, 1);
+                keyEvent(e.key.keysym.sym, 0, down);
             break;
         }
+
+        hasEvent = SDL_PollEvent(&e);
     }
-    if( 1 ) // ( time - lastUpdate ) > 30 ) // 20 good for runtime, too slow for debugger
-    {
-        updateTexture();
-        SDL_RenderClear(renderer);
-        r.x = 0;
-        r.y = 0;
-        r.w = WIDTH;
-        r.h = HEIGHT;
-        SDL_RenderCopy(renderer, texture, &r, &r);
-        SDL_RenderPresent(renderer);
-        if( idler )
-            idler();
+
+    // We only push the very last mouse position seen in this batch
+    if (mouseMoved) {
+        if (finalMouseX != x) postEvent(XLocation, finalMouseX, 1);
+        if (finalMouseY != y) postEvent(YLocation, finalMouseY, 1);
+        x = finalMouseX;
+        y = finalMouseY;
     }
+
     return count;
 }
 
@@ -543,8 +555,38 @@ DllExport int PAL2_nextEvent()
     return dequeue();
 }
 
-DllExport void PAL2_updateArea(int x,int y,int w,int h,int cx,int cy,int cw,int ch)
+DllExport void PAL2_updateArea(int x, int y, int w, int h, int cx, int cy, int cw, int ch)
 {
+    // Calculate intersection of the update and the clip rect
+    int left = MAX(x, cx);
+    int top = MAX(y, cy);
+    int right = MIN(x + w, cx + cw);
+    int bottom = MIN(y + h, cy + ch);
+
+    if (left >= right || top >= bottom)
+        return; // Empty intersection (nothing to draw)
+
+    // Add to the dirtyArea bounding box
+    if (!isDirty) {
+        dirtyArea.x = left;
+        dirtyArea.y = top;
+        dirtyArea.w = right - left;
+        dirtyArea.h = bottom - top;
+        isDirty = 1;
+    } else {
+        int oldRight = dirtyArea.x + dirtyArea.w;
+        int oldBottom = dirtyArea.y + dirtyArea.h;
+        dirtyArea.x = MIN(dirtyArea.x, left);
+        dirtyArea.y = MIN(dirtyArea.y, top);
+        dirtyArea.w = MAX(oldRight, right) - dirtyArea.x;
+        dirtyArea.h = MAX(oldBottom, bottom) - dirtyArea.y;
+    }
+
+    // Safety clamp to screen bounds
+    dirtyArea.x = MAX(0, dirtyArea.x);
+    dirtyArea.y = MAX(0, dirtyArea.y);
+    dirtyArea.w = MIN(dirtyArea.w, WIDTH - dirtyArea.x);
+    dirtyArea.h = MIN(dirtyArea.h, HEIGHT - dirtyArea.y);
 }
 
 DllExport uint32_t PAL2_getTime() // in milliseconds!
