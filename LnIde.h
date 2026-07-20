@@ -123,6 +123,7 @@ namespace Ln
         void onGotoLnr(quint32);
         void onFullScreen();
         void onCursor();
+        void onExportAsm();
         void onExportBc();
         void onExportAllBc();
         void onModsDblClicked(QTreeWidgetItem*,int);

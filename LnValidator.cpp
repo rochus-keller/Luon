@@ -1105,8 +1105,9 @@ static QList<qint64> getNumbers(Expression* e, bool&  ok)
 
 Statement*Validator::caseStat(Statement* s)
 {
-    visitExpr(s->rhs);
-    Expression* caseExp = s->rhs;
+    Statement* caseStat = s;
+    visitExpr(caseStat->rhs);
+    Expression* caseExp = caseStat->rhs;
     Type* caseExpT = deref(caseExp->type);
     QSet<qint64> labels;
     bool typecase = false;
@@ -1121,7 +1122,7 @@ Statement*Validator::caseStat(Statement* s)
             if( first )
             {
                 typecase = true;
-                s->kind = Statement::TypeCase;
+                caseStat->kind = Statement::TypeCase;
                 if( caseExpT->form != Type::Record )
                 {
                     error(caseExp->pos, "type case only supported for record types");

@@ -30,6 +30,7 @@ SOURCES += \
     ../LjTools/Engine2.cpp \
     ../LjTools/LuaJitComposer.cpp \
     ../LjTools/LuaJitHelper.cpp \
+    LnPAL.c \
     LnRuntime.cpp \
     LnLjRuntime.cpp \
     LnProject.cpp \
@@ -64,6 +65,8 @@ macx {
     include( ../LuaJIT/src/LuaJit.pri )
     QMAKE_LFLAGS += -rdynamic -ldl -pagezero_size 10000 -image_base 100000000
 }
+
+LIBS += -lSDL2 # because of LnPAL.c
 
 include( LnParser.pri )
 

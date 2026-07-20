@@ -47,7 +47,7 @@ MODULE Edit; (*JG 2.11.90 / NW 28.11.2015*)
 
     PROCEDURE Backup (VAR name: ARRAY OF CHAR);
       VAR res, i: INTEGER; bak: ARRAY 32 OF CHAR;
-    BEGIN i := 0;
+    BEGIN NEW(bak); i := 0;
       WHILE name[i] # 0X DO bak[i] := name[i]; INC(i) END;
       bak[i] := "."; bak[i+1] := "B"; bak[i+2] := "a"; bak[i+3] := "k"; bak[i+4] := 0X;
       Files.Rename(name, bak, res)

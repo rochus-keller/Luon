@@ -32,6 +32,7 @@ namespace Ln {
 		Tok_Lt,
 		Tok_LtStar,
 		Tok_Leq,
+		Tok_LtGt,
 		Tok_Eq,
 		Tok_Gt,
 		Tok_Geq,

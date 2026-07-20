@@ -27,6 +27,20 @@ let compiler_files = [
 		./LnValidator.cpp
 	]
 
+let runtime_files = [
+        ../LjTools/LuaJitBytecode.cpp
+        ../LjTools/Engine2.cpp
+        ../LjTools/LuaJitComposer.cpp
+        ../LjTools/LuaJitHelper.cpp
+        ./LnLjRuntime.cpp
+        ./LnProject.cpp
+        ./LnLjbcGen.cpp
+        #./LnPAL.c
+        #./LnPAL2.c
+        ./LnPAL3.cpp
+        ./LnBitBlt.c
+    ]
+
 let ide_files = [
         ../GuiTools/NamedFunction.cpp
         ../GuiTools/UiFunction.cpp
@@ -35,24 +49,22 @@ let ide_files = [
         ../GuiTools/CodeEditor.cpp
         ../GuiTools/DocSelector.cpp
         ../GuiTools/DocTabWidget.cpp
-        ../LjTools/LuaJitBytecode.cpp
-		../LjTools/Engine2.cpp 
 		../LjTools/Terminal2.cpp 
 		../LjTools/ExpressionParser.cpp 
-		../LjTools/LuaJitComposer.cpp 
 		../LjTools/BcViewer2.cpp 
 		../LjTools/BcViewer.cpp 
 		../LjTools/LjDisasm.cpp  
         ./LnIde.cpp
 		./LnHighlighter.cpp 
-		./LnLjRuntime.cpp 
-		./LnProject.cpp 
-		./LnLjbcGen.cpp 
-        #./LnPAL.c
-        #./LnPAL2.c
-		./LnPAL3.cpp 
-		./LnBitBlt.c
 	]
+
+let compiler_moc : Moc {
+    .sources += [
+        ../LjTools/Engine2.h
+        ./LnPAL3.h
+        ./LnProject.h
+    ]
+}
 
 let ide_moc : Moc {
 	.sources += [
@@ -64,11 +76,14 @@ let ide_moc : Moc {
 		../GuiTools/CodeEditor.h
         ../LjTools/BcViewer.h
         ../LjTools/BcViewer2.h
-        ../LjTools/Engine2.h
         ../LjTools/Terminal2.h
         ./LnIde.h
-        ./LnPAL3.h
-        ./LnProject.h
+    ]
+}
+
+let runtime_moc : Moc {
+    .sources += [
+        ./LnRuntime.h
     ]
 }
 
@@ -78,10 +93,10 @@ let ide_rcc : Rcc {
 
 let ide ! : Executable {
     .configs += [ qt.qt_client_config ]
-    .deps += [ qt.libqt ide_rcc ide_moc ]
+    .deps += [ qt.libqt ide_rcc ide_moc compiler_moc ]
     .include_dirs += [ ../LuaJIT/src .. ]
     .lib_dirs += [ ../LuaJIT/src ]
-    .sources += compiler_files + ide_files
+    .sources += compiler_files + ide_files + runtime_files
     if target_os == `win32 {
         .lib_files +=  [ ../LuaJIT/src/lua51.lib ]
         .deps += qt.libqtwinmain
@@ -96,3 +111,27 @@ let ide ! : Executable {
     .name = "LuonIDE"
 }
 
+let runtime * : Executable {
+    .configs += [ qt.qt_client_config ]
+    .deps += [ qt.libqt ide_rcc compiler_moc runtime_moc ]
+    .include_dirs += [ ../LuaJIT/src .. ]
+    .lib_dirs += [ ../LuaJIT/src ]
+    .sources += compiler_files + runtime_files;
+    .sources += [ ./LnRuntime.cpp ]
+    if target_os == `win32 {
+        .lib_files +=  [ ../LuaJIT/src/lua51.lib ]
+        .deps += qt.libqtwinmain
+    } else {
+        .lib_names += [ "dl" ]
+        .lib_files += [ ../LuaJIT/src/libluajit.a ]
+        .ldflags += [ "-rdynamic" ]
+        if target_os == `macos {
+            .ldflags += [ "-pagezero_size 10000" "-image_base 100000000" ]
+        }
+    }
+    .name = "luon"
+}
+
+let all * : Group {
+    .deps += [ runtime ide ]
+}

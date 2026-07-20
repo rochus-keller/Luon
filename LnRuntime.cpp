@@ -21,6 +21,7 @@
 #include "LnLjRuntime.h"
 #include "LnLexer.h"
 #include "LnProject.h"
+#include "LnVersion.h"
 #include <LjTools/Engine2.h>
 #include <LjTools/Terminal2.h>
 #include <LjTools/BcViewer2.h>
@@ -86,7 +87,7 @@ int main(int argc, char *argv[])
     a.setOrganizationName("me@rochus-keller.ch");
     a.setOrganizationDomain("github.com/rochus-keller/Luon");
     a.setApplicationName("Luon Runtime (LuaJIT)");
-    a.setApplicationVersion("0.1.0");
+    a.setApplicationVersion(LUON_VERSION);
     a.setStyle("Fusion");
 
 

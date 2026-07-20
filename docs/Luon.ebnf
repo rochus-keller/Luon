@@ -72,7 +72,7 @@ ExpList ::= expression { [','] expression }
 
 expression ::= SimpleExpression [ relation SimpleExpression ]
 
-relation ::= '=' | '#' | '<' | '<=' | '>' | '>=' | IN | IS
+relation ::= '=' | '#' | '<>' | '<' | '<=' | '>' | '>=' | IN | IS
 
 SimpleExpression ::= ['+' | '-'] term { AddOperator term }
 
@@ -155,7 +155,7 @@ ProcedureDeclaration ::=
             // type bound procs cannot be INLINE, INVAR, nor EXTERN
 
 	
-ProcedureHeading ::= procedure [Receiver] identdef [ FormalParameters ]  
+ProcedureHeading ::= procedure [Receiver| \LL:2\ ident '.'] identdef [ FormalParameters ]  
 Receiver ::= '(' ident ':' ident ')'
 
 block ::= BEGIN StatementSequence

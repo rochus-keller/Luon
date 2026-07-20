@@ -265,7 +265,7 @@ MODULE Oberon; (*JG 6.9.90 / 23.9.93 / 13.8.94 / NW 14.4.2013 / 22.12.2015*)
 
   PROCEDURE PassFocus* (V: Viewers.Viewer);
     VAR M: ControlMsg;
-  BEGIN M.id := defocus; FocusViewer.handle(FocusViewer, M); FocusViewer := V
+  BEGIN NEW(M); M.id := defocus; FocusViewer.handle(FocusViewer, M); FocusViewer := V
   END PassFocus;
 
   PROCEDURE OpenLog*(T: Texts.Text);
@@ -281,7 +281,7 @@ MODULE Oberon; (*JG 6.9.90 / 23.9.93 / 13.8.94 / NW 14.4.2013 / 22.12.2015*)
     VAR mod_: Modules.Module; P: Modules.Command;
       i, j: INTEGER; ch: CHAR;
       Mname, Cname: ARRAY 32 OF CHAR;
-  BEGIN i := 0; ch := name[0];
+  BEGIN NEW(Mname); NEW(Cname); i := 0; ch := name[0];
     WHILE (ch # ".") & (ch # 0X) DO Mname[i] := ch; INC(i); ch := name[i] END ;
     IF ch = "." THEN
       Mname[i] := 0X; INC(i);
@@ -299,7 +299,7 @@ MODULE Oberon; (*JG 6.9.90 / 23.9.93 / 13.8.94 / NW 14.4.2013 / 22.12.2015*)
 
   PROCEDURE GetSelection* (VAR text: Texts.Text; VAR beg, end_, time: INTEGER);
     VAR M: SelectionMsg;
-  BEGIN
+  BEGIN NEW(M);
     M.time := -1; Viewers.Broadcast(M); time := M.time;
     IF time >= 0 THEN text := M.text; beg := M.beg; end_ := M.end_ END
   END GetSelection;
@@ -400,6 +400,7 @@ MODULE Oberon; (*JG 6.9.90 / 23.9.93 / 13.8.94 / NW 14.4.2013 / 22.12.2015*)
   END Reset;
 
 BEGIN NEW(User); User[0] := 0X;
+  NEW(Par);
   NEW(Arrow);
   Arrow.Fade := FlipArrow; Arrow.Draw := FlipArrow;
   NEW(Star);

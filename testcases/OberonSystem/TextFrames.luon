@@ -105,7 +105,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
 
   PROCEDURE Width (VAR R: Texts.Reader; len: INTEGER): INTEGER;
     VAR patadr: Display.Pattern; pos: INTEGER; ox, dx, x, y, w, h: INTEGER;
-  BEGIN pos := 0; ox := 0;
+  BEGIN NEW(patadr); pos := 0; ox := 0;
     WHILE pos < len DO
       Fonts.GetPat(R.fnt, nextCh, dx, x, y, w, h, patadr);
       ox := ox + dx; INC(pos); Texts.Read(R, nextCh)
@@ -116,7 +116,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
   PROCEDURE DisplayLine (F: Frame; L: Line;
     VAR R: Texts.Reader; X, Y: INTEGER; len: INTEGER);
     VAR patadr: Display.Pattern; NX,  dx, x, y, w, h: INTEGER;
-  BEGIN NX := F.X + F.W;
+  BEGIN NEW(patadr); NX := F.X + F.W;
     WHILE (nextCh # CR) & (R.fnt # NIL) DO
       Fonts.GetPat(R.fnt, nextCh, dx, x, y, w, h, patadr);
       IF (X + x + w <= NX) & (h # 0) THEN
@@ -266,7 +266,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
     VAR R: Texts.Reader;
       patadr: Display.Pattern; bpos, pos, lim: INTEGER;
       bx, ex, ox, dx, u, v, w, h: INTEGER;
-  BEGIN LocateLine(F, y, loc);
+  BEGIN NEW(patadr); LocateLine(F, y, loc);
     lim := loc.org + loc.lin.len - 1;
     bpos := loc.org; bx := F.left;
     pos := loc.org; ox := F.left;
@@ -296,7 +296,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
     VAR R: Texts.Reader;
       patadr: Display.Pattern; pos, lim: INTEGER;
       ox, dx, u, v, w, h: INTEGER;
-  BEGIN LocateLine(F, y, loc);
+  BEGIN NEW(patadr); LocateLine(F, y, loc);
     lim := loc.org + loc.lin.len - 1;
     pos := loc.org; ox := F.left; dx := eolW;
     R := Texts.newReader();
@@ -331,7 +331,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
 
   PROCEDURE Pos* (F: Frame; X, Y: INTEGER): INTEGER;
     VAR loc: Location;
-  BEGIN LocateChar(F, X - F.X, Y - F.Y, loc); RETURN loc.pos
+  BEGIN NEW(loc); LocateChar(F, X - F.X, Y - F.Y, loc); RETURN loc.pos
   END Pos;
 
   PROCEDURE FlipCaret (F: Frame);

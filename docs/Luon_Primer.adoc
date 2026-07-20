@@ -1,0 +1,823 @@
+// This file may be used under the terms of the GNU General Public
+// License (GPL) versions 2.0 or 3.0 as published by the Free Software
+// Foundation, see http://www.gnu.org/copyleft/gpl.html for more information
+
+
+= A Luon Primer
+:author: Rochus Keller
+:email: me@rochus-keller.ch
+:revdate: 2026-07-19
+:revremark: work in progress
+:doctype: article
+:listing-caption: Listing
+:sectnums:
+:toc: left
+
+[dedication]
+A hands-on introduction to the Luon programming language for people who want to learn and use it quickly. For the precise rules, consult the companion document _The Programming Language Luon_.
+
+== Introduction
+
+Luon is a small, statically typed, garbage-collected language with a clean block structure and modules. It reads like a modern Pascal or Oberon, it compiles to fast code on the LuaJIT virtual machine, and it interoperates directly with Lua. The name is a contraction of *Lua* and *Oberon*, and that is a good one-line summary of what it is: _a statically typed alternative to Lua, in the tradition of Oberon_.
+
+This primer teaches the language from the ground up through small, complete examples. It is not a formal reference — where a detail matters, the reference (_The Programming Language Luon_) is the authority. The goal here is to get you writing and reading Luon confidently in an afternoon.
+
+=== The languages Luon builds on
+
+Luon did not appear out of nowhere; it is a careful blend of ideas from a family of well-understood languages.
+
+* *Oberon-2* and *Oberon-07* (Niklaus Wirth) contribute the overall philosophy: a very small language that is easy to read, easy to compile, and safe by default. From Oberon come modules with explicit import/export, records with single inheritance (_type extension_), type-bound procedures (methods), and a rigorously simple type system. Oberon-07 in particular reduced the language to a minimal core — Luon follows that spirit (for example, there is only one integer and one real type).
+* *Oberon+* (the author's earlier language) contributes the modernized surface syntax: reserved words may be written in lower case, semicolons are optional, generic (parametric) modules, enumerations, and explicit bit operations.
+* *Lua* (and its high-performance implementation *LuaJIT*) contributes the runtime model and two data structures that feel native to Lua programmers: a built-in `hashmap` (associative array) and an immutable `string` type with value semantics. Crucially, Luon _targets the LuaJIT VM_, so Luon code and Lua code share one runtime and can call each other.
+* *Pascal* (Wirth again) is the common ancestor of the whole family and the source of the `begin ... end` block style, `:=` assignment, and the declaration-before-statements structure.
+
+=== How Luon improves on these languages
+
+Luon is best understood as _fixing the things that annoyed its author while writing large programs in Lua_, while keeping the safety and readability of Oberon.
+
+Compared to *Lua*, Luon adds:
+
+* *Static typing with strong type checking.* Most errors are caught at compile time instead of at runtime. There are no implicit globals, and a local variable can no longer be used before its declaration.
+* *Real constants.* Constants do not occupy local slots or require hashed lookups; they are folded at compile time.
+* *Conditional compilation.* Debug-only or platform-specific code can be compiled in or out, so you never pay at runtime for statements you do not ship.
+* *Explicit inlining.* Procedures can be marked to be inlined, so you can structure code into small procedures without the usual call overhead and slot consumption.
+* *A `case` statement*, so you do not have to repeat the same relational expression again and again.
+
+Yet Luon keeps what makes Lua pleasant: a garbage collector, dynamically created reference-semantic data, hashmaps, immutable strings, and — because it compiles to LuaJIT — the ability to reuse the enormous body of existing Lua and C libraries through `extern` procedures.
+
+Compared to *Oberon*, Luon:
+
+* *Removes pointers entirely.* All structured types (records, arrays, hashmaps) have reference semantics and are created dynamically; you never write `pointer to` and never dereference. This makes the language markedly simpler than Oberon+ while covering the same use cases.
+* *Adds a `hashmap` type* and an immutable `string` type for Lua compatibility.
+* *Adds exception handling* (`pcall`/`raise`), *constructors* for building structured values in one expression, and *bit operations* as ordinary built-in functions.
+* *Modernizes the syntax*: lower-case keywords, optional semicolons, and short keyword spellings such as `proc` for `PROCEDURE`.
+
+=== What this primer covers
+
+We start with a runnable program and build up: lexical basics, the type system, control flow, procedures, objects (type-bound procedures), generics, modules, and finally interoperation with Lua and conditional compilation. Every code block is a complete or near-complete Luon fragment you can adapt.
+
+== Your first program
+
+A Luon program is a set of _modules_. The smallest useful module has a name and a statement body:
+
+[source,luon]
+----
+module Minimal
+
+begin
+	println("Minimal start")
+	println("Hello" + " World!")
+
+	println("Minimal done")
+end Minimal
+----
+
+Reading this top to bottom:
+
+* `module Minimal` opens the module; the matching `end Minimal` closes it. The name is repeated at the end (a readability aid inherited from Oberon).
+* The statements between `begin` and `end` form the *module body*. They run once, when the module is loaded.
+* `println` and its sibling `print` are predeclared: they write a textual representation of any value to the terminal (`println` adds a newline).
+* `+` on two strings concatenates them.
+
+Note the style already visible here: keywords are lower case, there are no semicolons at the ends of lines, and indentation is by convention only (Luon is free-form — whitespace merely separates tokens).
+
+== The shape of a program
+
+Every module follows the same skeleton:
+
+[source,luon]
+----
+module Name
+	// import list (optional)
+	// const / type / var / procedure declarations (any order, repeatable)
+begin
+	// statements executed at module load time (optional)
+end Name
+----
+
+Declarations come first, the optional `begin ... end` body last. Unlike older Pascals, you may write several `const`, `type`, and `var` sections in any order and interleave them with procedures.
+
+The following module shows declarations and a nested procedure:
+
+[source,luon]
+----
+module Minimal2
+
+	proc doit( str: array of char )
+		proc inner( a, b: integer )
+		begin
+			println( a * b DIV 3 )
+		end inner
+		var str2: array 53 of char
+	begin
+		inner( 44, 55 )
+		copy( str2, str )
+		println( str2 )
+	end doit
+
+begin
+	println("Minimal start")
+	doit("Hello" + " World!")
+	println("Minimal done")
+end Minimal2
+----
+
+`doit` declares a nested procedure `inner` and a local array `str2`; the procedure body follows `begin`. Procedures can be nested arbitrarily and see the locals of their enclosing procedure.
+
+== Lexical basics
+
+=== Identifiers, keywords, comments
+
+Identifiers are letters, digits and underscore, starting with a letter or underscore, and are case-sensitive (`Count` and `count` differ). Reserved words, by contrast, may be written *either* all upper case *or* all lower case — `begin` and `BEGIN` are the same keyword, but `Begin` is an ordinary identifier. This primer uses lower case throughout.
+
+Comments come in two flavours:
+
+[source,luon]
+----
+(* a block comment, which may (* nest *) *)
+// a line comment, to the end of the line
+----
+
+=== Numbers
+
+There is a single integer type (`integer`, 53 bits of precision) and a single real type (`real`). Integer literals may be decimal, or carry a suffix — `H`/`h` for hex, `O`/`o` for octal, `B`/`b` for binary — and may contain underscores for readability. A real literal always has a decimal point with at least one digit before it, and may carry an exponent introduced by `E`/`e`.
+
+[source,luon]
+----
+const million = 1_000_000
+const mask    = 0FFH        // hex 255; a leading 0 avoids clashing with an identifier
+const c       = 3.0E8       // a real
+----
+
+=== Characters and strings
+
+A `char` is a single character. Character literals can be written between double quotes, or as an ordinal followed by `X` (`41X` is `"A"`). A `string` is an immutable sequence of characters with value semantics, written between double quotes; `+` concatenates strings.
+
+[source,luon]
+----
+var ch: char
+ch := "A"
+ch := 41X          // same character, given by its Latin-1 ordinal
+println("Hello" + " " + "World")
+----
+
+Luon distinguishes the immutable `string` type (value semantics, like Lua strings) from an `array of char` (a mutable character buffer, terminated by the null character `0X`). The built-in `copy` turns a string into a char array; `strlen` gives the length up to the terminator.
+
+== Constants, variables, and types
+
+Constants are introduced with `const`, types with `type`, variables with `var`:
+
+[source,luon]
+----
+const
+	Pi   = 3.14159
+	Max  = 100
+
+type
+	Celsius = integer          // a type alias
+	Point   = record x, y: integer end
+
+var
+	count: integer             // initialized to 0
+	here:  Point               // a reference, initially nil
+----
+
+A newly declared variable of a basic type gets its default value (`0`, `0.0`, `false`, the empty set, or the first enumerator). A variable of a structured or procedure type starts out as `nil` until you create an instance for it (see <<reference-semantics>>).
+
+=== Basic types
+
+[%header,cols="1,3"]
+|===
+| Type | Values
+| `boolean` | `true` and `false`
+| `char` | a single Latin-1 character
+| `integer` | whole numbers with 53 bits of precision
+| `real` | floating-point numbers
+| `byte` | an integer in the range 0..255
+| `set` | a small set of integers (element range is implementation-defined, at least 0..31)
+| `string` | an immutable, value-semantic character sequence
+|===
+
+Numeric types form an inclusion hierarchy (`byte` is included in `integer`, `integer` in `real`), so a smaller type is accepted where a larger one is expected.
+
+== Expressions and operators
+
+Luon's operators will look familiar. The one spelling worth calling out is *"not equal"*, which may be written either `#` (the traditional Oberon spelling) or `<>` — the two are exact synonyms.
+
+[%header,cols="1,3"]
+|===
+| Operator | Meaning
+| `+` `-` `*` `/` | arithmetic (and `+` also concatenates strings)
+| `DIV` `MOD` | integer division and modulo
+| `&` `OR` `~` | logical and, or, not
+| `=` | equal
+| `#` or `<>` | not equal (two spellings, same meaning)
+| `<` `<=` `>` `>=` | ordering comparisons
+| `IN` | set membership: `x IN s`
+| `IS` | type test: `v IS T`
+| `{ }` | set / constructor braces
+| `..` | a range, e.g. `{0..7}` or a case label
+|===
+
+A quick tour:
+
+[source,luon]
+----
+var a, b: integer
+var ok: boolean
+var s: set
+
+a := 17 MOD 5              // 2
+ok := (a > 0) & (a <> 10)  // "<>" is "not equal"; same as a # 10
+s := {0, 2, 4..6}          // the set {0,2,4,5,6}
+ok := 4 IN s               // true
+----
+
+Logical `&` and `OR` short-circuit; `~` is negation. Sets support union `+`, difference `-`, intersection `*`, and symmetric difference `/`.
+
+== Control flow
+
+=== if / elsif / else
+
+[source,luon]
+----
+if i = 1 then
+	println("a")
+elsif i = 2 then
+	println("b")
+else
+	println("c")
+end
+----
+
+`elsif` and `else` are optional; every `if` is closed by `end`.
+
+=== case
+
+`case` selects among labels (which may be single values or ranges) and avoids repeating the tested expression:
+
+[source,luon]
+----
+case t of
+| A:    println("A")
+| B..C: println("B or C")
+| D:    println("D")
+else
+	println("something else")
+end
+----
+
+=== while, repeat, loop
+
+[source,luon]
+----
+while i < 10 do
+	println(i)
+	i := i + 1
+end
+
+repeat
+	println(i)
+	i := i + 1
+until i >= 10
+
+loop
+	println(i)
+	i := i + 1
+	if i >= 5 then exit end
+end
+----
+
+`while` tests before each iteration, `repeat`/`until` after, and `loop` is an unconditional loop left by an `exit` statement (handy for loops with the test in the middle).
+
+=== for
+
+The `for` statement counts a control variable of an integer or enumeration type from a start to an end value, with an optional `by` step (which may be negative):
+
+[source,luon]
+----
+for i := 1 to 10 by 2 do
+	println(i)
+end
+
+for i := 10 to 0 by -3 do
+	println(i)
+end
+----
+
+Because enumerations are ordinal types, you can iterate over one directly:
+
+[source,luon]
+----
+type Colour = ( red, green, blue )
+var c: Colour
+for c := red to blue do
+	println(c)
+end
+----
+
+== Structured types
+
+Luon has four structured types: arrays, hashmaps, records, and enumerations. All of them (except enumerations, which are ordinal values) have _reference semantics_ — this is important enough to get its own section below.
+
+=== Enumerations
+
+An enumeration lists its values; they are ordered, and `ord`, `inc`, `dec`, `min`, and `max` all work on them:
+
+[source,luon]
+----
+type T = ( A, B, C, D, E )   // commas are optional
+var t: T
+t := B
+inc(t)            // now C
+println(ord(t))   // 2
+println(min(T))   // A
+println(max(T))   // E
+----
+
+=== Arrays
+
+An array is either _fixed length_ (`array 10 of integer`) or _open_ (`array of integer`, its length fixed when you create it). Indexing is zero-based, and you may write multi-dimensional access either as `a[i][j]` or `a[i,j]`.
+
+[source,luon]
+----
+type Matrix = array 2 of array 3 of integer
+var m: Matrix
+new(m)               // allocate the fixed array
+m[1][2] := 42
+m[1, 2] := 42        // equivalent
+
+var v: array of integer
+new(v, 100)          // an open array of length 100
+println(len(v))      // 100
+----
+
+=== Hashmaps
+
+A `hashmap` is an associative array, exactly like a Lua table used as a dictionary. You give the key type and the value type:
+
+[source,luon]
+----
+var h: hashmap string of integer
+var names: array of string
+
+new(h)
+h["b"] := 234
+println(h["b"])      // 234
+names := keys(h)     // all keys, in arbitrary order
+println(len(names))
+----
+
+Reading a key that was never set yields the value type's default (for `integer`, `0`).
+
+=== Records and type extension
+
+A record groups named fields. A record may _extend_ another record by naming it in parentheses — this is Luon's single-inheritance mechanism:
+
+[source,luon]
+----
+type
+	A = record i, j: integer end
+	B = record (A) name: array 10 of char end   // B extends A
+	C = record (A) flag: boolean end
+
+var a: A
+var b: B
+new(b)
+a := b               // widening: a B is an A
+
+assert(a is A)       // type test: true
+assert(a is B)       // true — a currently refers to a B
+assert(~(a is C))    // true — it is not a C
+----
+
+The `is` operator asks whether the value's _dynamic_ type is (an extension of) the named type.
+
+[[reference-semantics]]
+== Reference semantics, new, and constructors
+
+This is the single most important thing to internalize coming from Oberon or Pascal: *Luon has no pointers, and every structured value is a reference.* A variable of record, array, or hashmap type does not hold the data — it refers to it, and starts life as `nil`.
+
+You bring an instance into existence in one of two ways.
+
+*With `new`*, which allocates a default-initialized instance:
+
+[source,luon]
+----
+var p: Point
+new(p)          // p now refers to a fresh Point with x=0, y=0
+p.x := 10
+----
+
+*With a constructor*, which allocates _and_ fills an instance in a single expression using braces. Fields can be given positionally or by name:
+
+[source,luon]
+----
+type
+	Vector3D = record x, y, z: real end
+	CallSign = record value: integer end
+	Aircraft = record callsign: CallSign; position: Vector3D end
+
+var a: Aircraft
+a := { callsign: {5}, position: { 6.0, 7.0, 8.0 } }
+----
+
+Constructors nest, so the whole object graph above is built in one line. Constructors also build arrays and hashmaps.
+
+Because assignment of a structured value copies the _reference_, two variables can refer to the same instance. When you need an independent duplicate, use `copy`, which makes a shallow copy:
+
+[source,luon]
+----
+var a1, a2: Aircraft
+new(a1); new(a1.position)
+a1.position.z := 4.0
+copy(a2, a1)            // a2 is now an independent shallow copy
+----
+
+There is no way to free memory explicitly; a garbage collector reclaims instances once they are no longer reachable. Setting the last reference to `nil` makes an instance collectable.
+
+== Procedures
+
+A procedure is declared with `proc` (or the longer `procedure`). It may take parameters, may return a value, and may be nested inside other procedures.
+
+[source,luon]
+----
+proc calc( n: integer ): integer
+	var a, b: integer
+begin
+	if n > 1 then
+		a := calc(n - 1)
+		b := calc(n - 2)
+		return a + b
+	elsif n = 0 then
+		return 0
+	else
+		return 1
+	end
+end calc
+----
+
+`return` yields the result of a function procedure; a procedure without a result type (a _proper_ procedure) may use `return` with no value to leave early.
+
+=== Parameter passing
+
+Parameters are passed by value unless marked otherwise:
+
+[%header,cols="1,3"]
+|===
+| Form | Meaning
+| `x: T` | value parameter — the procedure gets a copy (for structured `T`, a copy of the reference)
+| `var x: T` | variable parameter — the procedure can modify the caller's variable
+| `const x: T` | read-only parameter — passed efficiently, but cannot be modified
+|===
+
+[source,luon]
+----
+proc modify( var a: Aircraft )      // caller sees the change
+begin
+	a.position.z := 6.0
+end modify
+
+proc observe( const a: Aircraft )   // cheap, but read-only
+begin
+	println(a.position.z)
+end observe
+----
+
+=== External procedures
+
+A procedure whose body is implemented in Lua (or in C via the LuaJIT FFI) is declared with `extern` and no body. This is how Luon reuses the Lua/C ecosystem:
+
+[source,luon]
+----
+module Convert
+	procedure realToInt*(x: real): integer extern
+	procedure intToReal*(x: integer): real extern
+end Convert
+----
+
+The `*` after each name _exports_ it (see <<modules-and-imports>>). The Lua implementation is supplied at load time by the runtime.
+
+== Objects: type-bound procedures
+
+A procedure can be _bound_ to a record type, making it a method of that type. Binding is expressed by a *receiver* in the procedure heading. Luon offers two equivalent spellings.
+
+The *explicit* form names both a receiver parameter and its type:
+
+[source,luon]
+----
+type Tree = record key: integer; left, right: Tree end
+
+proc (self: Tree) Insert( node: Tree )
+	var p: Tree
+begin
+	p := self
+	// ... walk the tree using p ...
+end Insert
+----
+
+The *short* form names only the receiver type, followed by a dot. No receiver parameter is written; instead the compiler provides a hidden receiver reachable under the name `self`:
+
+[source,luon]
+----
+proc Tree.Insert( node: Tree )
+	var p: Tree
+begin
+	p := self          // "self" is the implicit receiver
+	// ...
+end Tree.Insert
+----
+
+Both forms bind `Insert` to `Tree`. Because Luon has no pointers, the receiver type simply names the record type directly (reference semantics do the rest). The procedure name repeated after `end` may optionally carry the receiver-type prefix — `end Tree.Insert` or plainly `end Insert`.
+
+Once bound, a method is called with dot notation on an instance:
+
+[source,luon]
+----
+var t: Tree
+new(t)
+t.Insert(otherNode)
+----
+
+=== Inheritance and overriding
+
+A method declared on a base record is inherited by extensions, which may _override_ it. Calls are dispatched on the dynamic type. The `^` selector performs a *supercall* — invoking the base type's version of the method being overridden.
+
+[source,luon]
+----
+type
+	Figure = record position: record x, y: integer end end
+	Circle = record (Figure) diameter: integer end
+
+proc (this: Figure) draw*() end          // base method (empty here)
+proc (this: Circle) draw*()
+begin
+	// ... draw the circle ...
+end draw
+----
+
+Combined with the `is` type test and the predeclared base type `anyrec` (the implicit root of all records), this gives Luon straightforward, statically checked object orientation without any pointer machinery.
+
+== Generics
+
+A module can take *type parameters* in parentheses after its name, making it a generic (parametric) module. Instantiating it with concrete types produces a usable module.
+
+[source,luon]
+----
+module Lists(T)
+	type List* = record
+		value* : T
+		next*  : List
+	end
+
+	proc (l: List) Add*( v: T )
+	begin
+		new(l.next)
+		l.next.value := v
+	end Add
+
+	proc (l: List) Print*()
+	begin
+		println(l.value)
+	end Print
+end Lists
+----
+
+A client instantiates the module in its import list, binding `T`:
+
+[source,luon]
+----
+module ListTest
+	import L := Lists(integer)     // instantiate with T = integer
+	var l: L.List
+begin
+	new(l)
+	l.value := 123
+	l.Add(456)
+	l.Print()
+	l.next.Print()
+end ListTest
+----
+
+This gives fully type-checked, reusable containers and algorithms without runtime type erasure.
+
+[[modules-and-imports]]
+== Modules and imports
+
+Modules are the units of compilation and of information hiding.
+
+* An identifier is *exported* by marking its declaration with `*` (fully public) or `-` (public but read-only in importing modules). Unmarked identifiers are private to the module.
+* A module gains access to another's exports by *importing* it. An exported `x` of module `M` is then referred to as `M.x`. An import may be aliased for brevity.
+
+[source,luon]
+----
+module Client
+	import
+		Out                    // import module Out
+		L := Lists(integer)    // import an instance under the alias L
+	var xs: L.List
+begin
+	new(xs)
+	xs.value := 1
+	// ... Out.something(...) ...
+end Client
+----
+
+The statements in a module body run when the module is loaded, _after_ all its imports have been loaded — so cyclic imports are not allowed. A module may not import itself.
+
+== Built-in procedures at a glance
+
+Luon predeclares a set of procedures that are always available (no import needed). Names may be written in upper or lower case. The most frequently used ones:
+
+[%header,cols="1,3"]
+|===
+| Procedure | What it does
+| `print(x)` / `println(x)` | write a representation of `x` (the latter adds a newline)
+| `new(v)` / `new(v, n)` | allocate a record/fixed array/hashmap, or an open array of length `n`
+| `copy(x, y)` | shallow-copy structured `y` into `x` (also string to char array)
+| `len(v)` | length of an array or string
+| `keys(h)` | array of a hashmap's keys
+| `assert(x)` | abort if the boolean `x` is false
+| `inc(v)` / `dec(v)` | increment / decrement an integer or enumeration value
+| `incl(s, x)` / `excl(s, x)` | add / remove element `x` of a set `s`
+| `abs`, `min`, `max`, `odd`, `ord`, `chr`, `floor`, `flt` | numeric / ordinal helpers
+| `bitand`, `bitor`, `bitxor`, `bitnot`, `bitshl`, `bitshr`, `bitasr` | bit operations on integers
+| `tostring(x)` | a string representation of any value
+| `pcall(...)` / `raise(e)` | protected call and exception raising
+|===
+
+A tiny taste of the bit operations and `assert`:
+
+[source,luon]
+----
+var b: integer
+b := bitshl(0FFH, 16)     // 0xFF shifted left 16 bits
+b := bitor(b, 1234)
+assert(odd(3))
+----
+
+== Conditional compilation and directives
+
+Luon can include or exclude parts of the source at compile time, driven by _configuration variables_. This lets you keep debug code, or platform-specific code, in the source without paying for it at runtime.
+
+Set a variable with a directive:
+
+[source,luon]
+----
+<* WIN32+ *>       // set WIN32
+<* WIN64- *>       // unset WIN64
+----
+
+Select code with an `if`/`elsif`/`else`/`end` directive whose conditions are boolean expressions over configuration variables (`&`, `OR`, `~`, parentheses). Unset variables are `false`:
+
+[source,luon]
+----
+proc calc( n: integer ): integer
+	var a, b: integer
+begin
+ <* if use_recursion then *>
+	if n > 1 then return calc(n-1) + calc(n-2)
+	elsif n = 0 then return 0
+	else return 1 end
+ <* else *>
+	// iterative version compiled in when use_recursion is not set
+	// ...
+	return a
+ <* end *>
+end calc
+----
+
+Only the selected section is seen by the compiler; the rest never reaches the generated code.
+
+== Interoperating with Lua
+
+Because Luon compiles to LuaJIT bytecode, Luon and Lua share one runtime. The bridge is the `extern` keyword introduced earlier: you declare the signature in Luon and provide the implementation in Lua (or in C reached through the LuaJIT FFI). This is how large Luon programs — for example the author's Smalltalk-80 virtual machine — pull in SDL2 and other native libraries.
+
+The practical upshot for a newcomer: write the parts that benefit from static typing and structure in Luon, and reach for `extern` when you want an existing Lua/C library.
+
+== A worked example: drawing figures
+
+The following program ties together modules, generics, records with inheritance, type-bound procedures, constructors, and nested procedures. It defines a generic container, a small figure hierarchy, and iterates over a collection to draw each element.
+
+[source,luon]
+----
+module Collections(T)
+	type Deque* = record
+		data: array of T
+		size: integer
+	end
+
+	proc createDeque*(): Deque
+		const initial_len = 1_000
+		var this: Deque              // initialized to nil
+	begin
+		new(this)
+		new(this.data, initial_len)
+		return this
+	end createDeque
+
+	proc (this: Deque) append*( element: T )
+	begin
+		if this.size = len(this.data) then assert(false) end
+		this.data[this.size] := element
+		inc(this.size)
+	end append
+
+	type Iterator* = record end
+	proc (this: Iterator) apply*( element: T ) end
+
+	proc (this: Deque) forEach*( iter: Iterator )
+		var i: integer
+	begin
+		for i := 0 to this.size - 1 do
+			iter.apply(this.data[i])
+		end
+	end forEach
+end Collections
+----
+
+[source,luon]
+----
+module Drawing
+	import C := Collections(Figure)
+
+	type Figure* = record position: record x, y: integer end end
+	proc (this: Figure) draw*() end
+
+	type
+		Circle* = record (Figure) diameter: integer end
+		Square* = record (Figure) width: integer end
+	proc (this: Circle) draw*() end
+	proc (this: Square) draw*() end
+
+	var figures: C.Deque
+	    circle:  Circle
+	    square:  Square
+
+	proc drawAll()
+		type I = record (C.Iterator) count: integer end
+		proc (this: I) apply( figure: Figure )
+		begin
+			figure.draw()
+			inc(this.count)
+		end apply
+		var i: I                     // count starts at zero
+	begin
+		new(i)
+		figures.forEach(i)
+		assert(i.count = 2)
+		println("drawing done")
+	end drawAll
+
+begin
+	figures := C.createDeque()
+	circle := { { 3, 4 }, diameter: 3 }        // constructor
+	figures.append(circle)
+	square := { { x: 5, y: 6 }, 4 }
+	figures.append(square)
+	drawAll()
+end Drawing
+----
+
+Points to notice:
+
+. `Collections(Figure)` is a generic module instantiated with the concrete element type `Figure`.
+. `Circle` and `Square` extend `Figure` and override `draw`; `forEach` calls `draw` on each element and dispatches to the right override.
+. `drawAll` declares a local record type `I` extending the imported `C.Iterator`, with its own `apply` — objects and generics compose cleanly.
+. Instances are built with constructors (`{ ... }`) instead of `new` where convenient.
+
+== Coming from another language
+
+=== If you know Lua
+
+[%header,cols="1,2"]
+|===
+| Lua | Luon
+| tables as records | `record` types with named, typed fields
+| tables as dictionaries | the `hashmap` type
+| dynamic typing | static typing, checked at compile time
+| implicit globals | every name must be declared; exports are explicit
+| `--` comments | `//` line comments and `(* ... *)` block comments
+| one numeric type | one `integer` (53-bit) and one `real`
+| `~=` for not-equal | `#` or `<>`
+| everything at runtime | constants, `case`, conditional compilation resolved at compile time
+|===
+
+=== If you know Oberon or Pascal
+
+[%header,cols="1,2"]
+|===
+| Oberon / Pascal | Luon
+| `POINTER TO T` and `NEW` | no pointers — structured types _are_ references; still `new`
+| `PROCEDURE`, uppercase keywords | `proc` also works; keywords may be lower case
+| mandatory `;` | semicolons are optional
+| `#` for not-equal | `#` or the synonym `<>`
+| separate int types | a single `integer` type
+| (no dictionaries) | the `hashmap` type
+| (no generics in classic Oberon) | generic modules `M(T)`
+| method receiver only as `(r: T)` | also the short `proc T.method` with implicit `self`
+|===
+
+== Where to go next
+
+You now know enough to read and write real Luon. For the exact rules — the full grammar, the precise typing and scope rules, the complete list of predeclared procedures, and the semantics of exception handling — read the reference document _The Programming Language Luon_. The `testcases` directory of the Luon repository contains many complete, working programs (from small feature tests to a full Smalltalk-80 virtual machine) that are an excellent source of idiomatic examples.

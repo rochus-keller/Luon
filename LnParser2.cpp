@@ -205,6 +205,7 @@ static inline bool FIRST_relation(int tt) {
 	case Tok_Hash:
 	case Tok_IN:
 	case Tok_Geq:
+    case Tok_LtGt:
 		return true;
 	default: return false;
 	}
@@ -1026,7 +1027,9 @@ quint8 Parser2::relation() {
 		expect(Tok_Eq, false, "relation");
 	} else if( la.d_type == Tok_Hash ) {
 		expect(Tok_Hash, false, "relation");
-	} else if( la.d_type == Tok_Lt ) {
+    } else if( la.d_type == Tok_LtGt ) {
+        expect(Tok_LtGt, false, "relation");
+    } else if( la.d_type == Tok_Lt ) {
 		expect(Tok_Lt, false, "relation");
 	} else if( la.d_type == Tok_Leq ) {
 		expect(Tok_Leq, false, "relation");
@@ -1662,16 +1665,29 @@ void Parser2::ProcedureDeclaration() {
     QPair<Token, Token> receiver;
     const Token t = la;
     Declaration* record = 0;
-    if( FIRST_Receiver(la.d_type) ) {
-        receiver = Receiver();
-        record = mdl->findDecl(receiver.second.d_val);
-        if( record == 0 || record->kind != Declaration::TypeDecl ||
-                record->type == 0 || record->type->form != Type::Record )
+
+    if( FIRST_Receiver(la.d_type) || ( peek(1).d_type == Tok_ident && peek(2).d_type == Tok_Dot )  ) {
+        if( FIRST_Receiver(la.d_type) ) {
+            receiver = Receiver();
+        } else if( ( peek(1).d_type == Tok_ident && peek(2).d_type == Tok_Dot )  ) {
+            expect(Tok_ident, false, "ProcedureHeading");
+            receiver.second = cur;
+            receiver.first = cur;
+            receiver.first.d_val = Token::getSymbol("self");
+            expect(Tok_Dot, false, "ProcedureHeading");
+        } else
+            invalid("ProcedureHeading");
+        if( receiver.second.isValid() )
         {
-            error(t, "receiver must be a record type declaration");
-            record = 0;
-        }else
-            mdl->openScope(0);
+            record = mdl->findDecl(receiver.second.d_val);
+            if( record == 0 || record->kind != Declaration::TypeDecl ||
+                    record->type == 0 || record->type->form != Type::Record )
+            {
+                error(t, "receiver must be a record type declaration");
+                record = 0;
+            }else
+                mdl->openScope(0);
+        }
     }
 
     const IdentDef id = identdef();

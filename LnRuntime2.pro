@@ -55,7 +55,6 @@ linux | macx {
     LIBS += $$absolute_path(../LuaJIT-2.1/src/libluajit.a, $$_PRO_FILE_PWD_)
     QMAKE_LFLAGS += -rdynamic -ldl
     #rdynamic is required so that the LjLibFfi functions are visible to LuaJIT FFI
-    LIBS += -lSDL2
 }
 
 include( LnParser.pri )

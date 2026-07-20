@@ -1025,13 +1025,24 @@ public:
         releaseLvalue(v);
     }
 
+    static qint64 maskFor(int bits)
+    {
+        Q_ASSERT(bits >= 0 && bits <= 32);
+
+        if (bits == 0)
+            return 0;
+        if (bits == 32)
+            return -1;  // 0xffffffff in LuaJIT BitOp
+        return (qint64(1) << bits) - 1;
+    }
+
     void emitClip(quint8 to, quint8 from, int bits, const RowCol& pos)
     {
         const int cfs = bc.getCallFrameSize();
         const quint8 tmp = ctx.back().buySlots(cfs+2, true);
         fetchLnlibMember(tmp,19,pos); // bit.band
         bc.MOV(tmp+cfs, from, pos.packed() );
-        bc.KSET(tmp+cfs+1, (1 << bits) - 1, pos.packed());
+        bc.KSET(tmp+cfs+1, maskFor(bits), pos.packed());
         bc.CALL(tmp, 1 ,2, pos.packed());
         bc.MOV(to,tmp, pos.packed());
         ctx.back().sellSlots(tmp,cfs+2);
@@ -1657,11 +1668,17 @@ public:
                     break;
                 case Declaration::VarDecl:
                 case Declaration::Procedure:
-                case Declaration::TypeDecl:
                 case Declaration::ConstDecl:
                     fetchModule(d->getModule(), res, e->pos );
                     emitGetTableByIndex(res, res, d->id, e->pos);
                     break;
+                case Declaration::TypeDecl: {
+                    Type* t = deref(d->type);
+                    if( t->decl && t->decl != d )
+                        d = t->decl; // this is an alias type; push the original type, not the alias
+                    fetchModule(d->getModule(), res, e->pos );
+                    emitGetTableByIndex(res, res, d->id, e->pos);
+                    } break;
                 case Declaration::LocalDecl:
                 case Declaration::ParamDecl:
                     bc.MOV(res,d->id, e->pos.packed());
@@ -1729,7 +1746,7 @@ public:
         // use currentHighWater instead of d_frameSize for the JMP A operand.
         // This gives the JIT recorder a tighter maxslot hint at branch points,
         // resulting in smaller snapshots (see rec_comp_fixup in lj_record.c).
-        const quint8 base = Lua::JitComposer::currentHighWater(ctx.back().pool)
+        const quint8 base = Lua::JitComposer::currentHighWater(ctx.back().pool);
 #else
         const quint8 base = ctx.back().pool.d_frameSize;
 #endif
@@ -1859,8 +1876,8 @@ public:
 
     void emitTypeCase( Statement* s )
     {
-        const int lhs = ctx.back().buySlots(1);
-        fetchClass(lhs, deref(s->rhs->type), s->rhs->pos );
+        emitExpression(s->rhs);
+        const int lhs = slotStack.back();
 
         QList<int> breaks;
         while(s->getNext() && s->getNext()->kind == Statement::CaseLabel )
@@ -1892,7 +1909,7 @@ public:
         foreach( quint32 pc, breaks )
             bc.patch(pc);
 
-        ctx.back().sellSlots(lhs);
+        releaseSlot(); // lhs
     }
 
     Lvalue lvalue( Expression* desig )

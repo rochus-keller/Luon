@@ -806,7 +806,7 @@ Expression*Expression::createFromToken(quint16 tt, const RowCol& rc)
     Kind k = Invalid;
     if( tt == Tok_Eq ) {
         k = Eq;
-    } else if( tt == Tok_Hash ) {
+    } else if( tt == Tok_Hash || tt == Tok_LtGt ) {
         k = Neq;
     } else if( tt == Tok_Lt ) {
         k = Lt;

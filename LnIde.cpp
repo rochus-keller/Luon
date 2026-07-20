@@ -25,6 +25,7 @@
 #include "LnLjRuntime.h"
 #include "LnLexer.h"
 #include "LnProject.h"
+#include "LnVersion.h"
 #include <LjTools/Engine2.h>
 #include <LjTools/Terminal2.h>
 #include <LjTools/BcViewer2.h>
@@ -570,6 +571,7 @@ void Ide::createDumpView()
     pop->addSeparator();
     pop->addCommand( "Show low level bytecode", this, SLOT(onShowLlBc()) );
     pop->addCommand( "Export current bytecode...", this, SLOT(onExportBc()) );
+    pop->addCommand( "Export assembler...", this, SLOT(onExportAsm()) );
     pop->addCommand( "Show bytecode file...", this, SLOT(onShowBcFile()) );
     addTopCommands(pop);
 }
@@ -1088,6 +1090,18 @@ void Ide::onCursor()
         d_bcv->gotoLine(RowCol(row+1,col+1).packed());
     }
     d_lock = false;
+}
+
+void Ide::onExportAsm()
+{
+    ENABLED_IF(true);
+
+    const QString path = QFileDialog::getSaveFileName(this, tr("Save Assembler"), QString(), "*.lasm" );
+
+    if (path.isEmpty())
+        return;
+
+    d_bcv->saveTo(path);
 }
 
 void Ide::onExportBc()
@@ -3115,7 +3129,7 @@ int main(int argc, char *argv[])
     a.setOrganizationName("me@rochus-keller.ch");
     a.setOrganizationDomain("github.com/rochus-keller/Luon");
     a.setApplicationName("Luon IDE (LuaJIT)");
-    a.setApplicationVersion("0.7.13");
+    a.setApplicationVersion(LUON_VERSION);
     a.setStyle("Fusion");    
     QFontDatabase::addApplicationFont(":/fonts/DejaVuSansMono.ttf"); // "DejaVu Sans Mono"
 
