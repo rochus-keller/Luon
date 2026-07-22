@@ -2673,6 +2673,37 @@ bool LjbcGen::translate(Declaration* module, QIODevice* out, bool strip)
 
 static void allocateLocalSlots(quint32& modSlotNr, Declaration* cur);
 
+static void allocateAnonRecordMembers(Type* t, QSet<Type*>& seen)
+{
+    // allocate the members eagerly here, in the pre-pass, so every
+    // module agrees on the layout before any code is generated
+    if( t == 0 )
+        return;
+    t = t->deref();
+    if( t == 0 || seen.contains(t) )
+        return;
+    seen.insert(t);
+    switch( t->form )
+    {
+    case Type::Record:
+        t->countAllocRecordMembers(true);
+        foreach( Declaration* sub, t->subs )
+            if( sub->kind == Declaration::Field )
+                allocateAnonRecordMembers(sub->type, seen);
+        break;
+    case Type::Array:
+    case Type::HashMap:
+        allocateAnonRecordMembers(t->base, seen);
+        break;
+    }
+}
+
+static void allocateAnonRecordMembers(Type* t)
+{
+    QSet<Type*> seen;
+    allocateAnonRecordMembers(t, seen);
+}
+
 static void allocateClassSlots(quint32& modSlotNr, Declaration* cur)
 {
     // slot per class object
@@ -2686,6 +2717,8 @@ static void allocateClassSlots(quint32& modSlotNr, Declaration* cur)
         {
             if( sub->kind == Declaration::Procedure )
                 allocateLocalSlots(modSlotNr, sub);
+            else if( sub->kind == Declaration::Field )
+                allocateAnonRecordMembers(sub->type);
         }
     }
 }
@@ -2711,9 +2744,11 @@ static void allocateLocalSlots(quint32& modSlotNr, Declaration* cur)
             break;
         case Declaration::LocalDecl:
             d->id = localSlot++;
+            allocateAnonRecordMembers(d->type);
             break;
         case Declaration::ParamDecl:
             d->id = localSlot++;
+            allocateAnonRecordMembers(d->type);
             break;
         }
 
@@ -2740,6 +2775,7 @@ bool LjbcGen::allocateModuleSlots(Declaration* module)
         case Declaration::VarDecl:
         case Declaration::Import:
             d->id = modSlotNr++;
+            allocateAnonRecordMembers(d->type);
             break;
         case Declaration::Procedure:
             d->id = modSlotNr++;

@@ -354,7 +354,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
       NEW(loc);
       REPEAT Input.Mouse(keys, X, Y); keysum := keysum + keys;
         Oberon.DrawMouseArrow(X, Y); LocateChar(F, X - F.X, Y - F.Y, loc);
-        IF loc.pos # F.carloc.pos THEN FlipCaret(F); F.carloc := loc; FlipCaret(F) END
+        IF loc.pos # F.carloc.pos THEN FlipCaret(F); COPY(F.carloc, loc); FlipCaret(F) END
       UNTIL keys = {};
       F.hasCar := TRUE
     END
@@ -397,19 +397,19 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
       LocateChar(F, X - F.X, Y - F.Y, loc);
       IF F.hasSel & (loc.pos = F.selbeg.pos) & (F.selend.pos = F.selbeg.pos + 1) THEN
         LocateChar(F, F.left, Y - F.Y, F.selbeg)
-      ELSE F.selbeg := loc
+      ELSE COPY(F.selbeg, loc)
       END;
-      INC(loc.pos); loc.x := loc.x + loc.dx; F.selend := loc;
+      INC(loc.pos); loc.x := loc.x + loc.dx; COPY(F.selend, loc);
       FlipSelection(F, F.selbeg, F.selend); keysum := {};
       REPEAT
         Input.Mouse(keys, X, Y);
         keysum := keysum + keys;
         Oberon.DrawMouseArrow(X, Y);
         LocateChar(F, X - F.X, Y - F.Y, loc);
-        IF loc.pos < F.selbeg.pos THEN loc := F.selbeg END;
+        IF loc.pos < F.selbeg.pos THEN COPY(loc, F.selbeg) END;
         INC(loc.pos); loc.x := loc.x + loc.dx;
-        IF loc.pos < F.selend.pos THEN FlipSelection(F, loc, F.selend); F.selend := loc
-        ELSIF loc.pos > F.selend.pos THEN FlipSelection(F, F.selend, loc); F.selend := loc
+        IF loc.pos < F.selend.pos THEN FlipSelection(F, loc, F.selend); COPY(F.selend, loc)
+        ELSIF loc.pos > F.selend.pos THEN FlipSelection(F, F.selend, loc); COPY(F.selend, loc)
         END
       UNTIL keys = {};
       F.time := Oberon.Time(); F.hasSel := TRUE
@@ -436,7 +436,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
         IF new.org # old.org THEN
           ReplConst(Display.white, F, F.X + F.left, F.Y + old.y - dsr, old.lin.wid, 2, Display.invert);
           ReplConst(Display.white, F, F.X + F.left, F.Y + new.y - dsr, new.lin.wid, 2, Display.invert);
-          old := new
+          COPY(old, new)
         END
        UNTIL keys = {};
        ReplConst(Display.white, F, F.X + F.left, F.Y + new.y - dsr, new.lin.wid, 2, Display.invert);
@@ -461,7 +461,7 @@ MODULE TextFrames; (*JG 8.10.90 / NW 10.5.2013 / 11.2.2017*)
         IF new.pos # old.pos THEN
           ReplConst(Display.white, F, F.X + old.x, F.Y + old.y - dsr, old.dx, 2, Display.invert);
           ReplConst(Display.white, F, F.X + new.x, F.Y + new.y - dsr, new.dx, 2, Display.invert);
-          old := new
+          COPY(old, new)
         END
       UNTIL keys = {};
       ReplConst(Display.white, F, F.X + new.x, F.Y + new.y - dsr, new.dx, 2, Display.invert);

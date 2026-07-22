@@ -238,6 +238,13 @@ the JitComposer2 and JitBytecode2 versions of the LjTools classes. In addition t
 an executable called "luon" which can be run via command line and which accepts the path to a Luon project (.lnpro) created with the IDE. This makes it easier to
 deploy Luon applications.
 
+##### Status on July 22, 2026
+
+After many fixes in the compiler, the platform adapter and the Oberon System sources, the latter now works as well on Luon. 
+Also the BUSY build is now updated for the Runtime (so far with LuaJIT 2.0). I added the <> and class.method(self) receiver
+from Micron to Luon, which makes declarations more practical. In addition I migrated the specification to my new LeanDoc
+format and added a ten page language primer to easy learning.
+
 ### Precompiled versions (outdated)
 
 The following precompiled versions are available at this time:
